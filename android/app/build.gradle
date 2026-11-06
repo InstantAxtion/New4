@@ -1,0 +1,54 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.portcity.game'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'com.portcity.game'
+        minSdk 26
+        targetSdk 35
+        versionCode 1
+        versionName '1.0'
+    }
+
+    // The game itself lives in /web and is bundled as the app's assets.
+    sourceSets {
+        main.assets.srcDirs = ['../../web']
+    }
+
+    signingConfigs {
+        // Sideload signing key, committed so every build can update an existing install.
+        // It is NOT secret — generate your own before publishing to an app store.
+        sideload {
+            storeFile file('portcity-sideload.jks')
+            storePassword 'portcity'
+            keyAlias 'portcity'
+            keyPassword 'portcity'
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.sideload
+        }
+        debug {
+            signingConfig signingConfigs.sideload
+        }
+    }
+
+    lint {
+        checkReleaseBuilds false
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+
+// No third-party dependencies: the wrapper uses only Android platform APIs.
