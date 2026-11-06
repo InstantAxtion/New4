@@ -1,0 +1,1142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b1d33">
+<title>Port City</title>
+<style>
+:root{
+  --bg:#0b1d33; --panel:#132a47; --panel2:#1a3558; --line:#25456d;
+  --text:#e8f0fa; --muted:#93a9c4; --accent:#3fb6ff; --good:#4ad991; --bad:#ff6b6b; --warn:#ffc65c;
+  --build:#3fb6ff; --policy:#b18cff; --diplo:#4ad991; --social:#ffb35c;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--text);font:15px/1.35 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;overscroll-behavior-y:contain}
+body{padding-bottom:calc(84px + env(safe-area-inset-bottom))}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
+#app{max-width:520px;margin:0 auto}
+.hidden{display:none!important}
+
+/* top bar */
+#topbar{position:sticky;top:0;z-index:20;background:rgba(11,29,51,.97);backdrop-filter:blur(6px);border-bottom:1px solid var(--line);padding:6px 8px 6px}
+.stats{display:grid;grid-template-columns:repeat(5,1fr);gap:4px}
+.stat{background:var(--panel);border-radius:9px;padding:4px 2px;text-align:center;min-width:0}
+.stat .ic{font-size:13px;line-height:1}
+.stat .v{font-weight:700;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stat .l{font-size:9.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em}
+.stat .d{font-size:10px;line-height:1.1}
+.up{color:var(--good)} .down{color:var(--bad)}
+.yearline{display:flex;justify-content:space-between;align-items:center;margin-top:5px;padding:0 2px}
+.year{font-weight:800;font-size:18px}
+.era{font-size:12px;color:var(--accent);font-weight:600;text-align:right}
+.yearprog{height:3px;background:var(--panel);border-radius:2px;margin-top:4px;overflow:hidden}
+.yearprog i{display:block;height:100%;background:var(--accent)}
+
+/* scene */
+.scenewrap{position:relative;margin:8px 8px 0;border-radius:14px;overflow:hidden;border:1px solid var(--line)}
+#scene{display:block;width:100%;height:210px}
+.scenetag{position:absolute;left:8px;top:8px;background:rgba(0,0,0,.45);border-radius:8px;padding:2px 7px;font-size:11px}
+.scenetag2{left:auto;right:8px}
+
+/* panels */
+.panel{background:var(--panel);margin:8px;border-radius:14px;padding:10px;border:1px solid var(--line)}
+.ptitle{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:6px;display:flex;justify-content:space-between}
+#chart{display:block;width:100%;height:96px}
+.kv{display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;font-size:12.5px;margin-top:8px}
+.kv div{display:flex;justify-content:space-between;gap:6px}
+.kv span:first-child{color:var(--muted)}
+.chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
+.chip{font-size:11.5px;background:var(--panel2);border-radius:999px;padding:3px 9px;color:var(--text)}
+.chip.warn{background:#4a3a14;color:var(--warn)} .chip.bad{background:#4a1d24;color:#ffb0b0}
+.news{font-size:12.5px;max-height:120px;overflow:auto}
+.news div{padding:4px 0;border-bottom:1px solid var(--line)}
+.news div:last-child{border:0}
+.news b{color:var(--accent);font-weight:700;margin-right:4px}
+
+/* tabs & cards */
+.tabs{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin:8px 8px 0;position:sticky;top:94px;z-index:10;background:var(--bg);padding:4px 0}
+.tab{background:var(--panel);border-radius:10px;padding:9px 2px;font-weight:700;font-size:13px;border:1px solid var(--line);min-height:44px}
+.tab.on{background:var(--panel2);border-color:var(--accent)}
+.tab[data-c=build].on{border-color:var(--build)} .tab[data-c=policy].on{border-color:var(--policy)}
+.tab[data-c=diplo].on{border-color:var(--diplo)} .tab[data-c=social].on{border-color:var(--social)}
+#cards{display:grid;grid-template-columns:1fr;gap:7px;margin:8px}
+.card{display:flex;gap:10px;text-align:left;background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--build);border-radius:12px;padding:10px;min-height:64px;width:100%;transition:transform .08s}
+.card:active{transform:scale(.98)}
+.card[data-c=policy]{border-left-color:var(--policy)} .card[data-c=diplo]{border-left-color:var(--diplo)} .card[data-c=social]{border-left-color:var(--social)}
+.card .ci{font-size:26px;line-height:1;width:32px;text-align:center;flex:none;padding-top:2px}
+.card .cb{flex:1;min-width:0}
+.card .cn{font-weight:700;font-size:15px;display:flex;justify-content:space-between;gap:6px}
+.card .cost{font-weight:700;color:var(--warn);white-space:nowrap;font-size:14px}
+.card .cd{font-size:12.5px;color:var(--muted);margin-top:2px}
+.card .cm{font-size:11.5px;margin-top:4px;display:flex;gap:8px;flex-wrap:wrap;color:var(--accent)}
+.card.dis{opacity:.45}
+.card.dis .why{color:var(--bad)}
+.card.done{opacity:.55;border-left-color:var(--good)}
+
+/* bottom bar */
+#bottombar{position:fixed;left:0;right:0;bottom:0;z-index:30;background:rgba(11,29,51,.97);border-top:1px solid var(--line);padding:8px 8px calc(8px + env(safe-area-inset-bottom))}
+#bottombar .inner{max-width:520px;margin:0 auto;display:flex;gap:8px}
+.btn{background:var(--accent);color:#04223a;font-weight:800;border-radius:12px;padding:14px 16px;min-height:52px;font-size:16px}
+.btn.sec{background:var(--panel2);color:var(--text);font-weight:700}
+.btn.big{flex:1}
+.btn:disabled{opacity:.4}
+.pips{display:inline-flex;gap:4px;margin-left:8px;vertical-align:middle}
+.pips i{width:10px;height:10px;border-radius:50%;background:#04223a;opacity:.85}
+.pips i.used{opacity:.2}
+
+/* modal */
+.modal{position:fixed;inset:0;z-index:50;background:rgba(3,10,20,.78);display:flex;align-items:flex-end;justify-content:center;padding:0}
+.sheet{background:var(--panel);width:100%;max-width:520px;max-height:92vh;overflow:auto;border-radius:18px 18px 0 0;padding:16px 16px calc(18px + env(safe-area-inset-bottom));border-top:1px solid var(--line);animation:up .22s ease-out}
+@keyframes up{from{transform:translateY(40px);opacity:0}to{transform:none;opacity:1}}
+.paper{background:#f3eee2;color:#1d1a14;border-radius:10px;padding:12px 14px;margin-bottom:12px;font-family:Georgia,"Times New Roman",serif}
+.paper .mast{display:flex;justify-content:space-between;font-size:11px;border-bottom:2px solid #1d1a14;padding-bottom:4px;margin-bottom:8px;text-transform:uppercase;letter-spacing:.08em}
+.paper h2{margin:0 0 6px;font-size:22px;line-height:1.15;font-weight:900}
+.paper p{margin:0;font-size:14.5px}
+.choice{display:block;width:100%;text-align:left;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px;margin-top:8px;min-height:56px}
+.choice b{display:block;font-size:15px}
+.choice small{display:block;color:var(--muted);font-size:12.5px;margin-top:3px}
+.choice:disabled{opacity:.4}
+.choice:active{background:var(--line)}
+.sheet h1{margin:0 0 6px;font-size:28px}
+.sheet h3{margin:14px 0 4px;font-size:15px;color:var(--accent)}
+.sheet p,.sheet li{font-size:14px;color:#cfdced}
+.sheet ul{padding-left:18px;margin:4px 0}
+.report{display:grid;grid-template-columns:1fr auto;gap:3px 12px;font-size:14px;margin:8px 0}
+.report span:nth-child(even){text-align:right;font-weight:700}
+.title-screen{text-align:center;padding:30px 18px}
+.logo{font-size:56px}
+.title-screen h1{font-size:40px;margin:4px 0;letter-spacing:-.02em}
+.title-screen .sub{color:var(--muted);margin-bottom:26px}
+.title-screen .btn{display:block;width:100%;margin:10px 0}
+.rank{font-size:30px;font-weight:900;color:var(--warn);margin:4px 0}
+#toast{position:fixed;left:50%;top:110px;transform:translateX(-50%);z-index:60;background:#0e3a5c;border:1px solid var(--accent);color:var(--text);padding:9px 14px;border-radius:12px;font-size:13.5px;max-width:92%;text-align:center;opacity:0;pointer-events:none;transition:opacity .25s}
+#toast.show{opacity:1}
+.small{font-size:12px;color:var(--muted)}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="topbar" class="hidden">
+    <div class="stats" id="stats"></div>
+    <div class="yearline"><div class="year" id="year">1950</div><div class="era" id="era"></div></div>
+    <div class="yearprog"><i id="yprog"></i></div>
+  </div>
+
+  <div id="main" class="hidden">
+    <div class="scenewrap">
+      <canvas id="scene"></canvas>
+      <div class="scenetag" id="tagDepth"></div>
+      <div class="scenetag scenetag2" id="tagCap"></div>
+    </div>
+
+    <div class="panel">
+      <div class="ptitle"><span>Trade volume (TEU / yr)</span><span id="chartMax"></span></div>
+      <canvas id="chart"></canvas>
+      <div class="kv" id="kv"></div>
+      <div class="chips" id="chips"></div>
+    </div>
+
+    <div class="tabs" id="tabs">
+      <button class="tab on" data-c="build">🏗 Build</button>
+      <button class="tab" data-c="policy">📜 Policy</button>
+      <button class="tab" data-c="diplo">🤝 Diplo</button>
+      <button class="tab" data-c="social">🏘 Social</button>
+    </div>
+    <div id="cards"></div>
+
+    <div class="panel">
+      <div class="ptitle"><span>Harbor Gazette</span></div>
+      <div class="news" id="news"></div>
+    </div>
+    <div class="panel">
+      <div class="ptitle"><span>Menu</span></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn sec" id="btnHelp">How to play</button>
+        <button class="btn sec" id="btnQuit">Title screen</button>
+      </div>
+      <p class="small" style="margin:8px 0 0">Progress is saved automatically on this device.</p>
+    </div>
+  </div>
+
+  <div id="title" class="title-screen">
+    <div class="logo">⚓</div>
+    <h1>Port City</h1>
+    <div class="sub">Govern a coastal town from 1950 to 2050.<br>Build it into a world trade hub.</div>
+    <button class="btn" id="btnContinue">Continue</button>
+    <button class="btn" id="btnNew">New Game</button>
+    <button class="btn sec" id="btnHow">How to Play</button>
+    <p class="small" id="bestLine"></p>
+  </div>
+</div>
+
+<div id="bottombar" class="hidden">
+  <div class="inner">
+    <button class="btn sec" id="btnUndo">↶ Undo</button>
+    <button class="btn big" id="btnEnd">End Year <span class="pips" id="pips"></span></button>
+  </div>
+</div>
+
+<div id="modal" class="modal hidden"><div class="sheet" id="sheet"></div></div>
+<div id="toast"></div>
+
+<script>
+/* ===================== CORE START (simulation, no DOM) ===================== */
+const START = 1950, END = 2050, ACTIONS = 3;
+const ERAS = [
+  {n:'Break-Bulk Era', from:1950},
+  {n:'Containerization', from:1966},
+  {n:'Globalization', from:1990},
+  {n:'Automation & Green Shipping', from:2010},
+  {n:'Climate Pressure', from:2030}
+];
+const FEE_NAMES = ['Very Low','Low','Standard','High','Very High'];
+const FEE_ATTR  = [1.30, 1.15, 1.00, 0.87, 0.75];
+const FEE_RATE  = [0.065, 0.090, 0.115, 0.140, 0.165]; // $M per thousand TEU
+const LABOR = ['Strict','Balanced','Loose'];
+const PARTNERS = ['the Northern Commonwealth','the Eastern Federation','the Southern Union','the Pacific Concord','the Continental Bloc'];
+
+function eraIdx(y){ let i=0; for(let j=0;j<ERAS.length;j++) if(y>=ERAS[j].from) i=j; return i; }
+function price(y){ return Math.pow(1.03, y-START); }           // cost inflation
+function gdemand(y){ return Math.exp(0.049*(y-START)); }         // world trade growth
+function clamp(v,a,b){ return v<a?a:v>b?b:v; }
+function lerpTable(t, y){ // t: [[year,val],...]
+  if(y<=t[0][0]) return t[0][1];
+  for(let i=1;i<t.length;i++){ if(y<=t[i][0]){ const [y0,v0]=t[i-1],[y1,v1]=t[i]; return v0+(v1-v0)*(y-y0)/(y1-y0);} }
+  return t[t.length-1][1];
+}
+const REQ_DEPTH = [[1950,8],[1965,9.5],[1980,12],[1995,14],[2008,15.5],[2020,17],[2050,18.5]];
+function reqDepth(s){ return lerpTable(REQ_DEPTH, s.year) + s.shipBump; }
+function wallNeeded(y){ return y<2032?0 : y<2040?1 : y<2046?2 : 3; }
+function C(s,base){ return base*price(s.year); }
+
+function newState(){
+  return {
+    v:1, year:START, treasury:14, teu:30, pop:40, approval:62, rep:40,
+    depth:8, berths:2, terms:0, megas:0, auto:0, rail:0, airport:0, wh:0, ftz:0,
+    housingCap:58, houses:0, edu:0, corr:25, green:0, wall:0,
+    fee:2, tax:25, labor:1, agree:0, alliance:'none', court:0, shipBump:0, cruise:0, ecustoms:0, natline:0,
+    projects:[], mods:[], hist:[{y:START,teu:30,t:14}], news:[],
+    actionsLeft:ACTIONS, used:{}, nextEvent:START+2, lastEv:{}, debtYears:0,
+    rev:0, exp:0, net:0, portRev:0, taxRev:0, demand:30, cap:50, prevTeu:30,
+    flags:{}, over:null, pendingEvent:null
+  };
+}
+
+/* ---- modifiers ---- */
+function addMod(s,k,v,yrs,label){ s.mods.push({k,v,until:s.year+yrs,label}); }
+function modMult(s,k){ let m=1; for(const x of s.mods) if(x.k===k) m*=x.v; return m; }
+function modAdd(s,k){ let m=0; for(const x of s.mods) if(x.k===k) m+=x.v; return m; }
+function news(s,txt){ s.news.unshift({y:s.year,t:txt}); if(s.news.length>40) s.news.length=40; }
+function adjRep(s,d){ s.rep=clamp(s.rep+d,0,100); }
+function adjAppr(s,d){ s.approval=clamp(s.approval+d,0,100); }
+
+/* ---- derived economics ---- */
+function capacity(s){
+  const bbF = s.year<1972?1 : s.year<1990?0.6 : 0.35;
+  let c = 15 + s.berths*25*bbF + (s.terms*320 + s.megas*2400)*(1+0.3*s.auto);
+  return c * modMult(s,'cap') * floodFactor(s);
+}
+function floodFactor(s){ const miss = Math.max(0, wallNeeded(s.year)-s.wall); return 1 - 0.12*miss; }
+function efficiency(s){ return [0.9,1,1.06][s.labor] * (1+0.02*s.edu); }
+function depthFactor(s){
+  const r = reqDepth(s);
+  return s.depth>=r ? Math.min(1.1, 1+0.035*(s.depth-r)) : Math.max(0.2, 1-0.15*(r-s.depth));
+}
+function attract(s){
+  const repF = 0.5 + s.rep/100;
+  const taxF = 1.16 - 0.65*s.tax/100;
+  const labF = [0.9,1,1.08][s.labor];
+  const corrF = 1 - s.corr/260;
+  const ally = s.alliance==='joined'?0.12 : 0;
+  const greenF = s.year>=2012 ? s.green*0.05 - (s.year>=2025 && s.green===0 ? 0.08 : 0) : 0;
+  const conn = 1 + 0.12*s.rail + 0.05*s.wh + 0.12*s.ftz + 0.07*s.agree + ally + 0.05*s.airport + greenF + 0.06*s.ecustoms + 0.03*s.edu + 0.1*(s.natline||0);
+  return repF * FEE_ATTR[s.fee] * depthFactor(s) * taxF * labF * corrF * conn * modMult(s,'demand');
+}
+function demand(s){ return 30 * gdemand(s.year) * attract(s); }
+
+function upkeep(s){
+  const p = Math.pow(price(s.year), 0.6); // running costs inflate slower than construction
+  const infra = s.berths*0.12 + s.terms*1.4 + s.megas*8 + s.auto*3 + s.rail*0.9 + s.airport*2.2 + s.wh*0.3 +
+    s.ftz*0.5 + s.edu*0.7 + s.wall*1.8 + s.green*0.8 + s.depth*0.05 + s.cruise*0.8 + s.houses*0.25 + (s.natline||0)*3;
+  const city = s.pop*0.014;
+  return infra*p + city;
+}
+
+/* ---- yearly simulation ---- */
+function simYear(s){
+  const y = s.year;
+  const log = [];
+  s.prevTeu = s.teu;
+  const D = demand(s);
+  const cap = capacity(s) * efficiency(s);
+  const target = Math.min(D, cap);
+  s.teu = Math.max(5, s.teu + (target - s.teu) * (target > s.teu ? 0.6 : 0.8));
+  s.demand = D; s.cap = cap;
+  const cong = D / cap;
+
+  // money
+  const portRev = s.teu * FEE_RATE[s.fee] * modMult(s,'rev');
+  const business = (s.pop*0.09 + s.teu*0.08) * (1 + 0.08*s.wh + 0.12*s.airport + 0.05*s.edu + 0.1*s.ftz + 0.1*s.cruise);
+  const taxRev = business * s.tax/100 * (1 - 0.08*s.ftz);
+  const up = upkeep(s);
+  const interest = s.treasury < 0 ? s.treasury*0.09 : Math.min(s.treasury*0.02, 5*price(y));
+  s.portRev = portRev; s.taxRev = taxRev;
+  s.rev = portRev + taxRev + Math.max(0,interest);
+  s.exp = up + Math.max(0,-interest);
+  s.net = s.rev - s.exp;
+  s.treasury += s.net;
+
+  // population & housing
+  const popT = 25 + 7*Math.sqrt(s.teu) * (1 + 0.06*s.edu + 0.12*s.airport + 0.1*s.cruise) + modAdd(s,'pop');
+  let g = (popT - s.pop) * 0.07;
+  if (s.pop > s.housingCap*1.2 && g > 0) g *= 0.3;
+  s.pop = Math.max(10, s.pop + g);
+  s.housingCap *= 1.024;
+  const crowd = s.pop / s.housingCap;
+  const overPen = crowd > 1 ? Math.min(30, (crowd-1)*90) : 0;
+
+  // inequality
+  const ineq = 25 + 8*s.ftz + [-8,0,10][s.labor] + (25 - s.tax)*0.5 - 3*s.edu - 1.5*Math.min(6,s.houses) + 4*s.auto;
+  const ineqPen = Math.max(0, ineq-30) * 0.7;
+
+  // approval
+  const growth = (s.teu / Math.max(1,s.prevTeu) - 1) * 100;
+  const growthB = clamp(growth*0.4, -8, 6);
+  const appT = 61 + 1.5*s.edu + 2*s.green - overPen - ineqPen - 0.2*s.corr + growthB + (s.treasury<0?-7:0)
+    - Math.max(0, wallNeeded(y)-s.wall)*6;
+  s.approval = clamp(s.approval + (appT - s.approval)*0.3 + modAdd(s,'appr'), 0, 100);
+  s.ineq = ineq; s.crowd = crowd;
+
+  // reputation with shipping lines
+  const r = reqDepth(s);
+  const depthT = s.depth >= r ? 8 : -6*(r - s.depth);
+  const congPen = cong > 1 ? Math.min(25, (cong-1)*40) : 0;
+  const repT = 40 + (2-s.fee)*7 + depthT - congPen + s.court*3 + s.green*4 + s.agree*1.5 - s.corr*0.15
+    + [-8,0,4][s.labor] + (s.alliance==='neutral'?3:0) + s.ecustoms*5 + (s.natline||0)*5;
+  s.rep = clamp(s.rep + (repT - s.rep)*0.2 + modAdd(s,'rep'), 0, 100);
+  s.cong = cong;
+
+  // corruption drift
+  s.corr = clamp(s.corr + 0.5 + 0.4*s.ftz + (s.labor===2?0.4:0) - 0.1*s.edu, 5, 100);
+
+  // warnings
+  if (cong > 1.15) log.push('Ships queue offshore — the port is congested. Build capacity!');
+  if (s.depth < r - 0.5) log.push('Modern ships are too big for our shallow harbor. Dredge!');
+  if (crowd > 1.08) log.push('Overcrowded tenements anger residents. Build housing.');
+  if (wallNeeded(y) > s.wall) log.push('Seawater floods the docks at high tide. Build sea walls.');
+
+  // game over checks
+  const limit = -Math.max(20*price(y), s.rev*0.75);
+  if (s.treasury < limit) s.debtYears++; else s.debtYears = 0;
+  if (s.approval <= 0) s.over = 'overthrown';
+  else if (s.debtYears >= 3) s.over = 'bankrupt';
+
+  s.hist.push({y, teu:s.teu, t:s.treasury});
+  return {log, cong};
+}
+
+function advanceYear(s){
+  const res = simYear(s);
+  if (s.over) return res;
+  if (s.year >= END) { s.over = 'complete'; return res; }
+  s.year++;
+  // complete projects
+  const done = [];
+  s.projects = s.projects.filter(p => {
+    if (p.done <= s.year) { const c = CARD_BY_ID[p.id]; c.finish(s); done.push(c.name); return false; }
+    return true;
+  });
+  for (const n of done) news(s, n + ' completed.');
+  s.mods = s.mods.filter(m => m.until > s.year);
+  s.actionsLeft = ACTIONS; s.used = {};
+  // era change
+  if (eraIdx(s.year) !== eraIdx(s.year-1)) news(s, 'A new age dawns: ' + ERAS[eraIdx(s.year)].n + '.');
+  // events
+  if (s.year >= s.nextEvent) {
+    const ev = pickEvent(s);
+    if (ev) { s.pendingEvent = ev.id; s.lastEv[ev.id] = s.year; }
+    s.nextEvent = s.year + 1 + Math.floor(Math.random()*3); // 1–3 years
+  }
+  res.done = done;
+  return res;
+}
+
+function score(s){
+  const p = price(s.year);
+  const parts = {
+    trade: Math.round(s.teu / 8),
+    pop: Math.round(s.pop / 3),
+    treasury: Math.round(s.treasury > 0 ? 120*Math.log(1 + s.treasury/p/40) : Math.max(-300, s.treasury/p/2)),
+    approval: Math.round(s.approval * 8)
+  };
+  parts.total = parts.trade + parts.pop + parts.treasury + parts.approval;
+  return parts;
+}
+const RANKS = [
+  {min:-1e9, n:'Fishing Village', d:'Gulls outnumber cargo ships. The harbor sleeps.'},
+  {min:900, n:'Coastal Town', d:'A tidy port serving local trade.'},
+  {min:1700, n:'Regional Port', d:'Feeder ships and freighters keep the quays busy.'},
+  {min:2800, n:'Major Hub', d:'A name every shipping line knows.'},
+  {min:3800, n:'Global Gateway', d:'One of the great ports of the world.'}
+];
+function rankFor(total){ let r=RANKS[0]; for(const x of RANKS) if(total>=x.min) r=x; return r; }
+
+/* ---- action cards ---- */
+const CARDS = [
+  // BUILD
+  {id:'dredge', cat:'build', icon:'🚜', name:'Dredge Harbor', from:1950,
+   desc:'Deepen the channel by 2 m so larger ships can call.',
+   cost:s=>C(s, 4*Math.pow(1.33,(s.depth-8)/2)), delay:2,
+   req:s=> s.depth>=24 ? 'Maximum depth reached' : null,
+   lvl:s=>s.depth.toFixed(0)+' m', finish:s=>{ s.depth+=2; }},
+  {id:'berth', cat:'build', icon:'⚓', name:'Break-Bulk Berth', from:1950, to:1980,
+   desc:'Wharf with cargo booms: +25k TEU capacity. Cheap, but obsolete once boxes arrive.',
+   cost:s=>C(s,3.5), delay:1, max:s=>8, cur:s=>s.berths, finish:s=>{ s.berths++; }},
+  {id:'term', cat:'build', icon:'🏗️', name:'Container Terminal', from:1966,
+   desc:'Gantry cranes and box yards: +320k TEU capacity. Needs 10 m depth.',
+   cost:s=>C(s,15), delay:3, max:s=>8, cur:s=>s.terms,
+   req:s=> s.depth<10 ? 'Needs 10 m depth' : null, finish:s=>{ s.terms++; }},
+  {id:'mega', cat:'build', icon:'🚢', name:'Mega Terminal', from:1995,
+   desc:'Deep-water mega berths: +2.4M TEU capacity. Needs 14 m depth.',
+   cost:s=>C(s,70), delay:4, max:s=>10, cur:s=>s.megas,
+   req:s=> s.depth<14 ? 'Needs 14 m depth' : null, finish:s=>{ s.megas++; }},
+  {id:'auto', cat:'build', icon:'🤖', name:'Automate Terminals', from:2008,
+   desc:'Robotic cranes & driverless trucks: +30% terminal capacity. Dockworkers lose jobs (−approval).',
+   cost:s=>C(s, 50*(s.auto+1)), delay:3, max:s=>3, cur:s=>s.auto,
+   req:s=> (s.terms+s.megas)===0 ? 'Needs a container terminal' : null,
+   finish:s=>{ s.auto++; adjAppr(s,-7); addMod(s,'appr',-2,3,'Automation layoffs'); }},
+  {id:'rail', cat:'build', icon:'🚆', name:'Rail Link', from:1950,
+   desc:'Connect the docks to the hinterland: +12% trade demand per level.',
+   cost:s=>C(s, 12*(s.rail+1)), delay:3, max:s=>3, cur:s=>s.rail, finish:s=>{ s.rail++; }},
+  {id:'wh', cat:'build', icon:'🏬', name:'Logistics Warehouses', from:1950,
+   desc:'Storage & distribution parks: +5% demand, +8% business tax base.',
+   cost:s=>C(s, 5*(1+s.wh*0.5)), delay:2, max:s=>6, cur:s=>s.wh, finish:s=>{ s.wh++; }},
+  {id:'airport', cat:'build', icon:'✈️', name:'Airport', from:1955,
+   desc:'Air cargo & business travel: +5% demand, +12% business, faster population growth.',
+   cost:s=>C(s, 25*(s.airport+1)), delay:4, max:s=>2, cur:s=>s.airport, finish:s=>{ s.airport++; }},
+  {id:'green', cat:'build', icon:'🌱', name:'Green Port Upgrade', from:2010,
+   desc:'Shore power, LNG & hydrogen bunkering. Shipping lines and residents love it. Lines start shunning ports without it after 2025.',
+   cost:s=>C(s, 22*(s.green+1)), delay:2, max:s=>3, cur:s=>s.green, finish:s=>{ s.green++; adjAppr(s,3); }},
+  {id:'wall', cat:'build', icon:'🧱', name:'Sea Wall', from:2015,
+   desc:'Protect quays from rising seas and storm surges. Needed from the 2030s.',
+   cost:s=>C(s, 40*(s.wall+1)), delay:4, max:s=>3, cur:s=>s.wall, finish:s=>{ s.wall++; }},
+
+  // POLICY
+  {id:'feeDown', cat:'policy', icon:'⬇️', name:'Lower Port Fees', from:1950,
+   desc:'More ships, better reputation — less income per box.',
+   cost:()=>0, req:s=> s.fee<=0?'Already at minimum':null, lvl:s=>FEE_NAMES[s.fee],
+   instant:s=>{ s.fee--; adjRep(s,4); }},
+  {id:'feeUp', cat:'policy', icon:'⬆️', name:'Raise Port Fees', from:1950,
+   desc:'More income per box — but ships look elsewhere.',
+   cost:()=>0, req:s=> s.fee>=4?'Already at maximum':null, lvl:s=>FEE_NAMES[s.fee],
+   instant:s=>{ s.fee++; adjRep(s,-5); }},
+  {id:'taxDown', cat:'policy', icon:'💸', name:'Cut Corporate Tax (−5%)', from:1950,
+   desc:'Businesses flock in; inequality rises and tax revenue falls.',
+   cost:()=>0, req:s=> s.tax<=5?'Already at minimum':null, lvl:s=>s.tax+'%',
+   instant:s=>{ s.tax-=5; adjRep(s,1); }},
+  {id:'taxUp', cat:'policy', icon:'🏛️', name:'Raise Corporate Tax (+5%)', from:1950,
+   desc:'Funds the state — but drives some business away.',
+   cost:()=>0, req:s=> s.tax>=50?'Already at maximum':null, lvl:s=>s.tax+'%',
+   instant:s=>{ s.tax+=5; adjRep(s,-1); adjAppr(s,1); }},
+  {id:'labLoose', cat:'policy', icon:'⛓️', name:'Loosen Labor Rules', from:1950,
+   desc:'Faster, cheaper docks; unions and residents are furious (−approval, +inequality).',
+   cost:()=>0, req:s=> s.labor>=2?'Already loose':null, lvl:s=>LABOR[s.labor],
+   instant:s=>{ s.labor++; adjAppr(s,-7); adjRep(s,3); }},
+  {id:'labTight', cat:'policy', icon:'🦺', name:'Tighten Labor Rules', from:1950,
+   desc:'Safer jobs and fairer pay (+approval), but slower, costlier docks.',
+   cost:()=>0, req:s=> s.labor<=0?'Already strict':null, lvl:s=>LABOR[s.labor],
+   instant:s=>{ s.labor--; adjAppr(s,5); adjRep(s,-3); }},
+  {id:'ftz', cat:'policy', icon:'🏷️', name:'Free-Trade Zone', from:1955,
+   desc:'Duty-free manufacturing & re-export: +12% demand. Some tax lost, corruption & inequality rise.',
+   cost:s=>C(s, 7*(s.ftz+1)), delay:2, max:s=>3, cur:s=>s.ftz, finish:s=>{ s.ftz++; s.corr+=4; }},
+
+  // DIPLOMACY
+  {id:'agree', cat:'diplo', icon:'✍️', name:'Trade Agreement', from:1950,
+   desc:s=>'Sign a pact with '+PARTNERS[Math.min(s.agree,PARTNERS.length-1)]+': +7% trade demand.',
+   cost:s=>C(s, 3*(s.agree+1)), delay:2, max:s=>5, cur:s=>s.agree,
+   finish:s=>{ s.agree++; adjRep(s,2); }},
+  {id:'court', cat:'diplo', icon:'🥂', name:'Court a Shipping Line', from:1950,
+   desc:'Wine, dine and offer berth priority to a major carrier: +10 reputation now, +3 lasting.',
+   cost:s=>C(s, 1.5 + s.teu/2000), req:s=> s.court>=8?'Every line already calls here':null,
+   cur:s=>s.court, max:s=>8, instant:s=>{ s.court++; adjRep(s,10); }},
+  {id:'promo', cat:'diplo', icon:'📣', name:'Trade Promotion Campaign', from:1950,
+   desc:'Trade fairs and envoys abroad: +6% trade demand for 4 years (stacks across years).',
+   cost:s=>C(s,2) + s.rev*0.22, instant:s=>{ addMod(s,'demand',1.06,4,'Trade promotion'); adjRep(s,2); }},
+  {id:'line', cat:'diplo', icon:'🚩', name:'Found a National Shipping Line', from:1958,
+   desc:'A state-owned carrier that always calls here: +10% trade demand, +5 reputation. Costly upkeep.',
+   cost:s=>C(s,30), delay:3, max:s=>1, cur:s=>s.natline||0, finish:s=>{ s.natline=1; adjRep(s,5); adjAppr(s,3); }},
+  {id:'ally', cat:'diplo', icon:'🛡️', name:'Join Maritime Alliance', from:1950,
+   desc:'Military & trade bloc: +12% demand and naval protection — but you get dragged into its conflicts.',
+   cost:()=>0, req:s=> s.alliance==='joined'?'Already a member':null,
+   lvl:s=>({none:'Unaligned',joined:'Member',neutral:'Neutral'})[s.alliance],
+   instant:s=>{ s.alliance='joined'; adjAppr(s,-2); }},
+  {id:'neutral', cat:'diplo', icon:'🕊️', name:'Declare Neutrality', from:1950,
+   desc:'Trade with everyone, side with no one. Lines trust you in wartime, but you lose bloc perks.',
+   cost:()=>0, req:s=> s.alliance==='neutral'?'Already neutral':null,
+   lvl:s=>({none:'Unaligned',joined:'Member',neutral:'Neutral'})[s.alliance],
+   instant:s=>{ s.alliance='neutral'; adjRep(s,4); adjAppr(s,2); }},
+
+  // SOCIAL
+  {id:'house', cat:'social', icon:'🏘️', name:'Public Housing', from:1950,
+   desc:'Build affordable homes: big boost to housing capacity, +approval, −inequality.',
+   cost:s=>(2.5 + s.pop*0.035)*Math.sqrt(price(s.year)), delay:2,
+   finish:s=>{ s.housingCap += Math.max(25, s.pop*0.3); s.houses++; adjAppr(s,4); }},
+  {id:'edu', cat:'social', icon:'🎓', name:'Education Program', from:1950,
+   desc:'Schools, a maritime academy, a university. Slow (4 yrs) but lifts growth, approval and efficiency.',
+   cost:s=>C(s, 5*(s.edu+1)), delay:4, max:s=>6, cur:s=>s.edu, finish:s=>{ s.edu++; adjAppr(s,2); }},
+  {id:'anticorr', cat:'social', icon:'🔍', name:'Anti-Corruption Drive', from:1950,
+   desc:'Purge customs graft & cronies: −18 corruption, +approval, +reputation.',
+   cost:s=>C(s, 2 + s.teu/4000), req:s=> s.corr<12?'Corruption already low':null, lvl:s=>'Corruption '+Math.round(s.corr),
+   instant:s=>{ s.corr=Math.max(5,s.corr-18); adjAppr(s,4); adjRep(s,3); }},
+  {id:'parks', cat:'social', icon:'🎡', name:'Parks & Festival', from:1950,
+   desc:'Waterfront parks and a harbor festival: +6 approval now.',
+   cost:s=>C(s, 1.2 + s.pop/400), instant:s=>{ adjAppr(s,6); }}
+];
+const CARD_BY_ID = {}; for (const c of CARDS) CARD_BY_ID[c.id] = c;
+
+function cardCost(s,c){ return c.cost(s); }
+function cardDesc(s,c){ return typeof c.desc==='function' ? c.desc(s) : c.desc; }
+function cardStatus(s,c){ // returns null if available, else reason
+  if (s.year < c.from) return 'Available from ' + c.from;
+  if (c.to && s.year > c.to) return 'Obsolete';
+  if (s.used[c.id]) return 'Done this year';
+  if (c.req) { const r = c.req(s); if (r) return r; }
+  if (c.max) { const inProg = s.projects.filter(p=>p.id===c.id).length; if (c.cur(s)+inProg >= c.max(s)) return 'Maximum built'; }
+  if (c.delay && s.projects.some(p=>p.id===c.id)) return 'Already under construction';
+  if (cardCost(s,c) > s.treasury + 0.001) return 'Not enough money';
+  if (s.actionsLeft <= 0) return 'No actions left this year';
+  return null;
+}
+function cardVisible(s,c){ return s.year >= c.from - 6 && !(c.to && s.year > c.to); }
+function doCard(s,c){
+  const st = cardStatus(s,c); if (st) return st;
+  const cost = cardCost(s,c);
+  s.treasury -= cost; s.actionsLeft--; s.used[c.id] = true;
+  if (c.delay) { s.projects.push({id:c.id, done:s.year + c.delay, start:s.year}); news(s, 'Work begins: ' + c.name + ' (ready ' + (s.year+c.delay) + ').'); }
+  else { c.instant(s); news(s, c.name + '.'); }
+  return null;
+}
+
+/* ---- events ---- */
+// choice: t=title, h=hint, cost=base $ (scaled by inflation), need=fn(s)->reason, f=effect
+const EVENTS = [
+ {id:'canal', from:1950, to:2050, w:1.1, head:'CANAL SHUT! Ships Forced Into Long Detour',
+  body:'A political crisis has closed the main inter-ocean canal. Lines are rerouting — and the new routes pass our coast.',
+  ch:[
+   {t:'Offer emergency discount berths', h:'Cost $, Reputation +12, Trade +20% for 2 yrs', cost:3, f:s=>{adjRep(s,12); addMod(s,'demand',1.2,2,'Canal detour');}},
+   {t:'Slap on a crisis surcharge', h:'Cash windfall now, Reputation −10', f:s=>{s.treasury+=s.portRev*0.5; adjRep(s,-10);}},
+   {t:'Business as usual', h:'Trade +6% for 2 yrs', f:s=>addMod(s,'demand',1.06,2,'Canal detour')}]},
+ {id:'rival', from:1955, to:2050, w:1, head:'RIVAL BAYPORT UNVEILS SHINY NEW TERMINAL',
+  body:'Just 80 km down the coast, Bayport has opened modern berths and is poaching our customers with cut-rate fees.',
+  ch:[
+   {t:'Start a price war', h:'Port fees drop one level, Reputation +8', need:s=>s.fee<=0?'Fees already minimal':null, f:s=>{s.fee--; adjRep(s,8);}},
+   {t:'Charm offensive with shipping lines', h:'Cost $, Reputation +12', cost:4, f:s=>adjRep(s,12)},
+   {t:'Ignore them', h:'Trade −8% for 8 yrs', f:s=>addMod(s,'demand',0.92,8,'Rival port')}]},
+ {id:'oil', from:1970, to:2050, w:1, head:'OIL SHOCK: Crude Prices Quadruple Overnight',
+  body:'An embargo by oil producers sends fuel costs soaring. Ships slow-steam and global trade stalls.',
+  ch:[
+   {t:'Subsidize bunker fuel for ships', h:'Cost $, Trade −5% for 2 yrs, Reputation +8', cost:5, f:s=>{addMod(s,'demand',0.95,2,'Oil shock'); adjRep(s,8);}},
+   {t:'Austerity budget', h:'Trade −15% for 2 yrs, +cash, Approval −8', f:s=>{addMod(s,'demand',0.85,2,'Oil shock'); s.treasury+=C(s,4); adjAppr(s,-8);}},
+   {t:'Build an energy terminal', h:'Cost $$, Trade −15% for 2 yrs then +6% for 12 yrs', cost:12, f:s=>{addMod(s,'demand',0.85,2,'Oil shock'); s.mods.push({k:'demand',v:1.06,until:s.year+14,label:'Energy terminal'});}}]},
+ {id:'war', from:1950, to:2050, w:1, head:'WAR ERUPTS ACROSS THE STRAIT',
+  body:s=> 'Regional powers trade blows. ' + (s.alliance==='joined' ? 'Our alliance partners demand we close our port to the enemy.' : s.alliance==='neutral' ? 'As a neutral port, both sides look to us for supplies.' : 'Both sides watch which way we lean.'),
+  ch:[
+   {t:'Stay strictly neutral', h:s=> s.alliance==='joined' ? 'Allies furious: alliance ends, Reputation −6' : 'Reputation +10, Trade −5% for 2 yrs', f:s=>{ if(s.alliance==='joined'){s.alliance='none'; adjRep(s,-6);} else {adjRep(s,10); addMod(s,'demand',0.95,2,'Regional war');}}},
+   {t:'Back our allies', h:s=> s.alliance==='joined' ? 'Approval +6, Trade −12% for 3 yrs' : 'Approval +4, Trade −15% for 3 yrs, Reputation −5', f:s=>{ if(s.alliance==='joined'){adjAppr(s,6); addMod(s,'demand',0.88,3,'War blockade');} else {adjAppr(s,4); addMod(s,'demand',0.85,3,'War blockade'); adjRep(s,-5);}}},
+   {t:'Become a wartime supply depot', h:'Big cash windfall, Approval −10, Corruption +10', f:s=>{s.treasury+=C(s,8)+s.rev*0.4; adjAppr(s,-10); s.corr+=10;}}]},
+ {id:'piracy', from:1950, to:2050, w:1, head:'PIRATES SEIZE TANKER IN SHIPPING LANES',
+  body:'Armed gangs in fast skiffs are hijacking freighters. Insurers are hiking premiums on our route.',
+  ch:[
+   {t:'Fund naval escorts', h:'Cost $, Reputation +10', cost:4, f:s=>adjRep(s,10)},
+   {t:'Rely on the alliance navy', h:s=>s.alliance==='joined'?'Free: Reputation +6':'Only for alliance members', need:s=>s.alliance!=='joined'?'Not in an alliance':null, f:s=>adjRep(s,6)},
+   {t:'Do nothing', h:'Reputation −10, Trade −8% for 2 yrs', f:s=>{adjRep(s,-10); addMod(s,'demand',0.92,2,'Piracy');}}]},
+ {id:'bigships', from:1968, to:2050, w:1, head:'SHIPYARDS LAUNCH RECORD-BREAKING GIANT VESSELS',
+  body:'A new class of ships — far longer and deeper than anything before — is entering service. Ports that can’t take them will be left behind.',
+  ch:[
+   {t:'Emergency dredging program', h:'Cost $$, Depth +2 m immediately', cost:s=>CARD_BY_ID.dredge.cost(s)/price(s.year)*1.3, f:s=>{s.depth+=2; s.shipBump+=0.5;}},
+   {t:'Offer feeder transshipment', h:'Cost $, Reputation −4, ships keep growing', cost:2, f:s=>{adjRep(s,-4); s.shipBump+=0.5;}},
+   {t:'Wait and see', h:'Required depth +1 m sooner, Reputation −6', f:s=>{adjRep(s,-6); s.shipBump+=1;}}]},
+ {id:'pandemic', from:1950, to:2050, w:0.7, head:'PANDEMIC SWEEPS THE GLOBE',
+  body:'A new virus spreads through port cities. Crews are quarantined and factories shut.',
+  ch:[
+   {t:'Strict lockdown', h:'Approval +5, Trade −25% for 1 yr', f:s=>{adjAppr(s,5); addMod(s,'demand',0.75,1,'Pandemic');}},
+   {t:'Keep the port open', h:'Approval −12, Trade −8% for 1 yr, Reputation +8', f:s=>{adjAppr(s,-12); addMod(s,'demand',0.92,1,'Pandemic'); adjRep(s,8);}},
+   {t:'Relief payments to families', h:'Cost $$, Approval +10, Trade −18% for 1 yr', cost:6, f:s=>{adjAppr(s,10); addMod(s,'demand',0.82,1,'Pandemic');}}]},
+ {id:'tradewar', from:1985, to:2050, w:1, head:'SUPERPOWERS SLAP TARIFFS ON EACH OTHER',
+  body:'A full-blown trade war erupts between the two largest economies. Container rates plunge.',
+  ch:[
+   {t:'Pick a side', h:s=>s.alliance==='joined'?'Approval +3, Trade −6% for 3 yrs':'Trade −10% for 3 yrs, Reputation −4', f:s=>{ if(s.alliance==='joined'){adjAppr(s,3); addMod(s,'demand',0.94,3,'Trade war');} else {addMod(s,'demand',0.9,3,'Trade war'); adjRep(s,-4);}}},
+   {t:'Become a neutral transshipment hub', h:'Trade +8% for 3 yrs, Corruption +10, Reputation +5', f:s=>{addMod(s,'demand',1.08,3,'Tariff dodging'); s.corr+=10; adjRep(s,5);}},
+   {t:'Subsidize hard-hit exporters', h:'Cost $$, Trade −12% for 3 yrs, Approval +8', cost:6, f:s=>{addMod(s,'demand',0.88,3,'Trade war'); adjAppr(s,8);}}]},
+ {id:'storm', from:1950, to:2050, w:1, head:s=> s.year>=2025 ? 'SUPER-STORM BATTERS COAST: Docks Under Water' : 'HURRICANE SMASHES INTO HARBOR',
+  body:s=>'Winds of 200 km/h and a storm surge tear through the waterfront.' + (s.wall ? ' Our sea walls blunt the worst of it.' : ''),
+  ch:[
+   {t:'Rebuild stronger', h:'Cost $$, Capacity −15% for 1 yr, Approval +4', cost:s=>6 + s.terms*2 + s.megas*8, f:s=>{addMod(s,'cap',0.85+0.04*s.wall,1,'Storm damage'); adjAppr(s,4);}},
+   {t:'Quick patch-up', h:'Cost $, Capacity −30% for 2 yrs', cost:s=>2 + s.terms + s.megas*3, f:s=>addMod(s,'cap',0.7+0.07*s.wall,2,'Storm damage')},
+   {t:'Appeal for foreign aid', h:'Capacity −30% for 2 yrs, Approval −6, Reputation −4', f:s=>{addMod(s,'cap',0.7+0.07*s.wall,2,'Storm damage'); adjAppr(s,-6); adjRep(s,-4);}}]},
+ {id:'automation', from:2008, to:2045, w:1.2, once:true, head:'ROBOTS ON THE DOCKS: Automation Wave Hits Ports',
+  body:'Rivals now run lights-out terminals where cranes are steered by software. Our dockworkers’ union is nervous.',
+  ch:[
+   {t:'Embrace automation', h:'Automation level +1 now, Approval −10', need:s=>(s.terms+s.megas)===0?'Needs a container terminal':s.auto>=3?'Fully automated':null, cost:20, f:s=>{s.auto++; adjAppr(s,-10);}},
+   {t:'Retrain dockworkers', h:'Cost $$, Education +1, Approval +4', cost:12, need:s=>s.edu>=6?'Education maxed':null, f:s=>{s.edu++; adjAppr(s,4);}},
+   {t:'Ban the robots', h:'Approval +8, Reputation −10, Trade −5% for 10 yrs', f:s=>{adjAppr(s,8); adjRep(s,-10); addMod(s,'demand',0.95,10,'Robot ban');}}]},
+ {id:'strike', from:1950, to:2050, w:1, head:'DOCKERS WALK OUT! Port Paralyzed by Strike',
+  body:s=>'Longshoremen demand higher pay and safer conditions.' + (s.labor===2 ? ' Loose labor laws have stoked their anger.' : ''),
+  ch:[
+   {t:'Concede to the union', h:'Cost $, Approval +6', cost:3, f:s=>adjAppr(s,6)},
+   {t:'Break the strike', h:'Approval −14, Reputation +6', f:s=>{adjAppr(s,-14); adjRep(s,6);}},
+   {t:'Mediate a compromise', h:'Cost $, Capacity −10% for 1 yr', cost:1, f:s=>addMod(s,'cap',0.9,1,'Strike')}]},
+ {id:'box', from:1958, to:1968, w:3, once:true, head:'THE BOX ARRIVES: Steel Containers Revolutionize Shipping',
+  body:'An American trucker’s idea — standard steel boxes — is slashing loading times from days to hours. Container terminals become possible from 1966.',
+  ch:[
+   {t:'Commission a container study', h:'Cost $, Reputation +8, Education +1', cost:3, need:s=>s.edu>=6?'Education maxed':null, f:s=>{adjRep(s,8); s.edu++;}},
+   {t:'Protect break-bulk jobs', h:'Approval +6, Reputation −8', f:s=>{adjAppr(s,6); adjRep(s,-8);}},
+   {t:'Wait and see', h:'No effect', f:s=>{}}]},
+ {id:'scandal', from:1950, to:2050, w:0.9, need:s=>s.corr>30, head:'CUSTOMS CHIEF ARRESTED IN BRIBERY SCANDAL',
+  body:'Investigators uncover a smuggling ring operating inside the port authority.',
+  ch:[
+   {t:'Public inquiry & purge', h:'Cost $, Corruption −20, Approval +4', cost:2, f:s=>{s.corr=Math.max(5,s.corr-20); adjAppr(s,4);}},
+   {t:'Quietly hush it up', h:'Approval −8, Corruption +5', f:s=>{adjAppr(s,-8); s.corr+=5;}},
+   {t:'Blame the shipping lines', h:'Approval +2, Reputation −12', f:s=>{adjAppr(s,2); adjRep(s,-12);}}]},
+ {id:'cruise', from:1985, to:2050, w:0.8, once:true, head:'CRUISE BOOM: Floating Hotels Seek New Ports of Call',
+  body:'Cruise lines want a glamorous new stop. Tourists spend freely — but residents worry about crowds.',
+  ch:[
+   {t:'Build a cruise terminal', h:'Cost $$, +business & population, Approval +3', cost:14, f:s=>{s.cruise=1; adjAppr(s,3);}},
+   {t:'Decline politely', h:'No effect', f:s=>{}}]},
+ {id:'ecustoms', from:1995, to:2050, w:0.9, once:true, head:'DIGITAL CUSTOMS: Paperless Ports Cut Clearance to Minutes',
+  body:'A tech firm offers to digitize all customs paperwork. Shipping lines are impressed by the pilots abroad.',
+  ch:[
+   {t:'Buy the system', h:'Cost $$, +6% demand and Reputation +5 permanently', cost:10, f:s=>{s.ecustoms=1; adjRep(s,5);}},
+   {t:'Build our own (slow, cheap)', h:'Cost $, gains arrive in 4 yrs', cost:4, f:s=>{s.projects.push({id:'_ecus',done:s.year+4});}},
+   {t:'Stick with paper', h:'Reputation −4', f:s=>adjRep(s,-4)}]},
+ {id:'crash', from:1975, to:2050, w:1, head:'MARKETS CRASH: Banks Fail as Credit Freezes',
+  body:'A financial panic spreads from the world’s money centres. Orders for goods collapse.',
+  ch:[
+   {t:'Stimulus spending', h:'Cost $$, Trade −10% for 2 yrs, Approval +6', cost:8, f:s=>{addMod(s,'demand',0.9,2,'Financial crisis'); adjAppr(s,6);}},
+   {t:'Austerity', h:'Trade −20% for 2 yrs, +cash, Approval −8', f:s=>{addMod(s,'demand',0.8,2,'Financial crisis'); s.treasury+=C(s,5); adjAppr(s,-8);}},
+   {t:'Bail out a struggling shipping line', h:'Cost $$, Trade −15% for 2 yrs, Reputation +18', cost:10, f:s=>{addMod(s,'demand',0.85,2,'Financial crisis'); adjRep(s,18);}}]},
+ {id:'boom', from:1950, to:2050, w:1.1, head:'GLOBAL BOOM: Factories Can’t Keep Up With Orders',
+  body:'Consumers worldwide are on a spending spree and every ship is full.',
+  ch:[
+   {t:'Cash in with peak-season surcharges', h:'Trade +10% for 3 yrs, Port income +20%, Reputation −6', f:s=>{addMod(s,'demand',1.1,3,'Global boom'); addMod(s,'rev',1.2,3,'Surcharges'); adjRep(s,-6);}},
+   {t:'Keep fees steady, win loyalty', h:'Trade +15% for 3 yrs, Reputation +6', f:s=>{addMod(s,'demand',1.15,3,'Global boom'); adjRep(s,6);}}]},
+ {id:'blockade', from:1950, to:1990, w:0.8, head:'COLD WAR STANDOFF: Navy Blockade Threatens Sea Lanes',
+  body:'The superpowers stare each other down. Our harbor is a tempting naval base.',
+  ch:[
+   {t:'Lease a naval base to the alliance', h:'Cash windfall, joins alliance, Approval −6', f:s=>{s.treasury+=C(s,8); s.alliance='joined'; adjAppr(s,-6);}},
+   {t:'Proclaim strict neutrality', h:'Becomes neutral, Reputation +6', f:s=>{s.alliance='neutral'; adjRep(s,6);}},
+   {t:'Keep our heads down', h:'Trade −5% for 2 yrs', f:s=>addMod(s,'demand',0.95,2,'Blockade')}]},
+ {id:'decol', from:1955, to:1980, w:1, once:true, head:'NEW NATIONS RISE: Former Colonies Seek Trade Partners',
+  body:'A wave of independence creates dozens of new countries, all looking for a friendly port.',
+  ch:[
+   {t:'Send trade missions', h:'Cost $, Trade +10% for 10 yrs', cost:3, f:s=>addMod(s,'demand',1.1,10,'New partners')},
+   {t:'Stick with old partners', h:'Reputation +3', f:s=>adjRep(s,3)}]},
+ {id:'labor', from:1960, to:2050, w:0.8, head:'LABOR SHORTAGE: Docks Can’t Find Enough Workers',
+  body:'The booming port needs hands. Recruiters eye workers from abroad.',
+  ch:[
+   {t:'Welcome migrant workers', h:'Population +, Approval −4, Housing pressure', f:s=>{s.pop*=1.06; adjAppr(s,-4);}},
+   {t:'Raise wages', h:'Cost $, Approval +4', cost:3, f:s=>adjAppr(s,4)},
+   {t:'Accept slower docks', h:'Capacity −10% for 2 yrs', f:s=>addMod(s,'cap',0.9,2,'Labor shortage')}]},
+ {id:'cyber', from:2012, to:2050, w:0.9, head:'HACKERS CRIPPLE PORT COMPUTERS WITH RANSOMWARE',
+  body:s=>'Terminal operating systems are frozen. ' + (s.auto ? 'Our automated cranes stand motionless.' : 'Clerks dust off paper manifests.'),
+  ch:[
+   {t:'Pay the ransom', h:'Cost $, Reputation −4', cost:4, f:s=>adjRep(s,-4)},
+   {t:'Rebuild systems from scratch', h:s=>'Capacity −'+(10+s.auto*8)+'% for 1 yr, Reputation +4', f:s=>{addMod(s,'cap',0.9-0.08*s.auto,1,'Cyberattack'); adjRep(s,4);}},
+   {t:'Invest in cyber defense', h:'Cost $$, Reputation +8', cost:9, f:s=>adjRep(s,8)}]},
+ {id:'greenreg', from:2015, to:2045, w:1, once:true, head:'GLOBAL CARBON RULES FOR SHIPPING TAKE EFFECT',
+  body:'New emission rules require ports to offer clean fuels and shore power. Lines will reward the leaders.',
+  ch:[
+   {t:'Lead the transition', h:'Cost $$, Green level +1 now, Reputation +6', cost:25, need:s=>s.green>=3?'Already fully green':null, f:s=>{s.green++; adjRep(s,6);}},
+   {t:'Lobby for exemptions', h:'Reputation −8, Approval −4', f:s=>{adjRep(s,-8); adjAppr(s,-4);}},
+   {t:'Comply slowly', h:'Trade −4% for 5 yrs', f:s=>addMod(s,'demand',0.96,5,'Carbon rules')}]},
+ {id:'sealevel', from:2030, to:2050, w:1.6, head:'KING TIDES FLOOD WATERFRONT FOR THIRD TIME THIS YEAR',
+  body:s=>'Rising seas push salt water into warehouses and streets.' + (s.wall>=wallNeeded(s.year) ? ' Thanks to the sea walls, damage is minor.' : ' Engineers warn it will only get worse.'),
+  ch:[
+   {t:'Emergency flood barriers', h:'Cost $$, Sea Wall +1 now', cost:s=>40*(s.wall+1)*0.8, need:s=>s.wall>=3?'Walls maxed':null, f:s=>{s.wall++;}},
+   {t:'Relocate low-lying homes', h:'Cost $, Approval −4, Housing capacity −10%', cost:3, f:s=>{adjAppr(s,-4); s.housingCap*=0.9;}},
+   {t:'Accept the damage', h:s=>s.wall>=wallNeeded(s.year)?'Minor losses':'Capacity −15% for 2 yrs, Approval −6', f:s=>{ if(s.wall<wallNeeded(s.year)){addMod(s,'cap',0.85,2,'Flooding'); adjAppr(s,-6);} }}]},
+ {id:'refugees', from:2032, to:2050, w:1, once:true, head:'CLIMATE REFUGEES ARRIVE BY THE THOUSANDS',
+  body:'Drought and floods elsewhere drive families to seek new lives in our city.',
+  ch:[
+   {t:'Open our doors', h:'Population +10%, Approval −4 (housing strain), Reputation +4', f:s=>{s.pop*=1.1; adjAppr(s,-4); adjRep(s,4);}},
+   {t:'Build welcome housing', h:'Cost $$, Population +10%, Housing +', cost:12, f:s=>{s.pop*=1.1; s.housingCap+=s.pop*0.15;}},
+   {t:'Close the borders', h:'Approval +3, Reputation −6', f:s=>{adjAppr(s,3); adjRep(s,-6);}}]},
+ {id:'arctic', from:2033, to:2050, w:0.8, once:true, head:'MELTING ICE OPENS ARCTIC SHIPPING ROUTE',
+  body:'Year-round polar passage cuts weeks off some voyages — bypassing some southern ports entirely.',
+  ch:[
+   {t:'Market ourselves as the Arctic gateway', h:'Cost $, Trade +8% for 10 yrs', cost:6, f:s=>addMod(s,'demand',1.08,10,'Arctic route')},
+   {t:'Focus on regional trade', h:'Trade −5% for 10 yrs, Reputation +3', f:s=>{addMod(s,'demand',0.95,10,'Arctic bypass'); adjRep(s,3);}}]},
+ {id:'hydrogen', from:2030, to:2050, w:0.8, once:true, head:'SHIPOWNERS RACE TO ZERO-CARBON FUELS',
+  body:'Ammonia and hydrogen-powered ships need refueling hubs. Early hubs could win huge business.',
+  ch:[
+   {t:'Build a clean-fuel hub', h:'Cost $$$, Trade +10% for 15 yrs, Reputation +6', cost:30, f:s=>{addMod(s,'demand',1.1,15,'Clean-fuel hub'); adjRep(s,6);}},
+   {t:'Let others go first', h:'Reputation −3', f:s=>adjRep(s,-3)}]},
+ {id:'mergers', from:1995, to:2050, w:0.8, head:'SHIPPING GIANTS MERGE INTO MEGA-ALLIANCE',
+  body:'The three largest carriers are pooling ships. They will pick just a few hub ports in our region.',
+  ch:[
+   {t:'Offer exclusive discounts', h:'Port income −15% for 5 yrs, Reputation +15', f:s=>{addMod(s,'rev',0.85,5,'Alliance discount'); adjRep(s,15);}},
+   {t:'Bet on our infrastructure', h:s=>s.cong<0.9 && s.depth>=reqDepth(s) ? 'Reputation +6 (we have room & depth)' : 'Reputation −8 (congested or shallow)', f:s=>{ adjRep(s, s.cong<0.9 && s.depth>=reqDepth(s) ? 6 : -8); }}]},
+ {id:'fishing', from:1950, to:1965, w:1, once:true, head:'FISHING FLEET DEMANDS ITS OWN HARBOR SPACE',
+  body:'Fishermen complain freighters are crowding them out of the old harbor.',
+  ch:[
+   {t:'Build them a separate fishing pier', h:'Cost $, Approval +6', cost:1.5, f:s=>adjAppr(s,6)},
+   {t:'Cargo comes first', h:'Approval −5, Reputation +4', f:s=>{adjAppr(s,-5); adjRep(s,4);}}]},
+ {id:'aid', from:1950, to:1962, w:1.2, once:true, head:'RECONSTRUCTION FUND OFFERS PORT LOANS',
+  body:'A postwar development fund will lend cheaply to ports that modernize.',
+  ch:[
+   {t:'Take the loan', h:'+$12M now, upkeep of debt via interest', f:s=>{s.treasury+=12; s.flags.loan=1; addMod(s,'rev',0.93,10,'Loan repayment');}},
+   {t:'Stay independent', h:'Approval +3', f:s=>adjAppr(s,3)}]}
+];
+const EVENT_BY_ID = {}; for (const e of EVENTS) EVENT_BY_ID[e.id] = e;
+// hidden project used by an event
+CARD_BY_ID._ecus = {id:'_ecus', name:'Digital customs system', finish:s=>{ s.ecustoms=1; adjRep(s,5); }};
+
+function pickEvent(s){
+  const pool = EVENTS.filter(e => s.year>=e.from && s.year<=e.to && (!e.need || e.need(s)) &&
+    !(e.once && s.lastEv[e.id]) && !(s.lastEv[e.id] && s.year - s.lastEv[e.id] < 8));
+  if (!pool.length) return null;
+  let tot = pool.reduce((a,e)=>a+e.w,0), r = Math.random()*tot;
+  for (const e of pool){ r -= e.w; if (r <= 0) return e; }
+  return pool[pool.length-1];
+}
+function evText(s,v){ return typeof v==='function' ? v(s) : v; }
+function choiceCost(s,ch){ if(!ch.cost) return 0; const b = typeof ch.cost==='function' ? ch.cost(s) : ch.cost; return C(s,b); }
+function choiceStatus(s,ch){
+  if (ch.need){ const r = ch.need(s); if (r) return r; }
+  if (choiceCost(s,ch) > s.treasury + 0.001) return 'Not enough money';
+  return null;
+}
+function resolveEvent(s, idx){
+  const ev = EVENT_BY_ID[s.pendingEvent]; if (!ev) { s.pendingEvent=null; return; }
+  const ch = ev.ch[idx];
+  s.treasury -= choiceCost(s,ch);
+  ch.f(s);
+  s.corr = clamp(s.corr,5,100);
+  news(s, evText(s,ev.head).replace(/:.*/,'') + ' — ' + ch.t.toLowerCase() + '.');
+  s.pendingEvent = null;
+}
+/* ===================== CORE END ===================== */
+
+/* ===================== UI ===================== */
+const SAVE_KEY = 'portcity_save_v1', BEST_KEY = 'portcity_best_v1', SEEN_KEY='portcity_seen_help';
+let S = null, undoStack = [], curTab = 'build', prevStats = null;
+const $ = id => document.getElementById(id);
+
+function store(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }
+function load(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }
+function wipe(k){ try{ localStorage.removeItem(k); }catch(e){} }
+function save(){ if (S) store(SAVE_KEY, JSON.stringify(S)); }
+
+function fmtMoney(v){
+  const a = Math.abs(v), sg = v<0?'−':'';
+  if (a >= 1000) return sg+'$'+(a/1000).toFixed(a>=10000?0:1)+'B';
+  if (a >= 100) return sg+'$'+a.toFixed(0)+'M';
+  return sg+'$'+a.toFixed(1)+'M';
+}
+function fmtTEU(k){ if (k >= 1000) return (k/1000).toFixed(k>=10000?1:2)+'M'; return Math.round(k)+'k'; }
+function fmtPop(k){ if (k >= 1000) return (k/1000).toFixed(2)+'M'; return Math.round(k)+'k'; }
+
+let toastT;
+function toast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),2200); }
+
+function showScreen(name){
+  const game = name==='game';
+  $('title').classList.toggle('hidden', game);
+  ['topbar','main','bottombar'].forEach(id=>$(id).classList.toggle('hidden', !game));
+}
+
+function titleScreen(){
+  closeModal();
+  showScreen('title');
+  const sv = load(SAVE_KEY); let ok=false;
+  if (sv) { try{ const o=JSON.parse(sv); ok = o && o.v===1 && !o.over; if(ok) $('btnContinue').textContent='Continue ('+o.year+')'; }catch(e){} }
+  $('btnContinue').classList.toggle('hidden', !ok);
+  const best = load(BEST_KEY);
+  $('bestLine').textContent = best ? 'Best score: ' + best : '';
+}
+
+function startGame(fresh){
+  if (fresh) { S = newState(); const t = JSON.parse(JSON.stringify(S)); simYear(t); for (const k of ['rev','exp','net','demand','cap','crowd','cong','portRev','taxRev']) S[k]=t[k]; news(S,'You take office as harbor governor. The quays are wooden, the cranes are men.'); }
+  else { try{ S = JSON.parse(load(SAVE_KEY)); }catch(e){ S=null; } if(!S || S.v!==1){ S=newState(); } }
+  undoStack = []; prevStats = null;
+  showScreen('game');
+  resizeCanvases(); render(); save();
+  if (S.pendingEvent) showEvent();
+  if (fresh && !load(SEEN_KEY)) showHelp();
+}
+
+/* ---- top bar ---- */
+function renderStats(){
+  const st = [
+    {ic:'💰', l:'Treasury', v:fmtMoney(S.treasury), raw:S.treasury, d: S.net, df:v=>(v>=0?'+':'')+fmtMoney(v).replace('$','$')},
+    {ic:'📦', l:'TEU/yr', v:fmtTEU(S.teu), raw:S.teu},
+    {ic:'👥', l:'Pop.', v:fmtPop(S.pop), raw:S.pop},
+    {ic:'👍', l:'Approval', v:Math.round(S.approval)+'%', raw:S.approval},
+    {ic:'⚓', l:'Rep.', v:Math.round(S.rep), raw:S.rep}
+  ];
+  $('stats').innerHTML = st.map((x,i)=>{
+    let d = '';
+    if (i===0) d = '<div class="d '+(S.net>=0?'up':'down')+'">'+(S.net>=0?'+':'')+fmtMoney(S.net)+'</div>';
+    else if (prevStats) { const diff = x.raw - prevStats[i]; if (Math.abs(diff) > (i<3? x.raw*0.005 : 0.5)) d = '<div class="d '+(diff>0?'up':'down')+'">'+(diff>0?'▲':'▼')+'</div>'; else d='<div class="d">&nbsp;</div>'; }
+    else d='<div class="d">&nbsp;</div>';
+    return '<div class="stat"><div class="ic">'+x.ic+'</div><div class="v'+(i===0&&S.treasury<0?' down':'')+(i===3&&S.approval<25?' down':'')+'">'+x.v+'</div>'+d+'<div class="l">'+x.l+'</div></div>';
+  }).join('');
+  $('year').textContent = S.year;
+  $('era').textContent = ERAS[eraIdx(S.year)].n;
+  $('yprog').style.width = ((S.year-START)/(END-START)*100)+'%';
+}
+
+function renderInfo(){
+  const r = reqDepth(S), cap = capacity(S)*efficiency(S);
+  $('tagDepth').innerHTML = '🌊 Depth ' + S.depth.toFixed(0) + ' m <span style="color:'+(S.depth>=r?'#4ad991':'#ff8a8a')+'">/ ships need ' + r.toFixed(1) + ' m</span>';
+  $('tagCap').textContent = '🏗 Capacity ' + fmtTEU(cap);
+  const kv = [
+    ['Revenue', fmtMoney(S.rev)], ['Expenses', fmtMoney(S.exp)],
+    ['Port fees', FEE_NAMES[S.fee]], ['Corp. tax', S.tax+'%'],
+    ['Labor rules', LABOR[S.labor]], ['Alliance', ({none:'Unaligned',joined:'Member',neutral:'Neutral'})[S.alliance]],
+    ['Ship demand', fmtTEU(S.demand)], ['Housing', Math.round((S.crowd||S.pop/S.housingCap)*100)+'% full'],
+  ];
+  $('kv').innerHTML = kv.map(x=>'<div><span>'+x[0]+'</span><span>'+x[1]+'</span></div>').join('');
+  const chips = [];
+  for (const p of S.projects){ const c = CARD_BY_ID[p.id]; chips.push('<span class="chip">🚧 '+c.name+' · '+(p.done-S.year)+'y</span>'); }
+  const seen = {};
+  for (const m of S.mods){ if (seen[m.label]) continue; seen[m.label]=1; const good = (m.k==='appr'||m.k==='rep') ? m.v>0 : m.v>1; chips.push('<span class="chip '+(good?'':'warn')+'">'+(good?'📈 ':'⚠️ ')+m.label+' · '+(m.until-S.year)+'y</span>'); }
+  if (S.cong > 1.1) chips.push('<span class="chip bad">🚢 Congested ×'+S.cong.toFixed(2)+'</span>');
+  if (S.depth < r - 0.5) chips.push('<span class="chip bad">🌊 Harbor too shallow</span>');
+  if ((S.crowd||0) > 1.05) chips.push('<span class="chip bad">🏚 Overcrowded</span>');
+  if (wallNeeded(S.year) > S.wall) chips.push('<span class="chip bad">🌊 Flooding — need sea wall '+wallNeeded(S.year)+'</span>');
+  if (S.debtYears>0) chips.push('<span class="chip bad">💀 Deep debt '+S.debtYears+'/3 yrs</span>');
+  if (S.corr > 45) chips.push('<span class="chip warn">🕵️ Corruption '+Math.round(S.corr)+'</span>');
+  $('chips').innerHTML = chips.join('');
+  $('news').innerHTML = S.news.slice(0,12).map(n=>'<div><b>'+n.y+'</b>'+n.t+'</div>').join('') || '<div>No news yet.</div>';
+}
+
+function renderCards(){
+  const list = CARDS.filter(c => c.cat===curTab && cardVisible(S,c));
+  $('cards').innerHTML = list.map(c=>{
+    const st = cardStatus(S,c), cost = cardCost(S,c);
+    const meta = [];
+    if (c.delay) meta.push('⏳ '+c.delay+' yr'+(c.delay>1?'s':'')); else meta.push('⚡ Instant');
+    if (c.max) meta.push('Lv '+c.cur(S)+'/'+c.max(S));
+    if (c.lvl) meta.push('Now: '+c.lvl(S));
+    const done = st==='Done this year';
+    return '<button class="card'+(st?(done?' done':' dis'):'')+'" data-c="'+c.cat+'" data-id="'+c.id+'">'+
+      '<div class="ci">'+c.icon+'</div><div class="cb"><div class="cn"><span>'+c.name+'</span><span class="cost">'+(cost>0?fmtMoney(cost):'Free')+'</span></div>'+
+      '<div class="cd">'+cardDesc(S,c)+'</div><div class="cm">'+meta.map(m=>'<span>'+m+'</span>').join('')+
+      (st?'<span class="why">'+(done?'✓ ':'')+st+'</span>':'')+'</div></div></button>';
+  }).join('');
+}
+
+function renderBottom(){
+  let p=''; for(let i=0;i<ACTIONS;i++) p+='<i class="'+(i>=S.actionsLeft?'used':'')+'"></i>';
+  $('pips').innerHTML = p;
+  $('btnUndo').disabled = undoStack.length===0;
+  $('btnEnd').firstChild.textContent = S.year>=END ? 'Final Year ' : 'End '+S.year+' ';
+}
+
+function render(){ renderStats(); renderInfo(); renderCards(); renderBottom(); drawChart(); }
+
+/* ---- actions ---- */
+function onCard(id){
+  const c = CARD_BY_ID[id]; if (!c) return;
+  const st = cardStatus(S,c);
+  if (st) { toast(st); return; }
+  undoStack.push(JSON.stringify(S));
+  doCard(S,c);
+  toast((c.delay ? '🚧 ' : '✅ ') + c.name + (c.delay ? ' — ready in '+(S.year+c.delay) : ''));
+  save(); render();
+}
+function onUndo(){ if(!undoStack.length) return; S = JSON.parse(undoStack.pop()); save(); render(); toast('Undone'); }
+
+function onEndYear(){
+  if (S.pendingEvent) { showEvent(); return; }
+  prevStats = [S.treasury,S.teu,S.pop,S.approval,S.rep];
+  const before = {teu:S.teu, treasury:S.treasury, year:S.year};
+  const res = advanceYear(S);
+  undoStack = [];
+  for (const l of res.log) if (Math.random()<0.6) news(S, l);
+  save();
+  if (S.over) { render(); gameOver(); return; }
+  render();
+  const dt = S.teu - before.teu;
+  toast(before.year+': '+(S.net>=0?'+':'')+fmtMoney(S.net)+' · TEU '+(dt>=0?'▲':'▼')+' '+fmtTEU(Math.abs(dt)) + (res.done && res.done.length ? ' · ✅ '+res.done.join(', ') : ''));
+  if (S.pendingEvent) setTimeout(showEvent, 350);
+}
+
+/* ---- modals ---- */
+function openModal(html, dismissable){
+  $('sheet').innerHTML = html; $('modal').classList.remove('hidden');
+  $('modal').onclick = e => { if (dismissable && e.target.id==='modal') closeModal(); };
+  $('sheet').scrollTop = 0;
+}
+function closeModal(){ $('modal').classList.add('hidden'); }
+
+function showEvent(){
+  const ev = EVENT_BY_ID[S.pendingEvent]; if (!ev) { S.pendingEvent=null; return; }
+  const html = '<div class="paper"><div class="mast"><span>The Harbor Gazette</span><span>'+S.year+'</span></div>'+
+    '<h2>'+evText(S,ev.head)+'</h2><p>'+evText(S,ev.body)+'</p></div>'+
+    '<div class="small">Treasury: '+fmtMoney(S.treasury)+' — choose a response:</div>'+
+    ev.ch.map((ch,i)=>{ const st = choiceStatus(S,ch), cost = choiceCost(S,ch);
+      return '<button class="choice" data-i="'+i+'" '+(st?'disabled':'')+'><b>'+ch.t+(cost>0?' <span style="color:var(--warn)">('+fmtMoney(cost)+')</span>':'')+'</b><small>'+evText(S,ch.h)+(st?' — <span style="color:var(--bad)">'+st+'</span>':'')+'</small></button>'; }).join('');
+  openModal(html,false);
+  $('sheet').querySelectorAll('.choice').forEach(b=>b.onclick=()=>{
+    resolveEvent(S, +b.dataset.i); save(); closeModal(); render();
+    if (S.approval<=0){ S.over='overthrown'; save(); gameOver(); }
+  });
+}
+
+function showHelp(){
+  store(SEEN_KEY,'1');
+  openModal(
+  '<h1>⚓ How to Play</h1>'+
+  '<p>You govern a small coastal town from <b>1950 to 2050</b>. Each turn is one year. Grow it into a world trade hub.</p>'+
+  '<h3>Each year</h3><ul><li>Take up to <b>3 actions</b> by tapping cards in the Build, Policy, Diplomacy and Social tabs.</li><li>Tap <b>End Year</b> to see the results. Made a mistake? <b>Undo</b> works until you end the year.</li></ul>'+
+  '<h3>How trade works</h3><ul>'+
+  '<li><b>Demand</b> for your port comes from world trade × your attractiveness: reputation, fees, harbor depth, taxes, rail links, trade pacts.</li>'+
+  '<li><b>Throughput</b> can never exceed your terminal <b>capacity</b>. Congestion hurts reputation.</li>'+
+  '<li>Ships grow every era. Keep <b>dredging</b> or lines will skip you.</li>'+
+  '<li>Big projects take <b>2–5 years</b> to finish and cost upkeep. Plan ahead!</li></ul>'+
+  '<h3>Money</h3><ul><li>Income = port fees per box + corporate tax. Low fees bring ships; high fees bring cash.</li><li>Debt costs interest. Being deeply in debt for 3 years = <b>bankruptcy</b>.</li></ul>'+
+  '<h3>People</h3><ul><li>Growth brings people. Build <b>housing</b> before they arrive, or approval sinks.</li><li>Loose labor rules, free-trade zones and low taxes raise inequality.</li><li>If approval hits <b>0%</b>, you are overthrown.</li></ul>'+
+  '<h3>Strategies</h3><p><b>Free port:</b> low fees, low tax, free-trade zones — volume over margin. <b>State builder:</b> higher taxes & fees funding education, housing and mega-projects. Both can win.</p>'+
+  '<h3>Eras</h3><p>Break-bulk → Containers (1966) → Globalization (1990) → Automation & green shipping (2010) → Climate pressure (2030): sea walls become essential.</p>'+
+  '<p>In 2050 you are ranked from <b>Fishing Village</b> to <b>Global Gateway</b>.</p>'+
+  '<button class="btn" style="width:100%;margin-top:10px" id="helpOk">Got it</button>', true);
+  $('helpOk').onclick = closeModal;
+}
+
+function gameOver(){
+  const sc = score(S), rk = rankFor(sc.total);
+  const best = +(load(BEST_KEY)||0);
+  if (S.over==='complete' && sc.total > best) store(BEST_KEY, String(sc.total));
+  let head, sub;
+  if (S.over==='overthrown'){ head='🔥 Overthrown!'; sub='Angry crowds storm the harbor office in '+S.year+'. Your term is over.'; }
+  else if (S.over==='bankrupt'){ head='💀 Bankrupt!'; sub='Creditors seize the port in '+S.year+' after three years of crushing debt.'; }
+  else { head='🏁 The Year 2050'; sub='A century of governance comes to an end.'; }
+  const peak = S.hist.reduce((a,h)=>Math.max(a,h.teu),0);
+  openModal(
+    '<h1>'+head+'</h1><p>'+sub+'</p>'+
+    (S.over==='complete' ? '<div class="small">Your port is remembered as a</div><div class="rank">'+rk.n+'</div><p>'+rk.d+'</p>' : '<div class="small">Had history ended here, your port would be a</div><div class="rank">'+rk.n+'</div>')+
+    '<div class="report">'+
+    '<span>Trade volume ('+fmtTEU(S.teu)+' TEU)</span><span>'+sc.trade+'</span>'+
+    '<span>Population ('+fmtPop(S.pop)+')</span><span>'+sc.pop+'</span>'+
+    '<span>Treasury ('+fmtMoney(S.treasury)+')</span><span>'+sc.treasury+'</span>'+
+    '<span>Approval ('+Math.round(S.approval)+'%)</span><span>'+sc.approval+'</span>'+
+    '<span style="border-top:1px solid var(--line);padding-top:4px"><b>Total score</b></span><span style="border-top:1px solid var(--line);padding-top:4px;color:var(--warn)">'+sc.total+'</span>'+
+    '</div>'+
+    '<p class="small">Peak trade: '+fmtTEU(peak)+' TEU · Ranks: Fishing Village < Coastal Town (900) < Regional Port (1700) < Major Hub (2800) < Global Gateway (3800)</p>'+
+    '<button class="btn" style="width:100%;margin-top:8px" id="goNew">Play Again</button>'+
+    '<button class="btn sec" style="width:100%;margin-top:8px" id="goTitle">Title Screen</button>', false);
+  $('goNew').onclick = ()=>{ closeModal(); startGame(true); };
+  $('goTitle').onclick = ()=>{ wipe(SAVE_KEY); titleScreen(); };
+}
+
+/* ---- chart ---- */
+function drawChart(){
+  const cv = $('chart'), ctx = cv.getContext('2d'), dpr = window.devicePixelRatio||1;
+  const W = cv.clientWidth, H = cv.clientHeight;
+  if (cv.width !== W*dpr) { cv.width = W*dpr; cv.height = H*dpr; }
+  ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,W,H);
+  const h = S.hist, max = Math.max(50, ...h.map(p=>p.teu));
+  $('chartMax').textContent = 'peak ' + fmtTEU(max);
+  const pl=4, pr=4, pt=6, pb=14;
+  const x = y => pl + (y-START)/(END-START)*(W-pl-pr);
+  const yv = v => pt + (1 - v/max)*(H-pt-pb);
+  // era bands
+  ERAS.forEach((e,i)=>{ const x0=x(e.from), x1=i<ERAS.length-1?x(ERAS[i+1].from):x(END);
+    ctx.fillStyle = i%2? 'rgba(255,255,255,0.035)':'rgba(255,255,255,0)'; ctx.fillRect(x0,pt,x1-x0,H-pt-pb); });
+  ctx.fillStyle='#6f87a6'; ctx.font='9px system-ui'; ctx.textAlign='center';
+  [1950,1975,2000,2025,2050].forEach(yr=>ctx.fillText(yr, clamp(x(yr),12,W-12), H-3));
+  ctx.strokeStyle='rgba(255,255,255,.12)'; ctx.beginPath(); ctx.moveTo(pl,yv(0)); ctx.lineTo(W-pr,yv(0)); ctx.stroke();
+  if (h.length < 2) return;
+  const g = ctx.createLinearGradient(0,pt,0,H-pb); g.addColorStop(0,'rgba(63,182,255,.45)'); g.addColorStop(1,'rgba(63,182,255,0)');
+  ctx.beginPath(); ctx.moveTo(x(h[0].y), yv(0));
+  h.forEach(p=>ctx.lineTo(x(p.y), yv(p.teu))); ctx.lineTo(x(h[h.length-1].y), yv(0)); ctx.closePath();
+  ctx.fillStyle=g; ctx.fill();
+  ctx.beginPath(); h.forEach((p,i)=> i?ctx.lineTo(x(p.y),yv(p.teu)):ctx.moveTo(x(p.y),yv(p.teu)));
+  ctx.strokeStyle='#3fb6ff'; ctx.lineWidth=2; ctx.stroke();
+  const L = h[h.length-1]; ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(x(L.y),yv(L.teu),3,0,7); ctx.fill();
+}
+
+/* ---- harbor scene ---- */
+let sceneShips = [], lastFrame = 0, trainX = 0;
+function rng(seed){ let x = seed>>>0 || 1; return ()=>{ x ^= x<<13; x>>>=0; x ^= x>>17; x ^= x<<5; x>>>=0; return x/4294967296; }; }
+function resizeCanvases(){
+  const cv = $('scene'), dpr = window.devicePixelRatio||1;
+  cv.width = cv.clientWidth*dpr; cv.height = cv.clientHeight*dpr;
+  const ch = $('chart'); ch.width = ch.clientWidth*dpr; ch.height = ch.clientHeight*dpr;
+  if (S) drawChart();
+}
+function shipCountTarget(){ return clamp(1 + Math.floor(Math.log2(Math.max(1,S.teu/15))), 1, 10); }
+function newShip(W,H,qy,i){
+  const lane = Math.random();
+  return {x: Math.random()*W, y: 20 + Math.random()*(qy-60), vx:(Math.random()<.5?-1:1)*(6+Math.random()*10), phase: Math.random()<0.5?'sail':'dock', t: Math.random()*10, seed: Math.random()*1e9|0, dockX: 0, lane};
+}
+function drawScene(ts){
+  requestAnimationFrame(drawScene);
+  if (!S || $('main').classList.contains('hidden')) return;
+  if (ts - lastFrame < 33) return;
+  const dt = Math.min(0.1, (ts - lastFrame)/1000); lastFrame = ts;
+  const cv = $('scene'), ctx = cv.getContext('2d'), dpr = window.devicePixelRatio||1;
+  const W = cv.width/dpr, H = cv.height/dpr; if (!W) return;
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  const era = eraIdx(S.year);
+  const flood = Math.max(0, wallNeeded(S.year)-S.wall);
+  const qy = Math.round(H*0.56) + flood*4; // quay line
+  // water: deeper = darker
+  const dn = clamp((S.depth-8)/14,0,1);
+  const wg = ctx.createLinearGradient(0,0,0,qy);
+  const c1 = `rgb(${Math.round(70-50*dn)},${Math.round(170-100*dn)},${Math.round(200-90*dn)})`;
+  const c2 = `rgb(${Math.round(110-60*dn)},${Math.round(200-90*dn)},${Math.round(215-70*dn)})`;
+  wg.addColorStop(0,c1); wg.addColorStop(1,c2);
+  ctx.fillStyle = wg; ctx.fillRect(0,0,W,qy+2);
+  // waves
+  ctx.strokeStyle='rgba(255,255,255,.18)'; ctx.lineWidth=1;
+  for (let i=0;i<14;i++){ const yy = (i*37 % (qy-10)) + 6, xx = ((i*97 + ts/60) % (W+40)) - 20; ctx.beginPath(); ctx.moveTo(xx,yy); ctx.quadraticCurveTo(xx+5,yy-2,xx+10,yy); ctx.stroke(); }
+  // dredged channel
+  const chW = 10 + (S.depth-8)*3;
+  ctx.fillStyle='rgba(5,25,60,'+(0.15+dn*0.25)+')';
+  ctx.beginPath(); ctx.moveTo(W*0.62-chW/2,0); ctx.lineTo(W*0.62+chW/2,0); ctx.lineTo(W*0.5+chW,qy); ctx.lineTo(W*0.5-chW,qy); ctx.fill();
+  // breakwater
+  ctx.strokeStyle='#8c8f94'; ctx.lineWidth=6; ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(-5,qy*0.35); ctx.quadraticCurveTo(W*0.25,qy*0.18,W*0.38,qy*0.28); ctx.stroke();
+  // lighthouse
+  ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(W*0.38,qy*0.28,4,0,7); ctx.fill();
+  ctx.fillStyle='#e33'; ctx.beginPath(); ctx.arc(W*0.38,qy*0.28,2,0,7); ctx.fill();
+  if (Math.floor(ts/800)%2){ ctx.fillStyle='rgba(255,240,150,.35)'; ctx.beginPath(); ctx.arc(W*0.38,qy*0.28,10,0,7); ctx.fill(); }
+  // wind turbines on breakwater (green)
+  for (let i=0;i<S.green*2;i++){ const tx = 14 + i*22, ty = qy*0.33 - i*3.2;
+    ctx.fillStyle='#ddd'; ctx.beginPath(); ctx.arc(tx,ty,2,0,7); ctx.fill();
+    ctx.strokeStyle='#f4f4f4'; ctx.lineWidth=1.5; const a = ts/400 + i;
+    for (let k=0;k<3;k++){ const aa=a+k*2.094; ctx.beginPath(); ctx.moveTo(tx,ty); ctx.lineTo(tx+Math.cos(aa)*8,ty+Math.sin(aa)*8); ctx.stroke(); } }
+
+  // land
+  const landC = era>=1 && S.terms ? '#7d8790' : '#b9ad86';
+  ctx.fillStyle = landC; ctx.fillRect(0,qy,W,H-qy);
+  // city area (lower land)
+  const cityY = qy + 34;
+  ctx.fillStyle = era>=2 ? '#5d6a63' : '#8a9a6a'; ctx.fillRect(0,cityY,W,H-cityY);
+  // roads
+  ctx.fillStyle='#454b52'; ctx.fillRect(0,cityY-2,W,3);
+  for (let i=1;i<5;i++) ctx.fillRect(i*W/5,cityY,2,H-cityY);
+  // quay edge / sea wall
+  ctx.fillStyle = S.wall ? '#c9ccd1' : '#6b5a3e'; ctx.fillRect(0,qy-1,W,S.wall?2+S.wall*1.5:3);
+  // FTZ fence
+  if (S.ftz){ ctx.setLineDash([3,3]); ctx.strokeStyle='#ffd34d'; ctx.lineWidth=1.2; ctx.strokeRect(W*0.62,qy+3,W*0.36,28); ctx.setLineDash([]);
+    ctx.fillStyle='#ffd34d'; ctx.font='bold 8px system-ui'; ctx.textAlign='left'; ctx.fillText('FTZ'+(S.ftz>1?' ×'+S.ftz:''),W*0.62+3,qy+30); }
+  // warehouses
+  for (let i=0;i<S.wh;i++){ const wx = W*0.64 + (i%3)*(W*0.11), wy = qy+6+Math.floor(i/3)*11;
+    ctx.fillStyle='#d6d0c4'; ctx.fillRect(wx,wy,W*0.1,8); ctx.fillStyle='#a69e8e'; ctx.fillRect(wx,wy+6,W*0.1,2); }
+  // terminals: container yards with stacks
+  const r = rng(77);
+  const facilities = [];
+  for (let i=0;i<Math.min(S.berths,6);i++) facilities.push('b');
+  for (let i=0;i<S.terms;i++) facilities.push('t');
+  for (let i=0;i<S.megas;i++) facilities.push('m');
+  const slots = facilities.slice(-12);
+  const yardW = W*0.6;
+  let fx = 4;
+  const per = yardW / Math.max(4, slots.length);
+  const cranes = [];
+  slots.forEach((f,i)=>{
+    const x0 = fx + i*per;
+    if (f==='b'){ ctx.fillStyle='#8b6b43'; ctx.fillRect(x0+per*0.2, qy-10, per*0.6, 11); cranes.push({x:x0+per*0.5,s:0.6,t:'b'}); }
+    else { const big = f==='m';
+      ctx.fillStyle = big ? '#5b6670' : '#6e7882'; ctx.fillRect(x0+1, qy+2, per-2, big?28:22);
+      for (let k=0;k<(big?10:6);k++){ ctx.fillStyle = ['#d64541','#2e86de','#f39c12','#27ae60','#8e44ad','#e67e22'][Math.floor(r()*6)];
+        ctx.fillRect(x0+3+(k%5)*(per-6)/5, qy+5+Math.floor(k/5)*7, (per-6)/5-1.5, 5); }
+      cranes.push({x:x0+per*0.3,s:big?1.3:1,t:'g'}); if (big||S.auto) cranes.push({x:x0+per*0.75,s:big?1.3:1,t:'g'}); }
+  });
+  // cranes
+  for (const c of cranes){
+    if (c.t==='b'){ ctx.strokeStyle='#5a4630'; ctx.lineWidth=1.5; ctx.beginPath(); ctx.moveTo(c.x,qy-2); ctx.lineTo(c.x+6,qy-14); ctx.stroke(); continue; }
+    const h = 16*c.s; ctx.fillStyle = S.auto? '#2fb5a6':'#e2a03f';
+    ctx.fillRect(c.x-1.5, qy-h, 3, h+6);
+    ctx.fillRect(c.x-3, qy-h-1, 6, 3);
+    ctx.fillRect(c.x-1, qy-h-14*c.s, 2, 14*c.s); // boom over water
+    ctx.fillStyle='rgba(0,0,0,.2)'; ctx.fillRect(c.x+2, qy-h+2, 3, h);
+  }
+  // rail link
+  if (S.rail){ const ry = qy+31; ctx.strokeStyle='#3d3d3d'; ctx.lineWidth=2;
+    for (let k=0;k<S.rail && k<2;k++){ ctx.beginPath(); ctx.moveTo(0,ry+k*4); ctx.lineTo(W,ry+k*4); ctx.stroke(); }
+    trainX = (trainX + dt*40*S.rail) % (W+120);
+    const tx = W - trainX;
+    for (let k=0;k<6;k++){ ctx.fillStyle = k===0?'#c0392b':['#2e86de','#f39c12','#27ae60'][k%3]; ctx.fillRect(tx+k*11, ry-2, 10, 5); } }
+  // city buildings
+  const cr = rng(1234);
+  const nB = clamp(Math.round(S.pop/12), 5, 60);
+  const cols = 12, bw = W/cols;
+  for (let i=0;i<nB;i++){
+    const col = i % cols, row = Math.floor(i/cols);
+    const bx = col*bw + 3 + cr()*4, by = cityY + 6 + row*((H-cityY-8)/5) + cr()*3;
+    const tall = clamp(S.pop/400 + cr()*1.5, 0.3, 4);
+    const sz = bw*0.55;
+    if (by+sz > H-2) continue;
+    if (S.airport && bx > W*0.66 && by > H-26) continue;
+    ctx.fillStyle='rgba(0,0,0,.25)'; ctx.fillRect(bx+tall*2, by+tall*1.5, sz, sz); // shadow = height
+    const shade = era>=2 && tall>1.5 ? ['#b8d4ea','#9cb8cf','#d0dde8'] : ['#d9c6a5','#c7a982','#e5d7bd','#b98d6a'];
+    ctx.fillStyle = shade[Math.floor(cr()*shade.length)]; ctx.fillRect(bx,by,sz,sz);
+    if (tall>2){ ctx.fillStyle='rgba(255,255,255,.35)'; ctx.fillRect(bx+1,by+1,sz-2,2); }
+  }
+  // housing blocks (public housing)
+  for (let i=0;i<Math.min(S.houses,8);i++){ const hx = 4 + i*14, hy = H-12; ctx.fillStyle='#e8a87c'; ctx.fillRect(hx,hy,11,9); ctx.fillStyle='#a0522d'; ctx.fillRect(hx,hy,11,2); }
+  // airport runway
+  if (S.airport){ ctx.fillStyle='#3a3f45'; ctx.fillRect(W*0.68,H-20,W*0.3,10*S.airport>10?14:9);
+    ctx.fillStyle='#fff'; for(let k=0;k<6;k++) ctx.fillRect(W*0.7+k*W*0.045,H-16,W*0.025,1.2);
+    const px = W*0.68 + ((ts/30) % (W*0.32)); ctx.fillStyle='#fff'; ctx.font='10px system-ui'; ctx.fillText('✈', px, H-12); }
+  // flooding overlay
+  if (flood){ ctx.fillStyle='rgba(60,140,200,'+(0.15+0.1*flood)+')'; ctx.fillRect(0,qy,W,10+flood*8); }
+
+  // ships
+  const target = shipCountTarget();
+  while (sceneShips.length < target) sceneShips.push(newShip(W,H,qy,sceneShips.length));
+  if (sceneShips.length > target) sceneShips.length = target;
+  const shipLen = [18,24,30,36,40][era] , shipH = [6,7,8,9,10][era];
+  sceneShips.forEach((sh,i)=>{
+    sh.t += dt;
+    if (sh.phase==='sail'){ sh.x += sh.vx*dt; if (sh.x < -50) sh.x = W+40; if (sh.x > W+50) sh.x = -40;
+      if (sh.t > 12) { sh.phase='dock'; sh.t=0; } }
+    else { if (sh.t > 9) { sh.phase='sail'; sh.t=0; } }
+    let x = sh.x, y = sh.y;
+    if (sh.phase==='dock' && slots.length){ const idx = i % slots.length; x = 4 + idx*per + per*0.15; y = qy - shipH - 6; }
+    else if (sh.phase==='dock') { x = W*0.45; y = qy - shipH - 6; }
+    const L = shipLen * (i%3===0?1:0.8);
+    ctx.fillStyle='rgba(0,0,0,.18)'; ctx.fillRect(x+2,y+2,L,shipH);
+    ctx.fillStyle = era===0 ? '#3b3b3b' : '#1f2d3d';
+    ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x+L-4,y); ctx.lineTo(x+L,y+shipH/2); ctx.lineTo(x+L-4,y+shipH); ctx.lineTo(x,y+shipH); ctx.closePath(); ctx.fill();
+    if (era>=1){ const sr = rng(sh.seed); const n = Math.floor((L-8)/4);
+      for (let k=0;k<n;k++){ ctx.fillStyle=['#d64541','#2e86de','#f39c12','#27ae60','#ecf0f1'][Math.floor(sr()*5)]; ctx.fillRect(x+3+k*4, y+1.5, 3.2, shipH-3); } }
+    else { ctx.fillStyle='#7a5c3a'; ctx.fillRect(x+4,y+2,L-12,shipH-4); }
+    ctx.fillStyle='#f4f4f4'; ctx.fillRect(x+1,y+1,3,shipH-2); // bridge
+    if (sh.phase==='sail'){ ctx.strokeStyle='rgba(255,255,255,.4)'; ctx.lineWidth=1; ctx.beginPath(); const back = sh.vx>0? x : x+L; ctx.moveTo(back,y+shipH/2); ctx.lineTo(back - Math.sign(sh.vx)*10, y+shipH/2-3); ctx.moveTo(back,y+shipH/2); ctx.lineTo(back - Math.sign(sh.vx)*10, y+shipH/2+3); ctx.stroke(); }
+  });
+  // label
+  ctx.fillStyle='rgba(255,255,255,.75)'; ctx.font='bold 10px system-ui'; ctx.textAlign='right';
+  ctx.fillText(slots.length? (S.terms+S.megas? (S.terms+S.megas)+' terminals':'') : '', W-8, qy-6);
+}
+
+/* ---- wiring ---- */
+$('btnNew').onclick = ()=>{
+  const sv = load(SAVE_KEY);
+  if (sv && !$('btnContinue').classList.contains('hidden')) {
+    openModal('<h1>New game?</h1><p>This will overwrite your saved game.</p><button class="btn" style="width:100%;margin-top:8px" id="cfYes">Start over</button><button class="btn sec" style="width:100%;margin-top:8px" id="cfNo">Cancel</button>', true);
+    $('cfYes').onclick = ()=>{ closeModal(); startGame(true); }; $('cfNo').onclick = closeModal;
+  } else startGame(true);
+};
+$('btnContinue').onclick = ()=>startGame(false);
+$('btnHow').onclick = showHelp;
+$('btnHelp').onclick = showHelp;
+$('btnQuit').onclick = ()=>{ save(); titleScreen(); };
+$('btnEnd').onclick = onEndYear;
+$('btnUndo').onclick = onUndo;
+$('tabs').onclick = e => { const b = e.target.closest('.tab'); if(!b) return; curTab = b.dataset.c;
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on', t===b)); renderCards(); };
+$('cards').onclick = e => { const b = e.target.closest('.card'); if (b) onCard(b.dataset.id); };
+window.addEventListener('resize', ()=>{ resizeCanvases(); });
+document.addEventListener('visibilitychange', ()=>{ if (document.hidden) save(); });
+titleScreen();
+requestAnimationFrame(drawScene);
+</script>
+</body>
+</html>
