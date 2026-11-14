@@ -74,7 +74,7 @@ function stepFlight(dt) {
 }
 
 // --- villagers walking about (visual only) ---
-const walkers = new Map(); // townId -> array
+export const walkers = new Map(); // townId -> array (exported for tests)
 const CLOTHES = ['#c0503e', '#4a78a8', '#5a9a5a', '#d9a440', '#8a5aa8', '#e8e0d0', '#7a5634'];
 function townTiles(t) {
   const arr = [];
@@ -83,8 +83,27 @@ function townTiles(t) {
 }
 const tileCache = new Map(); let tileCacheStamp = -1;
 export function invalidateTowns() { tileCacheStamp = -1; }
+// Ground distance between two world points (undo the 2:1 iso squash).
+const gdist = (ax, ay, bx, by) => Math.hypot(bx - ax, (by - ay) * 2);
+function tileSpot(i, nearX) {
+  const x = i % W, y = Math.floor(i / W);
+  let X = tileWX(x, y) + (Math.random() - 0.5) * 0.35, Y = tileWY(y) + 0.04 + (Math.random() - 0.5) * 0.1;
+  if (X - nearX > W / 2) X -= W; else if (nearX - X > W / 2) X += W; // stay on the same side of the date line
+  return [X, Y];
+}
+// Plan a walk along the iso grid (like following streets): one leg on each axis.
+function planWalk(w, tiles) {
+  const [X, Y] = tileSpot(tiles[Math.floor(Math.random() * tiles.length)], w.X);
+  const dX = X - w.X, dY = Y - w.Y;
+  const firstAxis = Math.random() < 0.5 ? 1 : -1;            // e1 = (0.5, 0.25), e2 = (-0.5, 0.25)
+  const k = firstAxis === 1 ? dX + 2 * dY : 2 * dY - dX;      // distance along the first axis
+  const cX = w.X + firstAxis * k * 0.5, cY = w.Y + k * 0.25;
+  w.path = [[w.X, w.Y], [cX, cY], [X, Y]];
+  w.l1 = gdist(w.X, w.Y, cX, cY); w.l2 = gdist(cX, cY, X, Y); w.d = 0;
+}
 function updateWalkers(dt, visibleTowns) {
   if (tileCacheStamp !== S.buildings.size) { tileCache.clear(); tileCacheStamp = S.buildings.size; }
+  const pace = Math.min(2, Math.max(1, S.speed)); // brisker at higher speeds, but never zooming
   for (const t of visibleTowns) {
     if (!tileCache.has(t.id)) tileCache.set(t.id, townTiles(t));
     const tiles = tileCache.get(t.id);
@@ -93,19 +112,24 @@ function updateWalkers(dt, visibleTowns) {
     if (!ws) walkers.set(t.id, (ws = []));
     const want = Math.min(28, Math.ceil(t.pop / 2));
     while (ws.length < want) {
-      const a = tiles[Math.floor(Math.random() * tiles.length)];
-      ws.push({ a, b: a, t: 1, sp: 0.25 + Math.random() * 0.2, c: CLOTHES[Math.floor(Math.random() * CLOTHES.length)], carry: Math.random() < 0.3, ph: Math.random() * 6 });
+      const [X, Y] = tileSpot(tiles[Math.floor(Math.random() * tiles.length)], tileWX(t.x, t.y));
+      ws.push({ X, Y, path: null, wait: Math.random() * 3, sp: 0.32 + Math.random() * 0.18, face: 1,
+        c: CLOTHES[Math.floor(Math.random() * CLOTHES.length)], carry: Math.random() < 0.3, ph: Math.random() * 6, moving: false });
     }
-    ws.length = want;
+    if (ws.length > want) ws.length = want;
     for (const w of ws) {
-      w.t += dt * w.sp * Math.max(1, S.speed) / Math.max(0.5, w.len || 1);
-      if (w.t >= 1) {
-        w.a = w.b; w.b = tiles[Math.floor(Math.random() * tiles.length)]; w.t = 0;
-        const ax = w.a % W, ay = Math.floor(w.a / W), bx = w.b % W, by = Math.floor(w.b / W);
-        w.len = Math.sqrt(groundDist2(ax, ay, bx, by)) + 0.3;
-        w.ox = (Math.random() - 0.5) * 0.4; w.oy = (Math.random() - 0.5) * 0.15;
-      }
-      w.ph += dt * 8;
+      w.moving = false;
+      if (w.wait > 0) { w.wait -= dt * pace; continue; }
+      if (!w.path) { planWalk(w, tiles); if (w.l1 + w.l2 < 0.05) { w.path = null; w.wait = 1; continue; } }
+      w.d += dt * w.sp * pace;
+      const [p0, p1, p2] = w.path;
+      let nx, ny;
+      if (w.d < w.l1) { const k = w.d / w.l1; nx = p0[0] + (p1[0] - p0[0]) * k; ny = p0[1] + (p1[1] - p0[1]) * k; }
+      else if (w.d < w.l1 + w.l2) { const k = (w.d - w.l1) / w.l2; nx = p1[0] + (p2[0] - p1[0]) * k; ny = p1[1] + (p2[1] - p1[1]) * k; }
+      else { nx = p2[0]; ny = p2[1]; w.path = null; w.wait = 0.8 + Math.random() * 3; } // arrived: linger a moment
+      if (Math.abs(nx - w.X) > 1e-4) w.face = nx > w.X ? 1 : -1;
+      w.X = nx; w.Y = ny; w.moving = !!w.path;
+      if (w.moving) w.ph += dt * 9 * pace;
     }
   }
 }
@@ -114,18 +138,17 @@ function drawWalkers(visibleTowns) {
   for (const t of visibleTowns) {
     const ws = walkers.get(t.id); if (!ws) continue;
     for (const w of ws) {
-      const ax = w.a % W, ay = Math.floor(w.a / W), bx = w.b % W, by = Math.floor(w.b / W);
-      let X0 = tileWX(ax, ay), X1 = tileWX(bx, by);
-      if (X1 - X0 > W / 2) X1 -= W; else if (X0 - X1 > W / 2) X1 += W;
-      const k = Math.min(1, w.t);
-      const X = X0 + (X1 - X0) * k + (w.ox || 0) + 0.18, Y = tileWY(ay) + (tileWY(by) - tileWY(ay)) * k + (w.oy || 0) + 0.06;
-      const x = sx(X), y = sy(Y);
+      const x = sx(w.X), y = sy(w.Y);
       if (x < -20 || x > cw + 20 || y < -20 || y > ch + 20) continue;
-      const bob = Math.abs(Math.sin(w.ph)) * 0.8 * s;
+      const step = w.moving ? Math.sin(w.ph) : 0, bob = Math.abs(step) * 0.7 * s;
       ctx.fillStyle = 'rgba(30,40,20,0.25)'; ctx.beginPath(); ctx.ellipse(x, y, 2.4 * s, 1.1 * s, 0, 0, 6.3); ctx.fill();
-      ctx.fillStyle = w.c; ctx.fillRect(x - 1.6 * s, y - 6 * s - bob, 3.2 * s, 5 * s);
-      ctx.fillStyle = '#f0c8a0'; ctx.beginPath(); ctx.arc(x, y - 7.6 * s - bob, 1.6 * s, 0, 6.3); ctx.fill();
-      if (w.carry) { ctx.fillStyle = '#b08a52'; ctx.fillRect(x + 0.6 * s, y - 9.5 * s - bob, 2.6 * s, 2.2 * s); }
+      // legs
+      ctx.strokeStyle = '#4a3a2c'; ctx.lineWidth = Math.max(0.8, 0.9 * s);
+      ctx.beginPath(); ctx.moveTo(x - 0.6 * s, y - 1.6 * s - bob); ctx.lineTo(x - 0.6 * s + step * 1.1 * s, y);
+      ctx.moveTo(x + 0.6 * s, y - 1.6 * s - bob); ctx.lineTo(x + 0.6 * s - step * 1.1 * s, y); ctx.stroke();
+      ctx.fillStyle = w.c; ctx.fillRect(x - 1.6 * s, y - 6 * s - bob, 3.2 * s, 4.6 * s);
+      ctx.fillStyle = '#f0c8a0'; ctx.beginPath(); ctx.arc(x + w.face * 0.3 * s, y - 7.6 * s - bob, 1.6 * s, 0, 6.3); ctx.fill();
+      if (w.carry) { ctx.fillStyle = '#b08a52'; ctx.fillRect(x + (w.face > 0 ? 0.6 : -3.2) * s, y - 9.5 * s - bob, 2.6 * s, 2.2 * s); }
     }
   }
 }
