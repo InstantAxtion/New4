@@ -4,7 +4,9 @@ import { buildSprites } from './sprites.js';
 import { S, update, save, loadSettings, recomputeTowns } from './game.js';
 import { initRender, frame, cam, clampCam, markDirty } from './render.js';
 import { initInput } from './input.js';
-import { initUI, showTitle } from './ui.js';
+import { initUI, showTitle, setMode } from './ui.js';
+import { initTutorial, updateTutorial } from './tutorial.js';
+import { sfx } from './audio.js';
 
 const $ = (s) => document.querySelector(s);
 const progress = (p, msg) => { $('#loadfill').style.width = `${Math.round(p * 100)}%`; if (msg) $('#loadmsg').textContent = msg; };
@@ -21,6 +23,7 @@ async function boot() {
   initRender(canvas);
   const keyPan = initInput(canvas);
   initUI();
+  initTutorial(sfx, setMode);
   showTitle();
 
   let last = performance.now();
@@ -30,6 +33,7 @@ async function boot() {
     if (!S.started && !document.querySelector('#title').classList.contains('hidden')) { cam.x += dt * 3 / Math.max(1, cam.tw); clampCam(); markDirty(); }
     update(dt);
     frame(now);
+    updateTutorial();
     requestAnimationFrame(loop);
   };
   requestAnimationFrame(loop);

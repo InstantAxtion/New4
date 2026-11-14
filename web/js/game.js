@@ -54,7 +54,7 @@ export const S = {
   rates: { food: 0, wood: 0, stone: 0, gold: 0, iron: 0 },
   towns: [], buildings: new Map(), zones: new Map(),
   neighbors: [], nbIndex: new Map(),
-  questsDone: new Set(), stats: { trades: 0, gifts: 0, joins: 0 },
+  questsDone: new Set(), stats: { trades: 0, gifts: 0, joins: 0 }, tutorial: 99,
   settings: { music: true, sfx: true, haptics: true },
   cam: { x: 1000, y: 500, tw: 1 }, nextTownId: 1, fed: true,
 };
@@ -328,7 +328,16 @@ export const activeQuests = () => QUESTS.filter((q) => !S.questsDone.has(q.id)).
 // ---------------- simulation ----------------
 let acc = 0;
 const STEP = 0.25; // days
-export const DAY_SECONDS = 3;
+// Pacing: a calm game meant to be enjoyed over days. One in-game day lasts DAY_SECONDS real seconds.
+export const DAY_SECONDS = 24;
+export const PACE = {
+  build: 2,        // construction takes this many times longer than the listed days
+  builders: 150,    // one extra builder crew per this many villagers in a town
+  growth: 0.08,    // how quickly families move into empty homes
+  minGrowth: 0.3,  // newcomers a day while a hamlet (<30 folk) has room, so the start feels alive
+  prod: 0.6,       // production per worker
+  eat: 0.6,        // food eaten per villager (kept in step with production)
+};
 
 export function update(dtSec) {
   if (!S.started || S.speed === 0) return;
@@ -349,7 +358,7 @@ function step(dd) {
   for (const [i, b] of S.buildings) {
     if (b.p >= 1) continue;
     const t = townById(b.town);
-    b.p += (dd / DEFS[b.t].time) * (t && t.pop >= 2 ? 1 : 0.5);
+    b.p += (dd / (DEFS[b.t].time * PACE.build)) * (t && t.pop >= 2 ? 1 : 0.5);
     if (b.p >= 1) {
       b.p = 1; changed = true;
       emit('built', { b, i, x: i % W, y: Math.floor(i / W) });
@@ -365,7 +374,7 @@ function step(dd) {
     for (const [i, z] of S.zones) {
       const x = i % W, y = Math.floor(i / W), t = ownerOf(x, y);
       if (!t) continue;
-      if ((busy.get(t.id) || 0) >= 1 + Math.floor(t.pop / 15)) continue;
+      if ((busy.get(t.id) || 0) >= 1 + Math.floor(t.pop / PACE.builders)) continue;
       const d = groundDist2(x, y, t.x, t.y), cur = best.get(t.id);
       if (!cur || d < cur.d) best.set(t.id, { i, x, y, z, d, t });
     }
@@ -387,20 +396,20 @@ function step(dd) {
     if (b.p < 1) continue;
     const d = DEFS[b.t]; if (!d.prod) continue;
     for (const [r, v] of Object.entries(d.prod)) {
-      let amt = v * dd * (b.t === 'townhall' ? 1 : eff) * (b.m || 1) * lib;
+      let amt = v * dd * PACE.prod * (b.t === 'townhall' ? 1 : eff) * (b.m || 1) * lib;
       if (r === 'food') amt *= gardens * (b.t === 'dock' ? lh : 1);
       if (r === 'gold') amt *= gcGold;
       S.res[r] += amt;
     }
   }
-  S.res.gold += pop * 0.02 * dd * gcGold;
+  S.res.gold += pop * 0.02 * PACE.prod * dd * gcGold;
 
   // Food and growth: nobody starves, growth just pauses.
-  const eat = pop * 0.1 * dd;
+  const eat = pop * 0.1 * PACE.eat * dd;
   S.fed = S.res.food >= eat;
   S.res.food = Math.max(0, S.res.food - eat);
   for (const t of S.towns) {
-    if (t.pop < t.cap && S.fed) t.pop = Math.min(t.cap, t.pop + Math.max(0.3, (t.cap - t.pop) * 0.06) * dd);
+    if (t.pop < t.cap && S.fed) t.pop = Math.min(t.cap, t.pop + Math.max(t.pop < 30 ? PACE.minGrowth : 0.02, (t.cap - t.pop) * 0.06 * PACE.growth) * dd);
     else if (t.pop > t.cap) t.pop = Math.max(t.cap, t.pop - 0.5 * dd);
   }
   for (const r of RES) S.rates[r] = S.rates[r] * 0.8 + ((S.res[r] - before[r]) / dd) * 0.2;
@@ -425,6 +434,7 @@ export function newGame(name, x, y) {
   S.res = { food: 60, wood: 50, stone: 20, gold: 30, iron: 0 };
   S.towns = []; S.buildings = new Map(); S.zones = new Map(); S.nextTownId = 1;
   S.questsDone = new Set(); S.stats = { trades: 0, gifts: 0, joins: 0 };
+  S.tutorial = 0;
   S.neighbors = generateNeighbors();
   addTown(x, y, { capital: true, name: S.name, pop: 4, built: true });
   // Keep the start area free of neighbouring villages.
@@ -435,37 +445,71 @@ export function newGame(name, x, y) {
   emit('change');
 }
 
-const SAVE_KEY = 'hearthlands-save-v1';
+// ---- Save slots: several realms, each autosaved on the device ----
+export const SLOT_COUNT = 3;
+const LEGACY_KEY = 'hearthlands-save-v1';
+const slotKey = (n) => `hearthlands-slot-${n}`;
+export let currentSlot = 1;
+export function setSlot(n) { currentSlot = n; }
+function migrateLegacy() {
+  try {
+    const old = localStorage.getItem(LEGACY_KEY);
+    if (old && !localStorage.getItem(slotKey(1))) localStorage.setItem(slotKey(1), old);
+    if (old) localStorage.removeItem(LEGACY_KEY);
+  } catch (e) { /* ignore */ }
+}
 export function save() {
   if (!S.started) return;
+  const capital = S.towns.find((t) => t.capital) || S.towns[0];
   const data = {
     v: 1, name: S.name, day: S.day, speed: S.speed, tier: S.tier, res: S.res, towns: S.towns,
     buildings: [...S.buildings].map(([i, b]) => [i, b.t, +b.p.toFixed(3), b.town, +(b.m || 1).toFixed(2), b.z ? 1 : 0]),
     zones: [...S.zones], nb: S.neighbors.filter((n) => n.friend || n.joined).map((n) => [n.id, n.friend, n.joined ? 1 : 0, Math.round(n.pop)]),
-    quests: [...S.questsDone], stats: S.stats, cam: S.cam, nextTownId: S.nextTownId,
+    quests: [...S.questsDone], stats: S.stats, cam: S.cam, nextTownId: S.nextTownId, tutorial: S.tutorial,
+    meta: {
+      pop: Math.floor(totalPop()), savedAt: Date.now(),
+      place: capital && world.country ? (world.countryNames[world.country[idxOf(capital.x, capital.y)] - 1] || '') : '',
+    },
   };
-  try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch (e) { /* storage unavailable */ }
+  try { localStorage.setItem(slotKey(currentSlot), JSON.stringify(data)); } catch (e) { /* storage unavailable */ }
   saveSettings();
 }
-export function hasSave() { try { return !!localStorage.getItem(SAVE_KEY); } catch (e) { return false; } }
-export function load() {
+// Summaries for the title screen (null for an empty slot).
+export function slotInfo() {
+  migrateLegacy();
+  const out = [];
+  for (let n = 1; n <= SLOT_COUNT; n++) {
+    let d = null;
+    try { d = JSON.parse(localStorage.getItem(slotKey(n))); } catch (e) { d = null; }
+    out.push(d && d.v === 1 ? { slot: n, name: d.name, tier: d.tier, day: d.day, pop: d.meta ? d.meta.pop : null, place: d.meta ? d.meta.place : '', savedAt: d.meta ? d.meta.savedAt : 0 } : null);
+  }
+  return out;
+}
+export function hasSave() { return slotInfo().some(Boolean); }
+export function load(n = currentSlot) {
+  migrateLegacy();
   let d;
-  try { d = JSON.parse(localStorage.getItem(SAVE_KEY)); } catch (e) { return false; }
+  try { d = JSON.parse(localStorage.getItem(slotKey(n))); } catch (e) { return false; }
   if (!d || d.v !== 1) return false;
-  S.started = true; S.name = d.name; S.day = d.day; S.speed = d.speed ?? 1; S.tier = d.tier; S.res = d.res;
+  currentSlot = n;
+  S.started = true; S.name = d.name; S.day = d.day;
+  S.speed = d.speed ? 1 : 0; // only pause / play now
+  S.tier = d.tier; S.res = d.res;
   S.towns = d.towns; S.nextTownId = d.nextTownId; S.stats = d.stats; S.questsDone = new Set(d.quests);
+  S.tutorial = d.tutorial ?? 99; // realms from before the tutorial existed skip it
   S.buildings = new Map(d.buildings.map(([i, t, p, town, m, z]) => [i, { t, p, town, m, z }]));
   S.zones = new Map(d.zones);
   S.neighbors = generateNeighbors();
   const cap = S.towns.find((t) => t.capital) || S.towns[0];
-  if (cap) S.neighbors = S.neighbors.filter((n) => groundDist2(n.x, n.y, cap.x, cap.y) > 144 || d.nb.some((e) => e[0] === n.id));
-  for (const [id, f, j, p] of d.nb) { const n = S.neighbors.find((q) => q.id === id); if (n) { n.friend = f; n.joined = !!j; n.pop = p; } }
+  if (cap) S.neighbors = S.neighbors.filter((n2) => groundDist2(n2.x, n2.y, cap.x, cap.y) > 144 || d.nb.some((e) => e[0] === n2.id));
+  for (const [id, f, j, p] of d.nb) { const q = S.neighbors.find((r) => r.id === id); if (q) { q.friend = f; q.joined = !!j; q.pop = p; } }
   indexNeighbors();
   if (d.cam) Object.assign(S.cam, d.cam);
   recomputeTowns();
   return true;
 }
-export function resetSave() { try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* ignore */ } }
+export function deleteSlot(n) { try { localStorage.removeItem(slotKey(n)); } catch (e) { /* ignore */ } }
+export function resetSave() { deleteSlot(currentSlot); }
 export function saveSettings() { try { localStorage.setItem('hearthlands-settings', JSON.stringify(S.settings)); } catch (e) { /* ignore */ } }
 export function loadSettings() { try { Object.assign(S.settings, JSON.parse(localStorage.getItem('hearthlands-settings')) || {}); } catch (e) { /* ignore */ } }
 

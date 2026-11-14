@@ -16,7 +16,11 @@ there are no timers, and you can pause whenever you like.
 - **Progression**: Hamlet → Village → Town → City → Kingdom, 19 gentle goals, and 5 Wonders.
 - **Cozy feel**: villagers walk around your towns, the capital's keep grows with your tier, generative music
   plays alongside birdsong, and building gives a little vibration.
-- Autosaves on the device. Works in portrait and landscape.
+- **A slow, calm pace** meant to be enjoyed over days: Village takes about 30 minutes of play, Town about 2 hours, City about 5 and Kingdom about 10. There is one speed plus pause, and nothing happens while the app is closed.
+- **Pip the messenger bird** guides your first few steps: zoning fields and homes, then building a Lumber Camp. You can skip the guide at any time.
+- **Three save slots**, so you can keep realms in different places on Earth. Each autosaves on the device.
+- Goals are tucked into a 📜 scroll button that shows a badge when you finish one.
+- Works in portrait and landscape.
 
 ## Tuned for the Galaxy S26 Ultra
 - Renders at up to 3× pixel density, with art drawn at 3× so it stays crisp on the QHD+ screen. Runs at the full 120 Hz refresh rate.

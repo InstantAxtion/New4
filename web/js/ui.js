@@ -4,11 +4,12 @@ import {
   S, M, RES, RES_NAMES, TIERS, DEFS, MANUAL, WONDERS, ZONES, FOUND_COST, GIFT_AMOUNT, CONTACT_RANGE,
   on, emit, totalPop, totalCap, townById, hasWonder, wonderStarted, count, ownerOf, canPlace, placeBuilding, setZone,
   demolish, canFound, foundTown, inContact, tradeOffers, doTrade, gift, canInvite, invite, activeQuests, QUESTS,
-  newGame, save, hasSave, load, resetSave, saveSettings, surveyStart, canStart, affordable, groundDist2, DAY_SECONDS,
+  newGame, save, hasSave, load, resetSave, slotInfo, setSlot, deleteSlot, SLOT_COUNT, saveSettings, surveyStart, canStart, affordable, groundDist2, DAY_SECONDS,
 } from './game.js';
 import { SPR, spriteIcon } from './sprites.js';
 import { panBy, cam, markDirty, flyTo, centerOn, clampCam, screenSize, TILE_MODE_TW, sx, sy, pickTile, setHover } from './render.js';
 import { initAudio, sfx, haptic, applySettings, resumeAudio } from './audio.js';
+import { tutorialActive } from './tutorial.js';
 
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -84,7 +85,7 @@ function setHTML(el, html) { if (el._html !== html) { el._html = html; el.innerH
 const head = (title, sub) => `<div class="sh-head"><div><h2>${title}</h2>${sub ? `<div class="sub">${sub}</div>` : ''}</div><button class="close" data-act="close" aria-label="Close">✕</button></div>`;
 
 // ---------------- modes ----------------
-export function setMode(mode) {
+export function setMode(mode, background = false) {
   M.mode = mode;
   const bar = $('#modebar');
   document.body.classList.toggle('moding', !!mode && mode.kind !== 'start');
@@ -97,12 +98,12 @@ export function setMode(mode) {
     html = Object.entries(ZONES).map(([k, z]) =>
       `<button class="tool ${mode.zone === k ? 'on' : ''} ${DEFS[z.builds].tier > S.tier ? 'disabled' : ''}" data-act="zone" data-arg="${k}"><span class="sw" style="background:${z.color}"></span>${z.name}</button>`).join('')
       + `<button class="tool ${mode.zone === 'erase' ? 'on' : ''}" data-act="zone" data-arg="erase"><span class="sw erase"></span>Erase</button>`;
-    if (!S.settings.zoneHint) { S.settings.zoneHint = true; saveSettings(); toast('Paint with your finger or S Pen. Two fingers move the map (with the S Pen, one finger does).'); }
+    if (!S.settings.zoneHint && !tutorialActive()) { S.settings.zoneHint = true; saveSettings(); toast('Paint with your finger or S Pen. Two fingers move the map (with the S Pen, one finger does).'); }
   } else if (mode.kind === 'found') {
     html = `<div class="mlabel"><span>Pick land for settlers</span></div><div class="cost">${costChips(FOUND_COST)}</div>`;
   }
   html += `<button class="tool done" data-act="cancelmode"><span class="ic">✓</span>Done</button>`;
-  if (!touchingUI) setHTML(bar, html);
+  if (!(background && touchingUI)) setHTML(bar, html); // a background refresh never redraws under a finger
   bar.classList.remove('hidden');
   markDirty(); highlightBottom();
 }
@@ -111,7 +112,7 @@ export function setMode(mode) {
 function buildHUD() {
   $('#resbar').innerHTML = RES.map((r) => `<div class="res" id="res-${r}" title="${RES_NAMES[r]}">${ICON[r]}<div class="rv"><span class="v">0</span><small class="flat">+0</small></div></div>`).join('')
     + `<div class="res" id="res-pop" title="Villagers">${ICON.pop}<div class="rv"><span class="v">0</span><small class="flat">/0</small></div></div>`;
-  $('#speed').innerHTML = [[0, '❚❚'], [1, '1×'], [2, '2×'], [4, '4×']].map(([v, l]) => `<button data-speed="${v}" aria-label="Speed ${l}">${l}</button>`).join('');
+  $('#speed').innerHTML = [[0, '❚❚', 'Pause'], [1, '▶', 'Play']].map(([v, l, a]) => `<button data-speed="${v}" aria-label="${a}">${l}</button>`).join('');
   $('#speed').addEventListener('click', (e) => {
     const b = e.target.closest('button'); if (!b) return;
     S.speed = +b.dataset.speed; sfx('tap'); updateHUD();
@@ -135,12 +136,10 @@ function buildHUD() {
     const k = b.dataset.z === 'in' ? 1.6 : 1 / 1.6;
     flyTo(null, null, cam.tw * k, 0.35, true);
   });
-  let qOpen = false;
-  try { qOpen = localStorage.getItem('hearthlands-quests-open') === '1'; } catch (e) { /* ignore */ }
-  $('#quests').classList.toggle('collapsed', !qOpen);
-  $('#quests').addEventListener('click', () => {
-    const open = $('#quests').classList.toggle('collapsed') === false;
-    try { localStorage.setItem('hearthlands-quests-open', open ? '1' : '0'); } catch (e) { /* ignore */ }
+  $('#quests').addEventListener('click', (e) => {
+    if (!e.target.closest('.qbtn')) return;
+    const open = $('#quests').classList.toggle('open');
+    if (open) { seenGoals = S.questsDone.size; renderQuests(true); }
   });
 }
 function highlightBottom() {
@@ -174,15 +173,19 @@ export function updateHUD() {
   document.querySelectorAll('#speed button').forEach((b) => b.classList.toggle('on', +b.dataset.speed === S.speed));
   renderQuests();
 }
-let questSig = '';
-function renderQuests() {
+let questSig = '', seenGoals = -1;
+function renderQuests(force) {
   const qs = activeQuests();
-  const sig = qs.map((q) => q.id).join(',');
-  if (sig === questSig) return;
-  questSig = sig;
   const done = S.questsDone.size;
-  $('#quests').innerHTML = `<h3><span class="qic">📜</span><span class="qtop">${qs[0] ? esc(qs[0].text) : 'All goals complete'}</span><span class="qtitle">Gentle goals</span><span class="qcount">${done}/${QUESTS.length}</span></h3><ul>${qs.map((q) =>
-    `<li><div>${esc(q.text)}<span class="reward">Reward: ${Object.entries(q.reward).map(([k, v]) => `${v} ${RES_NAMES[k].toLowerCase()}`).join(', ')}</span></div></li>`).join('') || '<li>Every goal complete. Your realm is a wonder.</li>'}</ul>`;
+  if (seenGoals < 0) seenGoals = done;
+  const fresh = done - seenGoals;
+  const sig = qs.map((q) => q.id).join(',') + '|' + fresh;
+  if (sig === questSig && !force) return;
+  questSig = sig;
+  const open = $('#quests').classList.contains('open');
+  $('#quests').innerHTML = `<button class="qbtn" aria-label="Goals">📜<span class="qbadge ${fresh > 0 && !open ? 'on' : ''}">${fresh > 0 ? fresh : ''}</span></button>
+    <div class="qpanel"><h3>Gentle goals <span>${done}/${QUESTS.length}</span></h3><ul>${qs.map((q) =>
+    `<li><div>${esc(q.text)}<span class="reward">Reward: ${Object.entries(q.reward).map(([k, v]) => `${v} ${RES_NAMES[k].toLowerCase()}`).join(', ')}</span></div></li>`).join('') || '<li>Every goal complete. Your realm is a wonder.</li>'}</ul></div>`;
 }
 
 // ---------------- build menu ----------------
@@ -240,7 +243,7 @@ function showMenu() {
       • Nothing can go wrong. Pause whenever you like, and the realm waits for you.<br>
       • <b>S Pen</b>: hover to see what's there. In Zones, the pen paints and fingers move the map. Hold the pen's side button to erase.</div></div>
       <div class="section"><h3>Map data</h3><div class="note">Earth outlines from Natural Earth (public domain) via world-atlas.</div></div>
-      <div class="row"><button class="btn small" data-act="savenow">Save now</button>${document.body.classList.contains('native') || !document.documentElement.requestFullscreen ? '' : '<button class="btn small" data-act="fullscreen">Full screen</button>'}<button class="btn small" data-act="restart">Start a new realm…</button></div>`);
+      <div class="row"><button class="btn small" data-act="savenow">Save now</button>${document.body.classList.contains('native') || !document.documentElement.requestFullscreen ? '' : '<button class="btn small" data-act="fullscreen">Full screen</button>'}<button class="btn small" data-act="switchrealm">Switch realm…</button></div>`);
 }
 
 // ---------------- tile info ----------------
@@ -331,6 +334,7 @@ function act(name, arg, el) {
     case 'set': S.settings[arg] = !S.settings[arg]; saveSettings(); applySettings(); refreshSheet(); if (arg === 'haptics' && S.settings.haptics) haptic(); break;
     case 'savenow': save(); toast('Your realm is saved.'); break;
     case 'fullscreen': if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen().catch(() => {}); break;
+    case 'switchrealm': save(); location.reload(); break;
     case 'restart':
       if (el.dataset.confirm) { resetSave(); location.reload(); }
       else { el.dataset.confirm = '1'; el.textContent = 'Tap again to abandon this realm'; el.classList.add('primary'); }
@@ -410,24 +414,45 @@ window.hlBack = () => {
 export const endPaint = () => { lastPaint = null; };
 
 // ---------------- title & start ----------------
+const tierNames = ['Hamlet', 'Village', 'Town', 'City', 'Kingdom'];
+function ago(ts) {
+  if (!ts) return '';
+  const m = Math.round((Date.now() - ts) / 60000);
+  return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} days ago`;
+}
 export function showTitle() {
   $('#loading').classList.add('hidden');
   $('#title').classList.remove('hidden');
+  centerOn(1000, 1400, Math.max(1.4, screenSize().ch / 700)); // gentle drifting view of Earth behind
+  renderSlots();
+}
+function renderSlots() {
   const btns = $('#titlebtns');
-  btns.innerHTML = (hasSave() ? '<button class="btn primary" id="tcont">Continue your realm</button>' : '')
-    + `<button class="btn ${hasSave() ? '' : 'primary'}" id="tnew">Begin a new realm</button>`;
-  // Gentle drifting background view of Earth
-  centerOn(1000, 1400, Math.max(1.4, screenSize().ch / 700));
-  if ($('#tcont')) $('#tcont').onclick = () => { initAudio(); sfx('tap'); if (load()) enterGame(); };
-  $('#tnew').onclick = () => {
-    initAudio(); sfx('tap');
-    if (hasSave() && !$('#tnew').dataset.confirm) { $('#tnew').dataset.confirm = 1; $('#tnew').textContent = 'Tap again: this replaces your saved realm'; return; }
-    btns.innerHTML = `<label class="note" for="rname" style="display:block;text-align:left">Name your realm</label>
-      <input id="rname" class="text" maxlength="24" value="Hearthlands" autocomplete="off">
-      <button class="btn primary" id="tgo">Choose your homeland</button>`;
-    const inp = $('#rname'); inp.focus(); inp.select();
-    const go = () => { sfx('tap'); startPicking(inp.value.trim() || 'Hearthlands'); };
-    $('#tgo').onclick = go; inp.onkeydown = (e) => { if (e.key === 'Enter') go(); };
+  const slots = slotInfo();
+  btns.innerHTML = `<div class="slots">${slots.map((d, k) => d
+    ? `<div class="slot"><button class="si" data-slot="${k + 1}" style="text-align:left"><b>${esc(d.name)}</b><small>${tierNames[d.tier] || ''}${d.pop != null ? ` · ${d.pop} folk` : ''}${d.place ? ` · ${esc(d.place)}` : ''}<br>Year ${Math.floor((d.day || 0) / 48) + 1} · played ${ago(d.savedAt)}</small></button><button class="del" data-del="${k + 1}" aria-label="Delete realm">🗑</button></div>`
+    : `<button class="slot empty" data-new="${k + 1}">＋ Begin a new realm</button>`).join('')}</div>`;
+  btns.onclick = (e) => {
+    initAudio();
+    const play = e.target.closest('[data-slot]'), nw = e.target.closest('[data-new]'), del = e.target.closest('[data-del]');
+    if (play) { sfx('tap'); if (load(+play.dataset.slot)) enterGame(); return; }
+    if (del) {
+      sfx('tap');
+      if (!del.dataset.confirm) { del.dataset.confirm = 1; del.textContent = 'Sure?'; del.style.width = 'auto'; del.style.padding = '0 10px'; del.style.borderRadius = '16px'; return; }
+      deleteSlot(+del.dataset.del); renderSlots(); return;
+    }
+    if (nw) {
+      sfx('tap'); setSlot(+nw.dataset.new);
+      btns.onclick = null;
+      btns.innerHTML = `<label class="note" for="rname" style="display:block;text-align:left">Name your realm</label>
+        <input id="rname" class="text" maxlength="24" value="Hearthlands" autocomplete="off">
+        <button class="btn primary" id="tgo">Choose your homeland</button>
+        <button class="btn" id="tback" style="margin-top:8px">Back</button>`;
+      const inp = $('#rname'); inp.focus(); inp.select();
+      const go = () => { sfx('tap'); startPicking(inp.value.trim() || 'Hearthlands'); };
+      $('#tgo').onclick = go; inp.onkeydown = (ev) => { if (ev.key === 'Enter') go(); };
+      $('#tback').onclick = () => { sfx('tap'); renderSlots(); };
+    }
   };
 }
 
@@ -485,7 +510,7 @@ export function enterGame(fresh) {
   questSig = '';
   updateHUD();
   const c = S.towns.find((t) => t.capital) || S.towns[0];
-  if (fresh) { flyTo(c.x, c.y, 64, 2.2); setTimeout(() => toast(`Welcome to ${S.name}!`, true), 900); setTimeout(() => toast('Tap Zones and paint Farmland near your hall to begin.'), 3200); }
+  if (fresh) { flyTo(c.x, c.y, 64, 2.2); setTimeout(() => toast(`Welcome to ${S.name}!`, true), 900);  }
   else { if (S.cam.tw < 2) centerOn(c.x, c.y, 56); clampCam(); toast(`Welcome back to ${S.name}.`); }
   markDirty();
 }
@@ -512,7 +537,7 @@ export function initUI() {
   let pending = false;
   const refresh = () => {
     if (pending) return; pending = true;
-    requestAnimationFrame(() => { pending = false; updateHUD(); if (sheetKind && sheetKind !== 'menu') refreshSheet(); if (M.mode && M.mode.kind === 'build') setMode(M.mode); markDirty(); });
+    requestAnimationFrame(() => { pending = false; updateHUD(); if (sheetKind && sheetKind !== 'menu') refreshSheet(); if (M.mode && M.mode.kind === 'build') setMode(M.mode, true); markDirty(); });
   };
   on('tick', refresh); on('change', refresh);
   on('built', ({ b }) => { if (DEFS[b.t].wonder) { toast(`The ${DEFS[b.t].name} is complete!`, true); sfx('tier'); } else sfx('built'); markDirty(); });
