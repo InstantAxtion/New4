@@ -31,6 +31,11 @@ export const DEFS = {
   greatcastle: { name: 'Great Castle', wonder: true, cost: { stone: 400, iron: 100, gold: 200 }, time: 40, tier: 3, desc: '+4 border for every town, +20% gold.' },
   cathedral: { name: 'Cathedral', wonder: true, cost: { stone: 500, gold: 300, iron: 50 }, time: 40, tier: 3, desc: '+30% housing everywhere.' },
 };
+// Homes upgrade by themselves as towns grow: cottage -> town house -> manor.
+export const HOUSE_LEVELS = ['Cottages', 'Town house', 'Manor'];
+export const HOUSE_CAP_MULT = [1, 1.35, 1.7];
+const UPGRADE_COST = [null, { wood: 10, stone: 10 }, { stone: 25, gold: 15 }];
+const upgradeOk = (t, lv) => (lv === 2 ? t.pop >= 40 : lv === 3 ? t.pop >= 150 && S.tier >= 3 : false);
 export const MANUAL = ['lumber', 'dock', 'quarry', 'mine', 'tower', 'market'];
 export const WONDERS = ['library', 'gardens', 'lighthouse', 'greatcastle', 'cathedral'];
 export const ZONES = {
@@ -103,7 +108,7 @@ export function recomputeTowns() {
     const d = DEFS[b.t];
     if (b.p >= 1) {
       t.n++; if (b.t === 'tower') t.towers++;
-      t.capRaw += d.cap || 0; t.jobs += d.jobs || 0;
+      t.capRaw += (d.cap || 0) * (b.t === 'house' ? HOUSE_CAP_MULT[(b.lv || 1) - 1] : 1); t.jobs += d.jobs || 0;
     }
   }
   for (const t of S.towns) {
@@ -245,14 +250,98 @@ export function generateNeighbors() {
   }
   return list;
 }
+// ---- neighbour personalities ----
+const TITLES = ['Elder', 'Reeve', 'Headwoman', 'Headman', 'Warden', 'Matron', 'Steward'];
+const FIRST = ['Mira', 'Oswin', 'Talia', 'Bram', 'Ysolde', 'Corin', 'Ada', 'Fenn', 'Lio', 'Sela', 'Dunstan', 'Ivo', 'Nessa', 'Rowan', 'Tamsin', 'Edric', 'Liora', 'Hale', 'Wynn', 'Petra'];
+export const TRAITS = {
+  cheerful: { label: 'Cheerful', gift: 1.2, req: 1, story: 1.3, blurb: 'Always glad of a visit.' },
+  proud: { label: 'Proud', gift: 0.8, req: 1.5, story: 1, blurb: 'Values help when it counts most.' },
+  shy: { label: 'Shy', gift: 0.9, req: 1, story: 0.6, blurb: 'Warms up slowly, but stays loyal.' },
+  generous: { label: 'Generous', gift: 1, req: 1, story: 1.4, blurb: 'Gives as freely as they receive.' },
+  curious: { label: 'Curious', gift: 1, req: 1.2, story: 1.2, blurb: 'Full of questions and small requests.' },
+};
+const TRAIT_KEYS = Object.keys(TRAITS);
+function personality(n) {
+  if (n.leader) return;
+  n.leader = `${TITLES[(hash2(n.id, 1, 51) * TITLES.length) | 0]} ${FIRST[(hash2(n.id, 2, 52) * FIRST.length) | 0]}`;
+  n.trait = TRAIT_KEYS[(hash2(n.id, 3, 53) * TRAIT_KEYS.length) | 0];
+  n.log = n.log || []; n.req = n.req || null;
+}
+function addLog(n, text) { n.log.unshift({ day: Math.floor(S.day), text }); if (n.log.length > 4) n.log.length = 4; }
+const REQUESTS = {
+  food: (v) => `${v}'s harvest was poor this year. Could you spare some food?`,
+  wood: (v) => `${v} is raising a new barn and needs timber.`,
+  stone: (v) => `${v} wants to dig a proper well and asks for stone.`,
+  gold: (v) => `${v}'s spring fair is coming, and they hope to borrow a little gold.`,
+  iron: (v) => `The smith in ${v} needs iron for new ploughs.`,
+};
+export function fulfil(n) {
+  const r = n.req; if (!r || !inContact(n) || S.res[r.res] < r.amt) return false;
+  S.res[r.res] -= r.amt;
+  const tr = TRAITS[n.trait];
+  n.friend = Math.min(100, n.friend + Math.round(20 * tr.req));
+  gain(r.reward);
+  addLog(n, `You helped with ${r.amt} ${r.res}. ${n.leader} sent ${Object.entries(r.reward).map(([k, v]) => `${v} ${k}`).join(', ')} in thanks.`);
+  n.req = null; S.stats.helped = (S.stats.helped || 0) + 1;
+  emit('toast', `${n.leader} of ${n.name} thanks you warmly!`); emit('change');
+  return true;
+}
+const STORIES = [
+  (n) => { const f = 10 + Math.round(n.pop / 4); gain({ food: f }); return `${n.name} held a harvest festival and sent you ${f} food.`; },
+  (n) => { const a = 12; gain({ [n.surplus]: a }); return `${n.leader} sent a basket of ${n.surplus} (${a}) as thanks for your friendship.`; },
+  (n) => { n.friend = Math.min(100, n.friend + 2); return `Travellers from ${n.name} say ${S.name} is the talk of the valley.`; },
+  (n) => `Children from ${n.name} came to watch your builders at work.`,
+  (n) => `A wedding in ${n.name}! Your folk were invited to the dancing.`,
+  (n) => `${n.leader} of ${n.name} stopped by to admire your town.`,
+];
+function neighbourLife(dd) {
+  const caps = [20, 30, 40, 55, 70];
+  for (const n of S.neighbors) {
+    if (n.joined) continue;
+    personality(n);
+    if (n.pop < 120) n.pop += n.pop * 0.002 * dd; // villages grow slowly by themselves
+    if (n.req && S.day > n.req.until) { addLog(n, 'Their need passed; they managed on their own.'); n.req = null; }
+    if (!inContact(n)) continue;
+    const tr = TRAITS[n.trait];
+    if (!n.req && Math.random() < 0.012 * tr.req * dd) {
+      const opts = RES.filter((r) => r !== n.surplus && (r !== 'iron' || S.tier >= 1));
+      const res = opts[(Math.random() * opts.length) | 0];
+      const amt = Math.round((caps[S.tier] * (0.7 + Math.random() * 0.6)) / 5) * 5;
+      const reward = n.surplus === res ? { gold: Math.round(amt * 0.8) } : { [n.surplus]: Math.round(amt * 1.2) };
+      n.req = { res, amt, until: S.day + 20, reward, text: REQUESTS[res](n.name) };
+      emit('request', n);
+    } else if (n.friend >= 40 && Math.random() < 0.004 * tr.story * dd) {
+      const text = STORIES[(Math.random() * STORIES.length) | 0](n);
+      addLog(n, text); emit('story', { n, text });
+    }
+  }
+}
+// Extra huts around villages that have grown: tile idx -> neighbour.
+export const nbExtra = new Map();
+function placeExtraHuts() {
+  nbExtra.clear();
+  for (const n of S.neighbors) {
+    if (n.joined || n.pop < 40) continue;
+    const want = Math.min(5, Math.floor((n.pop - 40) / 16) + 1);
+    let k = 0;
+    for (const [x, y] of neighbors(n.x, n.y)) {
+      if (k >= want) break;
+      if (y < 1 || y >= H - 1) continue;
+      const i = idxOf(x, y), b = world.biome[i];
+      if (isWater(b) || b === B.MOUNTAIN || b === B.SNOW || S.buildings.has(i) || S.nbIndex.has(i)) continue;
+      nbExtra.set(i, n); k++;
+    }
+  }
+}
 function indexNeighbors() {
   S.nbIndex.clear();
-  for (const n of S.neighbors) if (!n.joined) S.nbIndex.set(idxOf(n.x, n.y), n);
+  for (const n of S.neighbors) if (!n.joined) { S.nbIndex.set(idxOf(n.x, n.y), n); personality(n); }
+  placeExtraHuts();
 }
 export const CONTACT_RANGE = 45;
 export function inContact(n) { return S.towns.some((t) => groundDist2(n.x, n.y, t.x, t.y) <= CONTACT_RANGE ** 2); }
 export function tradeOffers(n) {
-  const bonus = Math.floor(n.friend * 0.1) + (count('market') ? 5 : 0) + (hasWonder('lighthouse') ? 4 : 0);
+  const bonus = Math.floor(n.friend * 0.1) + (count('market') ? 5 : 0) + (hasWonder('lighthouse') ? 4 : 0) + (n.trait === 'generous' ? 3 : 0);
   const offers = [{ give: { [n.want]: 20 }, get: { [n.surplus]: 14 + bonus } }];
   if (n.surplus !== 'gold') offers.push({ give: { gold: 15 }, get: { [n.surplus]: 16 + bonus } });
   else offers.push({ give: { food: 25 }, get: { gold: 10 + Math.floor(bonus / 2) } });
@@ -263,6 +352,7 @@ export function doTrade(n, k) {
   if (!o || !inContact(n) || !affordable(o.give)) return false;
   pay(o.give); gain(o.get);
   n.friend = Math.min(100, n.friend + 4); S.stats.trades++;
+  if (Math.random() < 0.25) addLog(n, `Traded ${Object.entries(o.give).map(([k, v]) => `${v} ${k}`).join(', ')} for ${Object.entries(o.get).map(([k, v]) => `${v} ${k}`).join(', ')}.`);
   emit('traded', n); emit('change');
   return true;
 }
@@ -270,7 +360,8 @@ export const GIFT_AMOUNT = 25;
 export function gift(n, res) {
   if (!inContact(n) || S.res[res] < GIFT_AMOUNT) return false;
   S.res[res] -= GIFT_AMOUNT;
-  n.friend = Math.min(100, n.friend + (res === n.want ? 18 : 10)); S.stats.gifts++;
+  n.friend = Math.min(100, n.friend + Math.round((res === n.want ? 18 : 10) * TRAITS[n.trait || 'cheerful'].gift)); S.stats.gifts++;
+  addLog(n, `You sent a gift of ${GIFT_AMOUNT} ${res}.`);
   emit('change');
   return true;
 }
@@ -416,7 +507,24 @@ function step(dd) {
     else if (t.pop > t.cap) t.pop = Math.max(t.cap, t.pop - 0.5 * dd);
   }
   for (const r of RES) S.rates[r] = S.rates[r] * 0.8 + ((S.res[r] - before[r]) / dd) * 0.2;
-  for (const n of S.neighbors) if (!n.joined && n.pop < 120) n.pop += n.pop * 0.002 * dd;
+  neighbourLife(dd);
+  if ((S._hutT = (S._hutT || 0) + dd) > 2) { S._hutT = 0; placeExtraHuts(); }
+  // Families improve their homes as a town grows (one at a time, when the realm can afford it).
+  for (const t of S.towns) {
+    if (Math.random() > 0.12 * dd) continue;
+    let cand = null;
+    for (const [i, b] of S.buildings) {
+      if (b.town !== t.id || b.t !== 'house' || b.p < 1) continue;
+      const lv = b.lv || 1;
+      if (lv < 3 && upgradeOk(t, lv + 1) && affordable(UPGRADE_COST[lv])) { cand = [i, b]; if (Math.random() < 0.3) break; }
+    }
+    if (!cand) continue;
+    const b = cand[1], lv = (b.lv || 1) + 1;
+    pay(UPGRADE_COST[lv - 1]); b.lv = lv;
+    t.upMsg = t.upMsg || {};
+    if (!t.upMsg[lv]) { t.upMsg[lv] = 1; emit('toast', lv === 2 ? `Families in ${t.name} are building finer town houses.` : `The first manor rises in ${t.name}!`); }
+    recomputeTowns(); emit('change');
+  }
 
   // Tiers
   const p = totalPop();
@@ -472,8 +580,8 @@ export function save() {
   const capital = S.towns.find((t) => t.capital) || S.towns[0];
   const data = {
     v: 1, name: S.name, day: S.day, speed: S.speed, tier: S.tier, res: S.res, towns: S.towns,
-    buildings: [...S.buildings].map(([i, b]) => [i, b.t, +b.p.toFixed(3), b.town, +(b.m || 1).toFixed(2), b.z ? 1 : 0]),
-    zones: [...S.zones], nb: S.neighbors.filter((n) => n.friend || n.joined).map((n) => [n.id, n.friend, n.joined ? 1 : 0, Math.round(n.pop)]),
+    buildings: [...S.buildings].map(([i, b]) => [i, b.t, +b.p.toFixed(3), b.town, +(b.m || 1).toFixed(2), b.z ? 1 : 0, b.lv || 1]),
+    zones: [...S.zones], nb: S.neighbors.filter((n) => n.friend || n.joined || n.req || (n.log && n.log.length) || n.pop > 70).map((n) => [n.id, n.friend, n.joined ? 1 : 0, +n.pop.toFixed(1), n.req || null, n.log || []]),
     quests: [...S.questsDone], stats: S.stats, cam: S.cam, nextTownId: S.nextTownId, tutorial: S.tutorial,
     meta: {
       pop: Math.floor(totalPop()), savedAt: Date.now(),
@@ -506,12 +614,12 @@ export function load(n = currentSlot) {
   S.tier = d.tier; S.res = d.res;
   S.towns = d.towns; S.nextTownId = d.nextTownId; S.stats = d.stats; S.questsDone = new Set(d.quests);
   S.tutorial = d.tutorial ?? 99; // realms from before the tutorial existed skip it
-  S.buildings = new Map(d.buildings.map(([i, t, p, town, m, z]) => [i, { t, p, town, m, z }]));
+  S.buildings = new Map(d.buildings.map(([i, t, p, town, m, z, lv]) => [i, { t, p, town, m, z, lv: lv || 1 }]));
   S.zones = new Map(d.zones);
   S.neighbors = generateNeighbors();
   const cap = S.towns.find((t) => t.capital) || S.towns[0];
   if (cap) S.neighbors = S.neighbors.filter((n2) => groundDist2(n2.x, n2.y, cap.x, cap.y) > 144 || d.nb.some((e) => e[0] === n2.id));
-  for (const [id, f, j, p] of d.nb) { const q = S.neighbors.find((r) => r.id === id); if (q) { q.friend = f; q.joined = !!j; q.pop = p; } }
+  for (const [id, f, j, p, req, log] of d.nb) { const q = S.neighbors.find((r) => r.id === id); if (q) { q.friend = f; q.joined = !!j; q.pop = p; q.req = req || null; q.log = log || []; } }
   indexNeighbors();
   if (d.cam) Object.assign(S.cam, d.cam);
   recomputeTowns();

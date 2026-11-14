@@ -5,6 +5,8 @@ import { S, M, DEFS, ZONES, townById, canPlace, canZone, canFound, canStart, own
 import { hash2 } from './noise.js';
 import { idxOf } from './world.js';
 import * as L from './life.js';
+import { styleAt } from './regions.js';
+import { nbExtra } from './game.js';
 
 export const TILE_MODE_TW = 20;
 const LIT = new Set(['house', 'townhall', 'workshop', 'market', 'tower', 'dock', 'library', 'cathedral', 'greatcastle', 'lighthouse', 'lumber']);
@@ -191,9 +193,16 @@ function buildingSprite(b, x, y) {
     const t = townById(b.town);
     return t && t.capital ? SPR.build.castle[S.tier] : SPR.build.townhall[0];
   }
+  if (b.t === 'house') {
+    const t = townById(b.town);
+    const arr = SPR.homes[t ? townStyle(t) : 'temperate'][(b.lv || 1) - 1];
+    return arr[Math.floor(hash2(x, y, 3) * arr.length)];
+  }
   const arr = SPR.build[b.t];
   return arr[Math.floor(hash2(x, y, 3) * arr.length)];
 }
+// A town keeps the style of the place it was founded.
+export function townStyle(t) { return t.style || (t.style = styleAt(t.x, t.y)); }
 function label(text, x, y, size = 12, sub) {
   ctx.font = `600 ${size}px "Trebuchet MS", system-ui, sans-serif`;
   const w = ctx.measureText(text).width + 14;
@@ -432,9 +441,22 @@ function drawTiles() {
         }
         continue;
       }
+      const extra = nbExtra.get(i);
+      if (extra) {
+        drawSprite(SPR.build.hut[(hash2(wx, y, 41) * 3) | 0], cx, cy, s);
+        lights.push([cx, cy - tw * 0.12, 0.6]);
+        continue;
+      }
       const nb = S.nbIndex.get(i);
       if (nb) {
-        drawSprite(SPR.build.village[nb.id % 3], cx, cy, s);
+        drawSprite(nb.pop < 22 ? SPR.build.hut[nb.id % 3] : SPR.build.village[nb.id % 3], cx, cy, s);
+        if (nb.req) { // a letter waiting: little envelope bobbing above the village
+          const ey = cy - tw * 0.62 + Math.sin(animTime * 2.4 + nb.id) * tw * 0.03, ew = Math.max(9, tw * 0.2), eh = ew * 0.66;
+          ctx.fillStyle = '#fffaf0'; ctx.strokeStyle = '#a0603c'; ctx.lineWidth = 1.2;
+          ctx.fillRect(cx - ew / 2, ey - eh / 2, ew, eh); ctx.strokeRect(cx - ew / 2, ey - eh / 2, ew, eh);
+          ctx.beginPath(); ctx.moveTo(cx - ew / 2, ey - eh / 2); ctx.lineTo(cx, ey + eh * 0.1); ctx.lineTo(cx + ew / 2, ey - eh / 2); ctx.stroke();
+          ctx.fillStyle = '#c0503e'; ctx.beginPath(); ctx.arc(cx, ey + eh * 0.1, ew * 0.09, 0, 6.3); ctx.fill();
+        }
         lights.push([cx, cy - tw * 0.15, 0.9]);
         // banner in their colour
         const fx = cx + 12 * s, fy = cy - 4 * s;
@@ -487,7 +509,7 @@ function drawLabels(tileMode) {
       if (n.joined) continue;
       const x = sx(tileWX(n.x, n.y)), y = sy(tileWY(n.y));
       if (x < -80 || x > cw + 80 || y < -40 || y > ch + 60) continue;
-      label(n.name, x, y - (tileMode ? tw * 0.7 : 9), 11);
+      label(n.req ? `${n.name} ✉` : n.name, x, y - (tileMode ? tw * 0.7 : 9), 11);
     }
   }
 }

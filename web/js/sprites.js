@@ -258,6 +258,94 @@ function cottage(g, du, dv, s, roof, rnd) {
   gable(g, u0, v0, u1, v1, 8, 7, roof);
   if (rnd() < 0.6) { const [cx, cy] = P(u0 + s * 0.25, (v0 + v1) / 2, 13); g.fillStyle = '#8c6e5a'; g.fillRect(cx - 1.2, cy - 4, 2.4, 4); }
 }
+// ---------------- regional homes ----------------
+// Each style: walls, trim, roof colours and roof shape. Original designs inspired by broad regional building traditions.
+export const STYLES = {
+  temperate: { name: 'Timber-framed', wall: '#e8d8b8', trim: '#8a5a3c', roofs: ['#c0603e', '#c9a35a', '#7a6b8f', '#b5543c'], roof: 'gable', rh: 7, chimney: true },
+  nordic: { name: 'Nordic', wall: '#7a5236', trim: '#5a3a24', roofs: ['#56704a', '#44505a', '#62744e'], roof: 'gable', rh: 11, chimney: true, door: '#c8a060' },
+  mediterranean: { name: 'Mediterranean', wall: '#f4eee2', roofs: ['#c8643c', '#d07448', '#b85a36'], roof: 'hip', rh: 4, shutters: ['#4a7aa8', '#5a9a7a', '#c0703e'] },
+  desert: { name: 'Adobe', wall: '#d9b47c', roofs: ['#c9a06a'], roof: 'flat', dome: '#efe2c8' },
+  tropical: { name: 'Stilt house', wall: '#c9a36a', trim: '#8a6a3a', roofs: ['#b8984a', '#a88a40', '#c4a458'], roof: 'gable', rh: 10, stilts: true, over: 0.13 },
+  eastasian: { name: 'Curved-eave', wall: '#efe6d6', trim: '#5a3a2a', roofs: ['#4a5a6a', '#3c6a50', '#6a4a3a'], roof: 'curved', rh: 6 },
+};
+function hip(g, u0, v0, u1, v1, z, rh, roof, over = 0.05) {
+  const C = hex(roof), vm = (v0 + v1) / 2, inset = (u1 - u0) * 0.28;
+  u0 -= over; v0 -= over; u1 += over; v1 += over;
+  const ru0 = u0 + inset, ru1 = u1 - inset;
+  poly(g, [P(u0, v0, z), P(u1, v0, z), P(ru1, vm, z + rh), P(ru0, vm, z + rh)], rgb(C, 0.82), rgb(C, 0.6));
+  poly(g, [P(u1, v0, z), P(u1, v1, z), P(ru1, vm, z + rh)], rgb(C, 0.72), rgb(C, 0.55));
+  poly(g, [P(ru0, vm, z + rh), P(ru1, vm, z + rh), P(u1, v1, z), P(u0, v1, z)], rgb(C, 1.05), rgb(C, 0.65));
+}
+function home(g, st, du, dv, sz, h, roofCol, rnd, opts = {}) {
+  const u0 = 0.5 - sz / 2 + du, v0 = 0.5 - sz / 2 + dv, u1 = u0 + sz, v1 = v0 + sz * (opts.deep || 0.8);
+  const z0 = st.stilts ? 4 : 0;
+  if (st.stilts) {
+    g.strokeStyle = '#6a4a2a'; g.lineWidth = 1.2;
+    for (const [u, v] of [[u0 + 0.03, v1 - 0.03], [u1 - 0.03, v1 - 0.03], [u1 - 0.03, v0 + 0.03]]) { g.beginPath(); g.moveTo(...P(u, v, 0)); g.lineTo(...P(u, v, z0)); g.stroke(); }
+  }
+  box(g, u0, v0, u1, v1, h, st.wall, z0);
+  if (st.trim) {
+    g.strokeStyle = st.trim; g.lineWidth = 0.8; g.beginPath();
+    for (const z of h > 11 ? [z0 + h / 2] : [z0 + h * 0.5]) { g.moveTo(...P(u0, v1, z)); g.lineTo(...P(u1, v1, z)); g.lineTo(...P(u1, v0, z)); }
+    g.moveTo(...P(u1, v1, z0)); g.lineTo(...P(u1, v1, z0 + h)); g.stroke();
+  }
+  // door and windows
+  const [dx, dy] = P((u0 + u1) / 2, v1, z0); g.fillStyle = st.door || '#7a4e34'; g.fillRect(dx - 1.5, dy - 5, 3, 5);
+  const floors = h > 11 ? 2 : 1;
+  for (let f = 0; f < floors; f++) {
+    const z = z0 + 6.5 + f * 6.5;
+    windows(g, u1, u1, (v0 + v1) / 2, z, 1, '#f5d78a');
+    if (f > 0 || sz > 0.45) windows(g, u0 + 0.04, u1 - 0.04, v1, z, f > 0 ? 2 : 1, '#f5d78a');
+    if (st.shutters) {
+      g.fillStyle = st.shutters[(rnd() * st.shutters.length) | 0];
+      const [wx, wy] = P(u1, (v0 + v1) / 2, z); g.fillRect(wx - 2.4, wy - 2.5, 0.9, 3); g.fillRect(wx + 1.5, wy - 2.5, 0.9, 3);
+    }
+  }
+  const top = z0 + h;
+  if (st.roof === 'gable') gable(g, u0, v0, u1, v1, top, st.rh * (sz / 0.5), roofCol, st.over || 0.05);
+  else if (st.roof === 'hip') hip(g, u0, v0, u1, v1, top, st.rh * (sz / 0.5) + 1, roofCol);
+  else if (st.roof === 'curved') {
+    gable(g, u0, v0, u1, v1, top, st.rh * (sz / 0.5), roofCol, 0.1);
+    // upturned eave tips
+    g.strokeStyle = rgb(hex(roofCol), 0.6); g.lineWidth = 1.6;
+    for (const [u, v] of [[u0 - 0.1, v1 + 0.1], [u1 + 0.1, v1 + 0.1], [u1 + 0.1, v0 - 0.1]]) {
+      const [x, y] = P(u, v, top); g.beginPath(); g.moveTo(x, y); g.quadraticCurveTo(x + (u > 0.5 ? 2 : -2), y, x + (u > 0.5 ? 3 : -3), y - 3); g.stroke();
+    }
+    const [rx, ry] = P(u1 + 0.1, (v0 + v1) / 2, top + st.rh * (sz / 0.5)); g.fillStyle = rgb(hex(roofCol), 0.6); g.beginPath(); g.arc(rx, ry, 1.2, 0, 7); g.fill();
+  } else if (st.roof === 'flat') {
+    box(g, u0, v1 - 0.04, u1, v1, 2, st.wall, top); box(g, u1 - 0.04, v0, u1, v1, 2, st.wall, top);
+    if (opts.dome) {
+      const [cx, cy] = P((u0 + u1) / 2, (v0 + v1) / 2, top); const r = sz * 14;
+      const gr = g.createLinearGradient(cx - r, 0, cx + r, 0); gr.addColorStop(0, '#fbf2dc'); gr.addColorStop(1, '#c8b48c');
+      g.fillStyle = gr; g.beginPath(); g.ellipse(cx, cy, r, r * 0.9, 0, Math.PI, 0); g.closePath(); g.fill();
+    }
+  }
+  if (st.chimney && rnd() < 0.7) { const [cx, cy] = P(u0 + sz * 0.25, (v0 + v1) / 2, top + st.rh * 0.8); g.fillStyle = '#8c6e5a'; g.fillRect(cx - 1.2, cy - 4, 2.4, 4); }
+}
+function hedge(g, u0, v0, u1, v1) {
+  g.strokeStyle = '#4f7f3e'; g.lineWidth = 2.4; g.beginPath();
+  g.moveTo(...P(u0, v1)); g.lineTo(...P(u1, v1)); g.lineTo(...P(u1, v0)); g.stroke();
+}
+function homeSprite(styleKey, lv, v) {
+  const st = STYLES[styleKey], rnd = mulberry32(v * 131 + lv * 17 + styleKey.length * 7);
+  const roof = () => st.roofs[(rnd() * st.roofs.length) | 0];
+  return make(72, 92, 36, 68, (g) => {
+    shadow(g, 21, 9.5);
+    if (lv === 1) {
+      if (v === 1) { home(g, st, -0.17, -0.12, 0.36, 8, roof(), rnd); home(g, st, 0.16, 0.2, 0.34, 8, roof(), rnd, { dome: st.dome && rnd() < 0.5 }); }
+      else { home(g, st, 0, 0, 0.5, 8, roof(), rnd, { dome: st.dome && v === 2 }); g.fillStyle = '#7aa04a'; g.beginPath(); g.arc(18, 4, 3, 0, 7); g.fill(); }
+    } else if (lv === 2) {
+      home(g, st, 0, 0.02, 0.56, 14, roof(), rnd, { deep: 0.75, dome: st.dome && v === 1 });
+      if (v === 2) { g.fillStyle = '#7aa04a'; g.beginPath(); g.arc(-19, 3, 3.2, 0, 7); g.fill(); }
+    } else {
+      // manor: main hall, a side wing and a little garden
+      hedge(g, 0.04, 0.05, 0.96, 0.96);
+      home(g, st, -0.14, -0.12, 0.42, 9, roof(), rnd, { deep: 0.8 });
+      home(g, st, 0.08, 0.08, 0.6, 15, roof(), rnd, { deep: 0.72, dome: !!st.dome });
+      g.fillStyle = '#f2b6c6'; for (const [u, v2] of [[0.85, 0.9], [0.9, 0.6], [0.2, 0.92]]) { const [x, y] = P(u, v2); g.beginPath(); g.arc(x, y - 1, 1.3, 0, 7); g.fill(); }
+    }
+  });
+}
 function field(g, rnd, snowy = false) {
   if (snowy) {
     g.save(); diamond(g, 29, 14.5); g.clip();
@@ -287,6 +375,16 @@ function buildingSprites() {
     else { cottage(g, 0, 0, 0.5, ROOFS[v], rnd); g.fillStyle = '#7aa04a'; g.beginPath(); g.arc(18, 4, 3, 0, 7); g.fill(); }
   }));
   S.farmSnow = [0, 1].map((v) => frame((g) => field(g, mulberry32(v + 3), true)));
+  // Regional homes: SPR.homes[style][level-1][variant]
+  SPR.homes = {};
+  for (const k of Object.keys(STYLES)) SPR.homes[k] = [1, 2, 3].map((lv) => [0, 1, 2].map((v) => homeSprite(k, lv, v)));
+  // a single hut for growing neighbour villages
+  S.hut = [0, 1, 2].map((v) => frame((g) => {
+    const [x, y] = P(0.5, 0.55, 0), r = 5 + v * 0.6;
+    g.fillStyle = 'rgba(30,40,20,0.18)'; g.beginPath(); g.ellipse(x, y + 1, r + 3, (r + 3) / 2, 0, 0, 7); g.fill();
+    g.fillStyle = '#c9b08a'; g.fillRect(x - r, y - 5, r * 2, 5); g.beginPath(); g.ellipse(x, y, r, r / 2, 0, 0, Math.PI); g.fill();
+    cone(g, 0.5, 0.55, 5, r + 1.5, 8, v === 1 ? '#a88a48' : '#b89a52');
+  }));
   S.farm = [0, 1, 2].map((v) => frame((g) => {
     const rnd = mulberry32(v * 5 + 11);
     field(g, rnd);

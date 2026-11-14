@@ -22,6 +22,8 @@ there are no timers, and you can pause whenever you like.
 - Goals are tucked into a 📜 scroll button that shows a badge when you finish one.
 - **A living world**: a gentle day and night cycle about every 5 minutes of play, with window glow in town at night. Seasons follow each hemisphere. Snow spreads and melts tile by tile, woods turn gold in autumn, and blossom opens in spring. Fields rest in winter and give a harvest boost in late summer and autumn.
 - **Wildlife and weather**: sheep, cows and chickens on the farms. Deer, reindeer, rabbits, gazelles and camels in the wild. Flocks of birds, fishing boats and sailing ships. Drifting clouds with shadows, showers with soft rain sound, snowfall in winter, and crickets at night.
+- **Regional building styles**: towns build in the style of where they stand on Earth (timber-framed, Nordic, Mediterranean, adobe, tropical stilt houses or curved-eave). Homes improve by themselves from cottage to town house to manor as a town grows, and each step holds more people.
+- **Neighbours with personality**: each village has a leader with a temperament. Leaders send letters with small requests (help is rewarded, ignoring them costs nothing), share little stories with friends, and their villages visibly grow on the map.
 - **Roads** form by themselves from each building to its town hall, and villagers walk along them.
 - Works in portrait and landscape.
 
@@ -60,6 +62,7 @@ cd android && ./gradlew assembleDebug
 | `web/js/sprites.js` | All art, drawn in code |
 | `web/js/ui.js` | HUD, menus, modes and the start flow |
 | `web/js/seasons.js` | Seasons per hemisphere, day and night |
+| `web/js/regions.js` | Which building style a place uses |
 | `web/js/life.js` | Weather, clouds, birds, animals, boats, roads, night lighting |
 | `web/js/tutorial.js` | Pip the messenger bird's first-time guide |
 | `web/js/audio.js` | Generative music, nature sounds, sound effects, haptics |

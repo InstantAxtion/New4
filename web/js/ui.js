@@ -4,12 +4,14 @@ import {
   S, M, RES, RES_NAMES, TIERS, DEFS, MANUAL, WONDERS, ZONES, FOUND_COST, GIFT_AMOUNT, CONTACT_RANGE,
   on, emit, totalPop, totalCap, townById, hasWonder, wonderStarted, count, ownerOf, canPlace, placeBuilding, setZone,
   demolish, canFound, foundTown, inContact, tradeOffers, doTrade, gift, canInvite, invite, activeQuests, QUESTS,
-  newGame, PACE, save, hasSave, load, resetSave, slotInfo, setSlot, deleteSlot, SLOT_COUNT, saveSettings, surveyStart, canStart, affordable, groundDist2, DAY_SECONDS,
+  newGame, PACE, TRAITS, fulfil, nbExtra, HOUSE_LEVELS, HOUSE_CAP_MULT, save, hasSave, load, resetSave, slotInfo, setSlot, deleteSlot, SLOT_COUNT, saveSettings, surveyStart, canStart, affordable, groundDist2, DAY_SECONDS,
 } from './game.js';
 import { SPR, spriteIcon } from './sprites.js';
 import { panBy, cam, markDirty, flyTo, centerOn, clampCam, screenSize, TILE_MODE_TW, sx, sy, pickTile, setHover } from './render.js';
 import { initAudio, sfx, haptic, applySettings, resumeAudio } from './audio.js';
 import { tutorialActive } from './tutorial.js';
+import { STYLES } from './sprites.js';
+import { townStyle } from './render.js';
 import { seasonIndex, SEASONS, SEASON_ICONS, nightAt, farmSeason } from './seasons.js';
 
 const $ = (s) => document.querySelector(s);
@@ -225,6 +227,8 @@ function showRealm() {
         `<button class="item" data-act="goto" data-arg="${t.id}"><div><b>${esc(t.name)}</b>${t.capital ? ' 👑' : ''}<div class="meta">${Math.floor(t.pop)}/${t.cap} folk · border ${t.radius.toFixed(1)}</div></div><span>➜</span></button>`).join('')}</div>
         <div class="row"><button class="btn leaf ${foundLocked ? 'disabled' : ''}" data-act="found">Found a new settlement</button><div class="cost">${costChips(FOUND_COST)}</div></div>
         ${foundLocked ? `<div class="note">${S.tier < 1 ? 'Unlocks when your realm becomes a Village.' : `A ${TIERS[S.tier].name} can hold ${TIERS[S.tier].maxTowns} settlements.`}</div>` : '<div class="note">Settlers can travel anywhere on Earth. Settle near neighbours to befriend them.</div>'}</div>
+      ${contacts.some((n) => n.req) ? `<div class="section"><h3>✉ Letters</h3><div class="list">${contacts.filter((n) => n.req).map((n) =>
+        `<button class="item" data-act="gonb" data-arg="${n.id}"><div><b>${esc(n.leader)} of ${esc(n.name)}</b><div class="meta">${esc(n.req.text)}</div></div><span>➜</span></button>`).join('')}</div></div>` : ''}
       <div class="section"><h3>Neighbours in reach</h3>${contacts.length ? `<div class="list">${contacts.slice(0, 12).map((n) =>
         `<button class="item" data-act="gonb" data-arg="${n.id}"><div><b>${esc(n.name)}</b><div class="meta">${Math.floor(n.pop)} folk · has ${n.surplus} · wants ${n.want}</div></div><span>${n.friend >= 100 ? '💛' : '🤝 ' + Math.floor(n.friend)}</span></button>`).join('')}</div>`
         : `<div class="note">No villages within ${CONTACT_RANGE} tiles yet. Explore the map or found settlements near others.</div>`}</div>
@@ -255,7 +259,7 @@ export function showInfo(x, y) {
   M.selected = { x, y }; markDirty();
   openSheet('info', () => {
     const i = idxOf(x, y), info = describeTile(x, y);
-    const b = S.buildings.get(i), z = S.zones.get(i), nb = S.nbIndex.get(i);
+    const b = S.buildings.get(i), z = S.zones.get(i), nb = S.nbIndex.get(i) || nbExtra.get(i);
     const town = ownerOf(x, y);
     let sub = `${info.biome} · ${esc(info.place)} · ${info.coord}`;
     if (nb) return neighborInfo(nb, sub);
@@ -276,6 +280,11 @@ export function showInfo(x, y) {
       if (d.wonder) body += `<span>Wonder</span><span>${d.desc}</span>`;
       body += '</div>';
       body += `<div class="row"><button class="btn small" data-act="demolish">${b.p < 1 ? 'Cancel construction' : 'Demolish'}</button></div>`;
+      if (b.t === 'house' && t) {
+        const lv = b.lv || 1;
+        body = body.replace('<span>Houses</span><span>6 villagers</span>', `<span>Houses</span><span>${Math.round(6 * HOUSE_CAP_MULT[lv - 1])} villagers</span>`);
+        return head(HOUSE_LEVELS[lv - 1], sub) + `<div class="note">${STYLES[townStyle(t)].name} homes of ${esc(t.name)}.${lv < 3 ? ` Families improve their homes by themselves as the town grows${lv === 1 ? ' past 40 folk' : ' past 150 folk at City size'}.` : ''}</div>` + body;
+      }
       return head(d.name, sub) + body;
     }
     if (z) {
@@ -305,8 +314,15 @@ function townInfo(t, sub) {
 function neighborInfo(n, sub) {
   const contact = inContact(n), inv = canInvite(n);
   const offers = tradeOffers(n);
+  const tr = TRAITS[n.trait] || TRAITS.cheerful;
+  const req = n.req;
   return head(esc(n.name), `Neighbouring village · ${Math.floor(n.pop)} folk`)
     + `<div class="note">${sub}</div>
+    <div class="note">Led by <b>${esc(n.leader || 'their elder')}</b> · ${tr.label}: ${tr.blurb}</div>
+    ${req ? `<div class="section"><h3>✉ A request</h3><div class="note">“${esc(req.text)}”</div>
+      <div class="row"><button class="btn small primary ${contact && S.res[req.res] >= req.amt ? '' : 'disabled'}" data-act="fulfil">Send ${req.amt} ${RES_NAMES[req.res].toLowerCase()}</button>
+      <div class="note" style="margin:0">They'll send ${Object.entries(req.reward).map(([k, v]) => `${v} ${k}`).join(', ')} in thanks</div></div>
+      <div class="note">No hurry, and no harm if you can't. The need passes in ${Math.max(1, Math.ceil(req.until - S.day))} days.</div></div>` : ''}
     <div class="kv"><span>Has plenty of</span><span>${ICON[n.surplus].replace('<svg', '<svg width="16" height="16"')} ${RES_NAMES[n.surplus]}</span><span>Would love</span><span>${ICON[n.want].replace('<svg', '<svg width="16" height="16"')} ${RES_NAMES[n.want]}</span></div>
     <div class="note">Friendship ${Math.floor(n.friend)}/100</div><div class="meter"><div style="width:${n.friend}%"></div></div>
     ${contact ? `<div class="section"><h3>Trade</h3><div class="list">${offers.map((o, k) =>
@@ -314,9 +330,12 @@ function neighborInfo(n, sub) {
       <div class="section"><h3>Send a gift (${GIFT_AMOUNT})</h3><div class="row">${RES.map((r) =>
         `<button class="btn small ${S.res[r] < GIFT_AMOUNT ? 'disabled' : ''}" data-act="gift" data-arg="${r}">${ICON[r].replace('<svg', '<svg width="18" height="18" style="vertical-align:-4px"')}${r === n.want ? ' 💛' : ''}</button>`).join('')}</div>
         <div class="note">Gifts of what they want count for nearly double.</div></div>
+      ${n.log && n.log.length ? `<div class="section"><h3>Lately in ${esc(n.name)}</h3><div class="note">${n.log.map((e) => `• ${esc(e.text)} <span style="opacity:.6">(Year ${Math.floor(e.day / 48) + 1})</span>`).join('<br>')}</div></div>` : ''}
       <div class="section"><button class="btn primary ${inv.ok ? '' : 'disabled'}" data-act="invite">Invite to join your kingdom</button>${inv.ok ? '' : `<div class="note">${inv.reason}</div>`}</div>`
     : `<div class="note">Too far for traders. Villages within ${CONTACT_RANGE} tiles of one of your settlements can trade. Found a settlement nearer to them.</div>`}`;
 }
+
+const nbAt = (t) => t && (S.nbIndex.get(idxOf(t.x, t.y)) || nbExtra.get(idxOf(t.x, t.y)));
 
 // ---------------- actions ----------------
 function act(name, arg, el) {
@@ -349,9 +368,10 @@ function act(name, arg, el) {
     case 'unzone': if (sel) { setZone('erase', sel.x, sel.y); closeSheet(); } break;
     case 'openbuild': showBuild(); break;
     case 'quickzone': if (sel && setZone(arg, sel.x, sel.y)) { sfx('place'); haptic(); toast(`${ZONES[arg].name} zoned. Villagers will build here soon.`); refreshSheet(); } break;
-    case 'trade': { const n = sel && S.nbIndex.get(idxOf(sel.x, sel.y)); if (n && doTrade(n, +arg)) { sfx('coin'); haptic(); toast(`Traded with ${n.name}.`); refreshSheet(); } else sfx('error'); break; }
-    case 'gift': { const n = sel && S.nbIndex.get(idxOf(sel.x, sel.y)); if (n && gift(n, arg)) { sfx('coin'); haptic(); toast(`${n.name} is delighted by your gift!`); refreshSheet(); } break; }
-    case 'invite': { const n = sel && S.nbIndex.get(idxOf(sel.x, sel.y)); if (n && invite(n)) { closeSheet(); } break; }
+    case 'trade': { const n = sel && nbAt(sel); if (n && doTrade(n, +arg)) { sfx('coin'); haptic(); toast(`Traded with ${n.name}.`); refreshSheet(); } else sfx('error'); break; }
+    case 'gift': { const n = sel && nbAt(sel); if (n && gift(n, arg)) { sfx('coin'); haptic(); toast(`${n.name} is delighted by your gift!`); refreshSheet(); } break; }
+    case 'fulfil': { const n = nbAt(sel); if (n && fulfil(n)) { sfx('quest'); haptic('medium'); refreshSheet(); } else sfx('error'); break; }
+    case 'invite': { const n = sel && nbAt(sel); if (n && invite(n)) { closeSheet(); } break; }
   }
 }
 function bindActions(root) {
@@ -561,6 +581,8 @@ export function initUI() {
     toast(`${SEASON_ICONS[index]} ${msg}`);
   });
   on('joined', () => sfx('tier'));
+  on('request', (n) => { toast(`✉ A letter from ${n.leader} of ${n.name}`); sfx('coin'); });
+  on('story', ({ text }) => toast(text));
   document.addEventListener('keydown', (e) => {
     if (e.target.tagName === 'INPUT') return;
     if (e.key === 'Escape') { if (M.mode && M.mode.kind !== 'start') setMode(null); else closeSheet(); }
