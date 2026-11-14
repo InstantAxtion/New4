@@ -1,0 +1,22 @@
+{
+  "name": "hearthlands",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A relaxing kingdom builder on a multi-million tile real Earth.",
+  "scripts": {
+    "serve": "npx --yes http-server web -p 8080 -c-1",
+    "android:add": "cap add android",
+    "android:sync": "cap sync android",
+    "android:assets": "capacitor-assets generate --android",
+    "android:build": "cd android && ./gradlew assembleDebug"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.0.0",
+    "@capacitor/core": "^8.0.0",
+    "@capacitor/haptics": "^8.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "^4.0.0",
+    "@capacitor/cli": "^8.0.0"
+  }
+}

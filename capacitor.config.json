@@ -1,0 +1,9 @@
+{
+  "appId": "com.hearthlands.game",
+  "appName": "Hearthlands",
+  "webDir": "web",
+  "backgroundColor": "#2e628c",
+  "android": {
+    "backgroundColor": "#2e628c"
+  }
+}

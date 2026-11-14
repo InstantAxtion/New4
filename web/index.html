@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#2e628c">
+  <title>Hearthlands</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <canvas id="map"></canvas>
+
+  <!-- Loading -->
+  <div id="loading" class="screen">
+    <div class="crest">
+      <svg viewBox="0 0 64 64" width="84" height="84" aria-hidden="true"><path d="M32 4 56 14v18c0 14-10 23-24 28C18 55 8 46 8 32V14Z" fill="#c0603e" stroke="#7a3a24" stroke-width="2.5"/><path d="M20 40V28l6-6 6 6 6-6 6 6v12Z" fill="#f5e6c4"/><rect x="29" y="33" width="6" height="7" fill="#7a3a24"/></svg>
+    </div>
+    <h1>Hearthlands</h1>
+    <div class="bar"><div id="loadfill"></div></div>
+    <p id="loadmsg">Preparing…</p>
+  </div>
+
+  <!-- Title -->
+  <div id="title" class="screen hidden">
+    <div class="titlecard">
+      <div class="crest small">
+        <svg viewBox="0 0 64 64" width="64" height="64" aria-hidden="true"><path d="M32 4 56 14v18c0 14-10 23-24 28C18 55 8 46 8 32V14Z" fill="#c0603e" stroke="#7a3a24" stroke-width="2.5"/><path d="M20 40V28l6-6 6 6 6-6 6 6v12Z" fill="#f5e6c4"/><rect x="29" y="33" width="6" height="7" fill="#7a3a24"/></svg>
+      </div>
+      <h1>Hearthlands</h1>
+      <p class="tagline">Build a gentle kingdom anywhere on Earth.<br>No timers. No losing. Just your realm, at your pace.</p>
+      <div id="titlebtns"></div>
+    </div>
+  </div>
+
+  <!-- HUD -->
+  <div id="hud" class="hidden">
+    <div id="topbar">
+      <div id="realm"><span id="realmname"></span><span id="tierbadge"></span></div>
+      <div id="resbar"></div>
+      <div id="timebox">
+        <span id="date"></span>
+        <div id="speed"></div>
+      </div>
+    </div>
+    <div id="quests"></div>
+    <div id="zoomctl">
+      <button data-z="in" aria-label="Zoom in">+</button>
+      <button data-z="out" aria-label="Zoom out">−</button>
+      <button data-z="home" aria-label="Go home" title="Go home">⌂</button>
+    </div>
+    <div id="bottombar"></div>
+  </div>
+
+  <div id="modebar" class="hidden"></div>
+  <div id="startbar" class="hidden"></div>
+  <div id="sheet" class="hidden"><div class="grab"></div><div id="sheetbody"></div></div>
+  <div id="toasts"></div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
