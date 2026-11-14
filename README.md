@@ -24,6 +24,7 @@ there are no timers, and you can pause whenever you like.
 - **Wildlife and weather**: sheep, cows and chickens on the farms. Deer, reindeer, rabbits, gazelles and camels in the wild. Flocks of birds, fishing boats and sailing ships. Drifting clouds with shadows, showers with soft rain sound, snowfall in winter, and crickets at night.
 - **Regional building styles**: towns build in the style of where they stand on Earth (timber-framed, Nordic, Mediterranean, adobe, tropical stilt houses or curved-eave). Homes improve by themselves from cottage to town house to manor as a town grows, and each step holds more people.
 - **Neighbours with personality**: each village has a leader with a temperament. Leaders send letters with small requests (help is rewarded, ignoring them costs nothing), share little stories with friends, and their villages visibly grow on the map.
+- **The late game**: build a **Harbour** to send settlers to other continents. Chart **sea routes** between harbour towns on different continents (ships sail them, each adds gold and room for another settlement). Make towns lovelier with **civic improvements**: town green, paved streets, fountain square, street lanterns and window boxes. Long-term goals include settling six continents.
 - **Roads** form by themselves from each building to its town hall, and villagers walk along them.
 - Works in portrait and landscape.
 

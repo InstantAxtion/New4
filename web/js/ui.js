@@ -4,7 +4,7 @@ import {
   S, M, RES, RES_NAMES, TIERS, DEFS, MANUAL, WONDERS, ZONES, FOUND_COST, GIFT_AMOUNT, CONTACT_RANGE,
   on, emit, totalPop, totalCap, townById, hasWonder, wonderStarted, count, ownerOf, canPlace, placeBuilding, setZone,
   demolish, canFound, foundTown, inContact, tradeOffers, doTrade, gift, canInvite, invite, activeQuests, QUESTS,
-  newGame, PACE, TRAITS, fulfil, nbExtra, HOUSE_LEVELS, HOUSE_CAP_MULT, save, hasSave, load, resetSave, slotInfo, setSlot, deleteSlot, SLOT_COUNT, saveSettings, surveyStart, canStart, affordable, groundDist2, DAY_SECONDS,
+  newGame, PACE, TRAITS, IMPROVEMENTS, IMPROVE_TIER, charm, improve, continentAt, realmContinents, harbourTowns, routeOptions, openRoute, ROUTE_COST, ROUTE_DAYS, routesDone, maxTowns, fulfil, nbExtra, HOUSE_LEVELS, HOUSE_CAP_MULT, save, hasSave, load, resetSave, slotInfo, setSlot, deleteSlot, SLOT_COUNT, saveSettings, surveyStart, canStart, affordable, groundDist2, DAY_SECONDS,
 } from './game.js';
 import { SPR, spriteIcon } from './sprites.js';
 import { panBy, cam, markDirty, flyTo, centerOn, clampCam, screenSize, TILE_MODE_TW, sx, sy, pickTile, setHover } from './render.js';
@@ -218,7 +218,7 @@ function showRealm() {
     const p = totalPop(), next = TIERS[S.tier + 1];
     const prog = next ? Math.min(1, (p - TIERS[S.tier].pop) / (next.pop - TIERS[S.tier].pop)) : 1;
     const f = canFound(0, 0);
-    const foundLocked = S.tier < 1 || S.towns.length >= TIERS[S.tier].maxTowns;
+    const foundLocked = S.tier < 1 || S.towns.length >= maxTowns();
     const contacts = S.neighbors.filter((n) => !n.joined && inContact(n)).sort((a, b) => b.friend - a.friend);
     return head(esc(S.name), `${TIERS[S.tier].name} · ${Math.floor(p)} villagers · ${S.towns.length} settlement${S.towns.length > 1 ? 's' : ''}`)
       + (next ? `<div class="note">Growing toward <b>${next.name}</b> at ${next.pop} villagers</div><div class="meter"><div style="width:${prog * 100}%"></div></div>` : '<div class="note">Your realm has become a true Kingdom.</div>')
@@ -226,12 +226,19 @@ function showRealm() {
       + `<div class="section"><h3>Settlements</h3><div class="list">${S.towns.map((t) =>
         `<button class="item" data-act="goto" data-arg="${t.id}"><div><b>${esc(t.name)}</b>${t.capital ? ' 👑' : ''}<div class="meta">${Math.floor(t.pop)}/${t.cap} folk · border ${t.radius.toFixed(1)}</div></div><span>➜</span></button>`).join('')}</div>
         <div class="row"><button class="btn leaf ${foundLocked ? 'disabled' : ''}" data-act="found">Found a new settlement</button><div class="cost">${costChips(FOUND_COST)}</div></div>
-        ${foundLocked ? `<div class="note">${S.tier < 1 ? 'Unlocks when your realm becomes a Village.' : `A ${TIERS[S.tier].name} can hold ${TIERS[S.tier].maxTowns} settlements.`}</div>` : '<div class="note">Settlers can travel anywhere on Earth. Settle near neighbours to befriend them.</div>'}</div>
+        ${foundLocked ? `<div class="note">${S.tier < 1 ? 'Unlocks when your realm becomes a Village.' : `A ${TIERS[S.tier].name} can hold ${maxTowns()} settlements.${S.tier >= 4 ? ' Each sea route makes room for one more.' : ''}`}</div>` : '<div class="note">Settlers can travel anywhere on Earth. Settle near neighbours to befriend them.</div>'}</div>
       ${contacts.some((n) => n.req) ? `<div class="section"><h3>✉ Letters</h3><div class="list">${contacts.filter((n) => n.req).map((n) =>
         `<button class="item" data-act="gonb" data-arg="${n.id}"><div><b>${esc(n.leader)} of ${esc(n.name)}</b><div class="meta">${esc(n.req.text)}</div></div><span>➜</span></button>`).join('')}</div></div>` : ''}
       <div class="section"><h3>Neighbours in reach</h3>${contacts.length ? `<div class="list">${contacts.slice(0, 12).map((n) =>
         `<button class="item" data-act="gonb" data-arg="${n.id}"><div><b>${esc(n.name)}</b><div class="meta">${Math.floor(n.pop)} folk · has ${n.surplus} · wants ${n.want}</div></div><span>${n.friend >= 100 ? '💛' : '🤝 ' + Math.floor(n.friend)}</span></button>`).join('')}</div>`
         : `<div class="note">No villages within ${CONTACT_RANGE} tiles yet. Explore the map or found settlements near others.</div>`}</div>
+      <div class="section"><h3>Across the seas</h3>
+        <div class="note">Your realm spans ${realmContinents().length} continent${realmContinents().length > 1 ? 's' : ''}: ${realmContinents().join(', ')}. ${harbourTowns().length ? `Harbours in ${harbourTowns().map((t) => esc(t.name)).join(', ')}.` : 'Build a Harbour (Town tier) to send settlers and ships to other continents.'}</div>
+        ${(S.routes || []).length ? `<div class="list">${S.routes.map((r) => { const a = townById(r.a), b = townById(r.b);
+          return `<div class="item"><div><b>${a ? esc(a.name) : '?'} ⛵ ${b ? esc(b.name) : '?'}</b><div class="meta">${r.p >= 1 ? 'Sea route open: +8% gold' : `Charting… ${Math.round(r.p * 100)}%`}</div></div><span>${r.p >= 1 ? '✅' : '🧭'}</span></div>`; }).join('')}</div>` : ''}
+        ${routeOptions().slice(0, 6).map(([a, b], k) => `<div class="row"><button class="btn small primary ${affordable(ROUTE_COST) ? '' : 'disabled'}" data-act="route" data-arg="${k}">Chart a route: ${esc(a.name)} → ${esc(b.name)}</button><div class="cost">${costChips(ROUTE_COST)}</div></div>`).join('')}
+        ${harbourTowns().length >= 1 && !routeOptions().length ? '<div class="note">Sea routes link harbour towns on different continents. Found a settlement across the sea and give it a harbour too.</div>' : ''}
+        ${routeOptions().length ? `<div class="note">Charting a route takes about ${ROUTE_DAYS} days. Each open route adds 8% gold${S.tier >= 4 ? ' and room for one more settlement' : ''}.</div>` : ''}</div>
       <div class="section"><h3>Wonders</h3><div class="list">${WONDERS.map((w) => {
         const d = DEFS[w], done = hasWonder(w), st = wonderStarted(w);
         return `<div class="item"><div><b>${d.name}</b><div class="meta">${d.desc}</div></div><span>${done ? '✅' : st ? '🚧' : d.tier > S.tier ? '🔒' : '—'}</span></div>`;
@@ -279,7 +286,8 @@ export function showInfo(x, y) {
       if (d.radius) body += `<span>Border</span><span>+${d.radius}</span>`;
       if (d.wonder) body += `<span>Wonder</span><span>${d.desc}</span>`;
       body += '</div>';
-      body += `<div class="row"><button class="btn small" data-act="demolish">${b.p < 1 ? 'Cancel construction' : 'Demolish'}</button></div>`;
+      if (d.civic) body += `<div class="note">A civic improvement of ${t ? esc(t.name) : 'your town'}, loved by everyone who lives there.</div>`;
+      else body += `<div class="row"><button class="btn small" data-act="demolish">${b.p < 1 ? 'Cancel construction' : 'Demolish'}</button></div>`;
       if (b.t === 'house' && t) {
         const lv = b.lv || 1;
         body = body.replace('<span>Houses</span><span>6 villagers</span>', `<span>Houses</span><span>${Math.round(6 * HOUSE_CAP_MULT[lv - 1])} villagers</span>`);
@@ -309,7 +317,14 @@ function townInfo(t, sub) {
     + `<div class="kv"><span>Villagers</span><span>${Math.floor(t.pop)} / ${t.cap}</span><span>Buildings</span><span>${t.n}</span>
       <span>Border</span><span>${t.radius.toFixed(1)} tiles</span><span>Founded</span><span>Year ${Math.floor(t.founded / 48) + 1}</span></div>
       <div class="note">${t.pop >= t.cap - 0.5 ? 'Every home is full. Zone more housing to grow.' : S.fed ? 'Families are moving in.' : 'Growth has paused until there is more food.'}</div>
-      ${t.capital && next ? `<div class="note">The keep grows grander as your realm reaches ${next.name}.</div>` : ''}`;
+      ${t.capital && next ? `<div class="note">The keep grows grander as your realm reaches ${next.name}.</div>` : ''}
+      <div class="kv"><span>Continent</span><span>${continentAt(t.x, t.y)}</span><span>Harbour</span><span>${harbourTowns().includes(t) ? 'Yes ⚓' : 'None yet'}</span><span>Charm</span><span>${'✿'.repeat(charm(t)) || '—'} ${charm(t)}/5</span></div>
+      <div class="section"><h3>Make ${esc(t.name)} lovelier</h3>${S.tier < IMPROVE_TIER ? `<div class="note">Civic improvements unlock when your realm becomes a ${TIERS[IMPROVE_TIER].name}.</div>` : `<div class="note">Each improvement changes how the town looks and makes room for 4% more villagers.</div>
+        <div class="list">${Object.entries(IMPROVEMENTS).map(([k, d]) => {
+          const done = t.imp && t.imp[k];
+          return `<div class="item"><div><b>${d.name}</b><div class="meta">${d.desc}</div>${done ? '' : `<div class="cost" style="margin-top:4px">${costChips(d.cost)}</div>`}</div>
+            ${done ? '<span>✅</span>' : `<button class="btn small leaf ${affordable(d.cost) ? '' : 'disabled'}" data-act="improve" data-arg="${t.id}:${k}">Add</button>`}</div>`;
+        }).join('')}</div>`}</div>`;
 }
 function neighborInfo(n, sub) {
   const contact = inContact(n), inv = canInvite(n);
@@ -370,6 +385,8 @@ function act(name, arg, el) {
     case 'quickzone': if (sel && setZone(arg, sel.x, sel.y)) { sfx('place'); haptic(); toast(`${ZONES[arg].name} zoned. Villagers will build here soon.`); refreshSheet(); } break;
     case 'trade': { const n = sel && nbAt(sel); if (n && doTrade(n, +arg)) { sfx('coin'); haptic(); toast(`Traded with ${n.name}.`); refreshSheet(); } else sfx('error'); break; }
     case 'gift': { const n = sel && nbAt(sel); if (n && gift(n, arg)) { sfx('coin'); haptic(); toast(`${n.name} is delighted by your gift!`); refreshSheet(); } break; }
+    case 'improve': { const [tid, key] = arg.split(':'); const t = townById(+tid); if (t && improve(t, key)) { sfx('built'); haptic('medium'); toast(`${IMPROVEMENTS[key].name} added to ${t.name}.`); refreshSheet(); } else sfx('error'); break; }
+    case 'route': { const o = routeOptions()[+arg]; if (o && openRoute(o[0], o[1])) { sfx('quest'); haptic('medium'); refreshSheet(); } else sfx('error'); break; }
     case 'fulfil': { const n = nbAt(sel); if (n && fulfil(n)) { sfx('quest'); haptic('medium'); refreshSheet(); } else sfx('error'); break; }
     case 'invite': { const n = sel && nbAt(sel); if (n && invite(n)) { closeSheet(); } break; }
   }

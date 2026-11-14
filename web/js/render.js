@@ -9,7 +9,7 @@ import { styleAt } from './regions.js';
 import { nbExtra } from './game.js';
 
 export const TILE_MODE_TW = 20;
-const LIT = new Set(['house', 'townhall', 'workshop', 'market', 'tower', 'dock', 'library', 'cathedral', 'greatcastle', 'lighthouse', 'lumber']);
+const LIT = new Set(['house', 'townhall', 'workshop', 'market', 'tower', 'dock', 'library', 'cathedral', 'greatcastle', 'lighthouse', 'lumber', 'harbour', 'fountain']);
 export const MAX_TW = 160;
 const OCEAN = '#2e628c';
 
@@ -240,6 +240,7 @@ export function frame(now) {
   lights.length = 0;
   if (tileMode) drawTiles(); else drawOverview();
   if (visTowns.length) drawWalkers(visTowns);
+  if (S.routes && S.routes.length) L.drawRoutes(ctx, animTime, S.routes, townById, sx, sy, cam.tw);
   L.drawClouds(ctx, animTime, cam, cw, ch, sx, sy, tileMode);
   L.drawBirds(ctx, animTime, cam, cw, ch, sx, sy);
   if (tileMode) L.drawFalling(ctx, fdt, cw, ch, L.fallingSnow(Math.max(0, Math.min(H - 1, Math.round(cam.y / 0.25)))));
@@ -333,7 +334,8 @@ function drawTiles() {
   };
 
   // Pass 1: ground
-  const tint = new Path2D(), border = new Path2D(), valid = new Path2D(), invalid = new Path2D(), roadPath = new Path2D();
+  const tint = new Path2D(), border = new Path2D(), valid = new Path2D(), invalid = new Path2D(), roadPath = new Path2D(), pavedPath = new Path2D();
+  const isPaved = (i) => { const t = townById(L.roadTown.get(i)); return !!(t && t.imp && t.imp.paved); };
   let anyRoad = false;
   let anyOwn = false;
   for (let y = yA; y <= yB; y++) {
@@ -349,7 +351,7 @@ function drawTiles() {
         const arr = L.tileSnowy(wx, y, b, rs) && SPR.groundSnow[b] ? SPR.groundSnow[b] : SPR.ground[b];
         drawSprite(arr[(hash2(wx, y, 1) * 4) | 0], cx, cy, s);
         const rm = b > 2 ? L.roads.get(rowBase + wx) : 0;
-        if (rm) { L.addRoad(roadPath, rm, cx, cy, hw, hh); anyRoad = true; }
+        if (rm) { L.addRoad(isPaved(rowBase + wx) ? pavedPath : roadPath, rm, cx, cy, hw, hh); anyRoad = true; }
       }
       if (showOwn && nearTowns.length && b > 2) {
         const o = own(wx, y);
@@ -370,7 +372,7 @@ function drawTiles() {
       }
     }
   }
-  if (anyRoad) L.strokeRoads(ctx, roadPath, tw);
+  if (anyRoad) { L.strokeRoads(ctx, roadPath, tw); L.strokeRoads(ctx, pavedPath, tw, true); }
   if (anyOwn) {
     ctx.fillStyle = 'rgba(255,226,150,0.10)'; ctx.fill(tint);
     if (placing) { ctx.fillStyle = 'rgba(140,255,140,0.22)'; ctx.fill(valid); }
@@ -423,11 +425,18 @@ function drawTiles() {
           const snowy = L.tileSnowy(wx, y, bt, rs);
           drawSprite(snowy ? SPR.build.farmSnow[(hash2(wx, y, 3) * 2) | 0] : buildingSprite(bld, wx, y), cx, cy, s);
           const rm = L.roads.get(i);
-          if (rm) { const p = new Path2D(); L.addRoad(p, rm, cx, cy, hw, hh); L.strokeRoads(ctx, p, tw); }
+          if (rm) { const p = new Path2D(); L.addRoad(p, rm, cx, cy, hw, hh); L.strokeRoads(ctx, p, tw, isPaved(i)); }
           if (!snowy && tw >= 30) L.drawFarmAnimals(ctx, cx, cy, s, wx, y, animTime);
           continue;
         }
         drawSprite(buildingSprite(bld, wx, y), cx, cy, s);
+        if (bld.t === 'house' && bld.p >= 1 && tw >= 30) {
+          const ht = townById(bld.town);
+          if (ht && ht.imp && ht.imp.flowers) for (let k = 0; k < 4; k++) {
+            ctx.fillStyle = ['#f2b6c6', '#f4e9a8', '#e8705a', '#c8a0f0'][(k + wx) % 4];
+            ctx.fillRect(cx + (-10 + k * 6.5) * s, cy + (2 + (k % 2) * 3) * s, 2.2 * s, 2.2 * s);
+          }
+        }
         if (bld.p >= 1 && LIT.has(bld.t)) lights.push([cx, cy - tw * 0.18, bld.t === 'lighthouse' ? 2.4 : bld.t === 'house' ? 0.8 : 1.1]);
         if (bld.t === 'dock' && bld.p >= 1 && tw >= 24) {
           const spot = L.dockBoatSpot(i);
@@ -471,6 +480,15 @@ function drawTiles() {
         continue;
       }
       if (S.zones.has(i)) continue;
+      if (tw >= 28 && L.roads.has(i) && hash2(wx, y, 43) < 0.4) {
+        const lt = townById(L.roadTown.get(i));
+        if (lt && lt.imp && lt.imp.lanterns) {
+          const lit = L.daylight().n > 0.3;
+          L.drawLantern(ctx, cx + tw * 0.16, cy + tw * 0.02, s, lit);
+          lights.push([cx + tw * 0.16, cy - tw * 0.2, 0.55]);
+          continue;
+        }
+      }
       const dens = DECOR_DENSITY[b];
       if (dens && hash2(wx, y, 7) < dens) {
         let arr = SPR.decor[b];

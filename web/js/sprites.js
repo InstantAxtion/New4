@@ -375,6 +375,44 @@ function buildingSprites() {
     else { cottage(g, 0, 0, 0.5, ROOFS[v], rnd); g.fillStyle = '#7aa04a'; g.beginPath(); g.arc(18, 4, 3, 0, 7); g.fill(); }
   }));
   S.farmSnow = [0, 1].map((v) => frame((g) => field(g, mulberry32(v + 3), true)));
+  // Harbour: a long pier, a warehouse, a little crane and a moored ship
+  S.harbour = [frame((g) => {
+    poly(g, [P(0.05, 0.42), P(1.05, 0.42), P(1.05, 0.66), P(0.05, 0.66)], '#a57a4e', '#7a5634');
+    for (let k = 0; k < 7; k++) { g.strokeStyle = '#7a5634'; g.lineWidth = 0.6; g.beginPath(); g.moveTo(...P(0.08 + k * 0.14, 0.42)); g.lineTo(...P(0.08 + k * 0.14, 0.66)); g.stroke(); }
+    box(g, 0.08, 0.08, 0.5, 0.38, 12, '#c8b498'); gable(g, 0.08, 0.08, 0.5, 0.38, 12, 7, '#7a5a48');
+    for (let k = 0; k < 3; k++) { const [x, y] = P(0.58 + k * 0.08, 0.3, 0); g.fillStyle = '#9a7048'; g.fillRect(x - 2.5, y - 4, 5, 4); g.fillStyle = '#b88a58'; g.fillRect(x - 2.5, y - 4, 5, 1.2); }
+    g.strokeStyle = '#5a4030'; g.lineWidth = 1.4; const [cx, cy] = P(0.92, 0.5, 0);
+    g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx, cy - 22); g.lineTo(cx - 12, cy - 18); g.stroke();
+    g.lineWidth = 0.5; g.beginPath(); g.moveTo(cx - 12, cy - 18); g.lineTo(cx - 12, cy - 9); g.stroke(); g.fillStyle = '#9a7048'; g.fillRect(cx - 14, cy - 9, 4, 3);
+    const [sx2, sy2] = P(0.62, 0.95, 0);
+    g.fillStyle = '#6e4a30'; g.beginPath(); g.moveTo(sx2 - 12, sy2 - 3); g.lineTo(sx2 + 12, sy2 - 3); g.lineTo(sx2 + 9, sy2 + 2); g.lineTo(sx2 - 9, sy2 + 2); g.closePath(); g.fill();
+    g.strokeStyle = '#4a3020'; g.lineWidth = 0.9; for (const m of [-4, 4]) { g.beginPath(); g.moveTo(sx2 + m, sy2 - 3); g.lineTo(sx2 + m, sy2 - 20); g.stroke(); }
+    g.fillStyle = '#f6f0e2'; for (const m of [-4, 4]) { g.beginPath(); g.moveTo(sx2 + m + 0.6, sy2 - 19); g.quadraticCurveTo(sx2 + m + 7, sy2 - 12, sx2 + m + 0.6, sy2 - 5); g.fill(); }
+    g.fillStyle = '#c0503e'; g.fillRect(sx2 + 4, sy2 - 23, 4, 2);
+  }, 80, 96, 40, 66)];
+  // Town green: lawn, flower beds, two shade trees and a bench
+  S.green = [frame((g) => {
+    diamond(g, 29, 14.5); g.fillStyle = '#8cc06a'; g.fill();
+    g.strokeStyle = '#e8dcc0'; g.lineWidth = 1.6; g.beginPath(); g.moveTo(...P(0.5, 0.05)); g.lineTo(...P(0.5, 0.95)); g.stroke();
+    const rnd = mulberry32(77);
+    for (const [u, v] of [[0.25, 0.3], [0.75, 0.7], [0.3, 0.75], [0.72, 0.25]]) {
+      const [x, y] = P(u, v); g.fillStyle = '#6a9a4a'; g.beginPath(); g.ellipse(x, y, 5, 2.5, 0, 0, 7); g.fill();
+      for (let k = 0; k < 5; k++) { g.fillStyle = ['#f2b6c6', '#f4e9a8', '#e8705a', '#ffffff', '#b8a0e0'][k]; g.fillRect(x - 4 + rnd() * 8, y - 1.5 + rnd() * 3, 1.5, 1.5); }
+    }
+    const [bx, by] = P(0.6, 0.5); g.fillStyle = '#8a5a3c'; g.fillRect(bx - 4, by - 2.5, 8, 1.5); g.fillRect(bx - 4, by - 4.5, 8, 1);
+    tree(g, -14, -2, 0.85, 'round', rnd); tree(g, 13, 4, 0.8, 'round', rnd);
+  })];
+  // Fountain square: paving and a round basin with a little jet of water
+  S.fountain = [frame((g) => {
+    diamond(g, 30, 15); g.fillStyle = '#d6cdbd'; g.fill();
+    g.strokeStyle = 'rgba(150,140,125,0.6)'; g.lineWidth = 0.6;
+    for (let k = 1; k < 6; k++) { g.beginPath(); g.moveTo(...P(k / 6, 0)); g.lineTo(...P(k / 6, 1)); g.moveTo(...P(0, k / 6)); g.lineTo(...P(1, k / 6)); g.stroke(); }
+    cyl(g, 0.5, 0.5, 0, 11, 3, '#c8c0b0'); g.fillStyle = '#7ab8d8'; g.beginPath(); g.ellipse(0, -3, 9, 4.5, 0, 0, 7); g.fill();
+    cyl(g, 0.5, 0.5, 3, 2, 7, '#c8c0b0');
+    g.strokeStyle = 'rgba(210,235,255,0.95)'; g.lineWidth = 1.1;
+    for (const d of [-1, 1]) { g.beginPath(); g.moveTo(0, -10); g.quadraticCurveTo(d * 3, -17, d * 7, -4); g.stroke(); }
+    g.fillStyle = 'rgba(210,235,255,0.9)'; g.beginPath(); g.arc(0, -11, 1.4, 0, 7); g.fill();
+  })];
   // Regional homes: SPR.homes[style][level-1][variant]
   SPR.homes = {};
   for (const k of Object.keys(STYLES)) SPR.homes[k] = [1, 2, 3].map((lv) => [0, 1, 2].map((v) => homeSprite(k, lv, v)));

@@ -24,6 +24,9 @@ export const DEFS = {
   quarry: { name: 'Quarry', cost: { wood: 15 }, prod: { stone: 1 }, jobs: 3, time: 3, tier: 0, desc: 'Works anywhere; full output near hills, mountains or rocky ground, half elsewhere.' },
   mine: { name: 'Iron Mine', cost: { wood: 20, stone: 15 }, prod: { iron: 0.6 }, jobs: 3, time: 4, tier: 1, desc: 'Build on hills or beside mountains.' },
   tower: { name: 'Watchtower', cost: { wood: 20, stone: 25 }, jobs: 1, time: 4, tier: 1, radius: 3, desc: 'Pushes the town border outward.' },
+  harbour: { name: 'Harbour', cost: { wood: 80, stone: 60, gold: 40 }, prod: { gold: 1 }, jobs: 4, time: 8, tier: 2, desc: 'On the coast. Settlers and traders sail from here to other continents.' },
+  green: { name: 'Town Green', hidden: true, civic: true, time: 1 },
+  fountain: { name: 'Fountain Square', hidden: true, civic: true, time: 1 },
   market: { name: 'Market', cost: { wood: 40, stone: 30, gold: 20 }, prod: { gold: 1.5 }, jobs: 3, time: 5, tier: 2, desc: 'Earns gold and sweetens every trade.' },
   library: { name: 'Grand Library', wonder: true, cost: { wood: 300, stone: 200, gold: 300 }, time: 30, tier: 2, desc: '+10% to all production.' },
   gardens: { name: 'Royal Gardens', wonder: true, cost: { food: 300, wood: 200, gold: 150 }, time: 25, tier: 2, desc: '+25% food from every source.' },
@@ -36,7 +39,74 @@ export const HOUSE_LEVELS = ['Cottages', 'Town house', 'Manor'];
 export const HOUSE_CAP_MULT = [1, 1.35, 1.7];
 const UPGRADE_COST = [null, { wood: 10, stone: 10 }, { stone: 25, gold: 15 }];
 const upgradeOk = (t, lv) => (lv === 2 ? t.pop >= 40 : lv === 3 ? t.pop >= 150 && S.tier >= 3 : false);
-export const MANUAL = ['lumber', 'dock', 'quarry', 'mine', 'tower', 'market'];
+// ---- continents, harbours and sea routes (late game) ----
+export function continentAt(x, y) {
+  const lat = tileLat(y), lon = ((x + 0.5 + (y & 1) * 0.5) / W) * 360 - 180;
+  if (lat < -60) return 'Antarctica';
+  if (lon >= -170 && lon <= -50 && lat >= 7) return 'North America';
+  if (lon >= -92 && lon <= -30 && lat < 13) return 'South America';
+  if (lon >= -30 && lon <= 50 && lat >= 35) return 'Europe';
+  if (lon >= -20 && lon <= 52 && lat < 37 && !(lon > 34 && lat > 12)) return 'Africa';
+  if ((lon >= 110 || lon <= -150) && lat < 0) return 'Oceania';
+  if (lon > -170 && lon < -50) return 'North America';
+  return 'Asia';
+}
+export const realmContinents = () => [...new Set(S.towns.map((t) => continentAt(t.x, t.y)))];
+const hasHarbour = (t) => { for (const b of S.buildings.values()) if (b.t === 'harbour' && b.p >= 1 && (!t || b.town === t.id)) return true; return false; };
+export const harbourTowns = () => S.towns.filter((t) => hasHarbour(t));
+export const routesDone = () => (S.routes || []).filter((r) => r.p >= 1).length;
+export const maxTowns = () => TIERS[S.tier].maxTowns + (S.tier >= 4 ? 4 + routesDone() : 0);
+export const ROUTE_COST = { wood: 200, gold: 150, food: 120 };
+export const ROUTE_DAYS = 40;
+export function routeOptions() {
+  const hs = harbourTowns(), out = [];
+  for (let i = 0; i < hs.length; i++) for (let j = i + 1; j < hs.length; j++) {
+    const a = hs[i], b = hs[j];
+    if (continentAt(a.x, a.y) === continentAt(b.x, b.y)) continue;
+    if ((S.routes || []).some((r) => (r.a === a.id && r.b === b.id) || (r.a === b.id && r.b === a.id))) continue;
+    out.push([a, b]);
+  }
+  return out;
+}
+export function openRoute(a, b) {
+  if (!affordable(ROUTE_COST)) return false;
+  pay(ROUTE_COST);
+  (S.routes ||= []).push({ a: a.id, b: b.id, p: 0 });
+  emit('toast', `Ships set out to chart a route from ${a.name} to ${b.name}.`); emit('change');
+  return true;
+}
+// ---- civic improvements: making a town lovelier ----
+export const IMPROVEMENTS = {
+  green: { name: 'Town green', cost: { wood: 60, food: 60 }, desc: 'Flower beds and shade trees beside the hall.' },
+  paved: { name: 'Paved streets', cost: { stone: 150 }, desc: 'Cobbled roads all through town.' },
+  fountain: { name: 'Fountain square', cost: { stone: 80, gold: 60 }, desc: 'A paved square with a fountain.' },
+  lanterns: { name: 'Street lanterns', cost: { iron: 30, gold: 40 }, desc: 'Warm lights along the roads at night.' },
+  flowers: { name: 'Window boxes', cost: { food: 40, gold: 30 }, desc: 'Flowers on every home.' },
+};
+export const IMPROVE_TIER = 2;
+export const charm = (t) => Object.keys(t.imp || {}).length;
+export function improve(t, key) {
+  const d = IMPROVEMENTS[key];
+  if (!d || (t.imp && t.imp[key]) || S.tier < IMPROVE_TIER || !affordable(d.cost)) return false;
+  if (key === 'green' || key === 'fountain') {
+    // claim a free tile beside the hall for the green or the square
+    let spot = null;
+    const reach = Math.max(3, Math.ceil(t.radius));
+    for (let r = 1; r <= reach && !spot; r++) for (let dy = -2 * r; dy <= 2 * r && !spot; dy++) for (let dx = -r; dx <= r && !spot; dx++) {
+      if (Math.abs(dx) < r && Math.abs(dy) < 2 * r - 1) continue; // only the new ring
+      const x = wrapX(t.x + dx), y = t.y + dy, i = idxOf(x, y), b = world.biome[i];
+      if (!S.buildings.has(i) && BUILDABLE.has(b) && !nearNeighbor(x, y) && ownerOf(x, y) === t) spot = i;
+    }
+    if (spot == null) { emit('toast', `There is no open ground left in ${t.name}. Free up a tile first.`); return false; }
+    S.zones.delete(spot);
+    S.buildings.set(spot, { t: key, p: 1, town: t.id, m: 1 });
+  }
+  pay(d.cost); (t.imp ||= {})[key] = 1;
+  recomputeTowns();
+  emit('improved', { t, key }); emit('change');
+  return true;
+}
+export const MANUAL = ['lumber', 'dock', 'quarry', 'mine', 'tower', 'market', 'harbour'];
 export const WONDERS = ['library', 'gardens', 'lighthouse', 'greatcastle', 'cathedral'];
 export const ZONES = {
   housing: { name: 'Housing', builds: 'house', color: '#e8a25a' },
@@ -114,7 +184,7 @@ export function recomputeTowns() {
   for (const t of S.towns) {
     const cap = TIERS[S.tier].radiusCap;
     t.radius = Math.min(cap, (t.capital ? 5 : 4) + t.n * 0.3) + t.towers * 3 + gc;
-    t.cap = Math.round(t.capRaw * cath);
+    t.cap = Math.round(t.capRaw * cath * (1 + 0.04 * charm(t)));
   }
 }
 
@@ -133,7 +203,7 @@ export function canPlace(type, x, y) {
   if (d.tier > S.tier) return { ok: false, reason: `Unlocks at ${TIERS[d.tier].name}.` };
   if (d.wonder && wonderStarted(type)) return { ok: false, reason: 'This wonder is already built.' };
   if (type === 'lumber' && !WOODS.has(b) && !adjacent(x, y, (n) => WOODS.has(n))) return { ok: false, reason: 'Needs woodland nearby.' };
-  if ((type === 'dock' || type === 'lighthouse') && !adjacent(x, y, (n) => n === B.SHALLOW || n === B.OCEAN)) return { ok: false, reason: 'Must touch the water.' };
+  if ((type === 'dock' || type === 'lighthouse' || type === 'harbour') && !adjacent(x, y, (n) => n === B.SHALLOW || n === B.OCEAN)) return { ok: false, reason: 'Must touch the water.' };
   if (type === 'mine' && !(b === B.HILLS || adjacent(x, y, (n) => n === B.MOUNTAIN || n === B.SNOW))) return { ok: false, reason: 'Needs hills or mountains.' };
   if (!affordable(d.cost)) return { ok: false, reason: 'Not enough resources.', own };
   return { ok: true, own };
@@ -185,7 +255,7 @@ export function setZone(zone, x, y) {
 
 export function demolish(x, y) {
   const i = idxOf(x, y), b = S.buildings.get(i);
-  if (!b || b.t === 'townhall') return false;
+  if (!b || b.t === 'townhall' || DEFS[b.t].civic) return false;
   const d = DEFS[b.t];
   if (b.p >= 1 || b.p > 0) Object.entries(d.cost || {}).forEach(([k, v]) => (S.res[k] += Math.floor(v * (b.p >= 1 ? 0.5 : 0.9))));
   S.buildings.delete(i);
@@ -202,7 +272,9 @@ let nameRng = mulberry32(Date.now() & 0xffff);
 export function canFound(x, y) {
   x = wrapX(x);
   if (S.tier < 1) return { ok: false, reason: 'Founding new settlements unlocks at Village.' };
-  if (S.towns.length >= TIERS[S.tier].maxTowns) return { ok: false, reason: `A ${TIERS[S.tier].name} can hold ${TIERS[S.tier].maxTowns} settlements. Grow to unlock more.` };
+  if (S.towns.length >= maxTowns()) return { ok: false, reason: `A ${TIERS[S.tier].name} can hold ${maxTowns()} settlements. ${S.tier >= 4 ? 'Each sea route makes room for one more.' : 'Grow to unlock more.'}` };
+  const cont = continentAt(x, y);
+  if (!realmContinents().includes(cont) && !hasHarbour()) return { ok: false, reason: `Settlers need a Harbour to sail to ${cont}.` };
   const b = biomeAt(x, y);
   if (isWater(b) || !BUILDABLE.has(b)) return { ok: false, reason: 'Pick open land for a new settlement.' };
   for (const t of S.towns) if (groundDist2(x, y, t.x, t.y) < (t.radius + 3) ** 2) return { ok: false, reason: `Too close to ${t.name}.` };
@@ -369,7 +441,7 @@ export function canInvite(n) {
   if (!inContact(n)) return { ok: false, reason: 'Too far away. Found a settlement nearer to them.' };
   if (n.friend < 100) return { ok: false, reason: 'They need to be close friends first (100 friendship).' };
   if (S.tier < 2) return { ok: false, reason: 'Your realm must be a Town to welcome others.' };
-  if (S.towns.length >= TIERS[S.tier].maxTowns) return { ok: false, reason: 'No room for another settlement at this tier.' };
+  if (S.towns.length >= maxTowns()) return { ok: false, reason: 'No room for another settlement at this tier.' };
   return { ok: true };
 }
 export function invite(n) {
@@ -413,7 +485,14 @@ export const QUESTS = [
   Q('wonder1', 'Complete a Wonder', () => WONDERS.some(hasWonder), { gold: 150, iron: 50 }),
   Q('city', 'Become a City (200 villagers)', () => S.tier >= 3, { stone: 200, gold: 200 }),
   Q('kingdom', 'Become a Kingdom (500 villagers)', () => S.tier >= 4, { gold: 500 }),
+  Q('harbour', 'Build a Harbour on the coast', () => count('harbour') >= 1, { gold: 80 }),
+  Q('charm1', 'Give a town its first civic improvement', () => S.towns.some((t) => charm(t) >= 1), { stone: 60 }),
+  Q('route1', 'Open a sea route to another continent', () => routesDone() >= 1, { gold: 200, iron: 40 }),
+  Q('cont3', 'Settle on three continents', () => realmContinents().length >= 3, { gold: 300 }),
+  Q('charm5', 'Make one town as lovely as can be (all five improvements)', () => S.towns.some((t) => charm(t) >= 5), { gold: 250 }),
+  Q('routes5', 'Open five sea routes', () => routesDone() >= 5, { gold: 500 }),
   Q('wonders', 'Complete all five Wonders', () => WONDERS.every(hasWonder), { gold: 1000 }),
+  Q('cont6', 'Settle on six continents', () => realmContinents().length >= 6, { gold: 1000 }),
 ];
 export const activeQuests = () => QUESTS.filter((q) => !S.questsDone.has(q.id)).slice(0, 3);
 
@@ -442,7 +521,7 @@ export function update(dtSec) {
 function step(dd) {
   const lib = hasWonder('library') ? 1.1 : 1;
   const gardens = hasWonder('gardens') ? 1.25 : 1;
-  const gcGold = hasWonder('greatcastle') ? 1.2 : 1;
+  const gcGold = (hasWonder('greatcastle') ? 1.2 : 1) * (1 + 0.08 * routesDone());
   const lh = hasWonder('lighthouse') ? 1.5 : 1;
   let changed = false;
 
@@ -508,6 +587,11 @@ function step(dd) {
   }
   for (const r of RES) S.rates[r] = S.rates[r] * 0.8 + ((S.res[r] - before[r]) / dd) * 0.2;
   neighbourLife(dd);
+  for (const r of S.routes || []) {
+    if (r.p >= 1) continue;
+    r.p = Math.min(1, r.p + dd / ROUTE_DAYS);
+    if (r.p >= 1) { const a = townById(r.a), b = townById(r.b); emit('route', { a, b }); emit('toast', `⛵ A sea route now links ${a ? a.name : '?'} and ${b ? b.name : '?'}!`); }
+  }
   if ((S._hutT = (S._hutT || 0) + dd) > 2) { S._hutT = 0; placeExtraHuts(); }
   // Families improve their homes as a town grows (one at a time, when the realm can afford it).
   for (const t of S.towns) {
@@ -550,7 +634,7 @@ export function newGame(name, x, y) {
   S.started = true; S.name = name || 'Hearthlands'; S.day = 0; S.tier = 0; S.speed = 1;
   S.res = { food: 60, wood: 50, stone: 20, gold: 30, iron: 0 };
   S.towns = []; S.buildings = new Map(); S.zones = new Map(); S.nextTownId = 1;
-  S.questsDone = new Set(); S.stats = { trades: 0, gifts: 0, joins: 0 };
+  S.questsDone = new Set(); S.stats = { trades: 0, gifts: 0, joins: 0 }; S.routes = [];
   S.tutorial = 0;
   S.neighbors = generateNeighbors();
   addTown(x, y, { capital: true, name: S.name, pop: 4, built: true });
@@ -582,7 +666,7 @@ export function save() {
     v: 1, name: S.name, day: S.day, speed: S.speed, tier: S.tier, res: S.res, towns: S.towns,
     buildings: [...S.buildings].map(([i, b]) => [i, b.t, +b.p.toFixed(3), b.town, +(b.m || 1).toFixed(2), b.z ? 1 : 0, b.lv || 1]),
     zones: [...S.zones], nb: S.neighbors.filter((n) => n.friend || n.joined || n.req || (n.log && n.log.length) || n.pop > 70).map((n) => [n.id, n.friend, n.joined ? 1 : 0, +n.pop.toFixed(1), n.req || null, n.log || []]),
-    quests: [...S.questsDone], stats: S.stats, cam: S.cam, nextTownId: S.nextTownId, tutorial: S.tutorial,
+    quests: [...S.questsDone], stats: S.stats, routes: S.routes || [], cam: S.cam, nextTownId: S.nextTownId, tutorial: S.tutorial,
     meta: {
       pop: Math.floor(totalPop()), savedAt: Date.now(),
       place: capital && world.country ? (world.countryNames[world.country[idxOf(capital.x, capital.y)] - 1] || '') : '',
@@ -612,7 +696,7 @@ export function load(n = currentSlot) {
   S.started = true; S.name = d.name; S.day = d.day;
   S.speed = d.speed ? 1 : 0; // only pause / play now
   S.tier = d.tier; S.res = d.res;
-  S.towns = d.towns; S.nextTownId = d.nextTownId; S.stats = d.stats; S.questsDone = new Set(d.quests);
+  S.towns = d.towns; S.routes = d.routes || []; S.nextTownId = d.nextTownId; S.stats = d.stats; S.questsDone = new Set(d.quests);
   S.tutorial = d.tutorial ?? 99; // realms from before the tutorial existed skip it
   S.buildings = new Map(d.buildings.map(([i, t, p, town, m, z, lv]) => [i, { t, p, town, m, z, lv: lv || 1 }]));
   S.zones = new Map(d.zones);

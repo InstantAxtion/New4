@@ -198,7 +198,7 @@ export function drawFalling(ctx, dt, cw, ch, snow) {
 
 // Birds: small flocks gliding across in a slowly turning direction.
 export function drawBirds(ctx, t, cam, cw, ch, sx, sy) {
-  if (daylight().n > 0.5) return;
+  if (daylight().n > 0.5 || cam.tw < 4) return; // flocks only when zoomed in enough to see them as birds
   const tw = cam.tw, cell = 60, cellH = 30;
   const ang = 0.4 + Math.sin(t * 0.01) * 0.6;
   const ox = Math.cos(ang) * t * 0.35, oy = Math.sin(ang) * t * 0.12;
@@ -338,12 +338,13 @@ export function lPath(ax, ay, bx, by) {
   return out;
 }
 export const roads = new Map(); // tile idx -> bitmask of directions
+export const roadTown = new Map(); // tile idx -> town id that built the road
 let roadsDirty = true;
 const markRoads = () => { roadsDirty = true; };
-on('built', markRoads); on('change', markRoads); on('joined', markRoads); on('founded', markRoads);
+on('built', markRoads); on('change', markRoads); on('improved', markRoads); on('joined', markRoads); on('founded', markRoads);
 export function updateRoads() {
   if (!roadsDirty) return;
-  roadsDirty = false; roads.clear();
+  roadsDirty = false; roads.clear(); roadTown.clear();
   const halls = new Map(S.towns.map((t) => [t.id, t]));
   for (const [i, b] of S.buildings) {
     if (b.p < 1 || b.t === 'townhall') continue;
@@ -354,6 +355,8 @@ export function updateRoads() {
       const a = idxOf(px, py), c = idxOf(x, y);
       roads.set(a, (roads.get(a) || 0) | (1 << d));
       roads.set(c, (roads.get(c) || 0) | (1 << OPP[d]));
+      if (!roadTown.has(a)) roadTown.set(a, t.id);
+      if (!roadTown.has(c)) roadTown.set(c, t.id);
     }
   }
 }
@@ -362,9 +365,61 @@ const EDGE = [[0.5, 0.5], [-0.5, -0.5], [-0.5, 0.5], [0.5, -0.5]];
 export function addRoad(path, mask, cx, cy, hw, hh) {
   for (let d = 0; d < 4; d++) if (mask & (1 << d)) { path.moveTo(cx, cy); path.lineTo(cx + EDGE[d][0] * hw, cy + EDGE[d][1] * hh); }
 }
-export function strokeRoads(ctx, path, tw) {
+export function strokeRoads(ctx, path, tw, paved = false) {
   ctx.lineCap = 'round';
-  ctx.strokeStyle = 'rgba(120,92,60,0.55)'; ctx.lineWidth = tw * 0.17; ctx.stroke(path);
-  ctx.strokeStyle = 'rgba(206,176,128,0.95)'; ctx.lineWidth = tw * 0.12; ctx.stroke(path);
+  if (paved) {
+    ctx.strokeStyle = 'rgba(90,86,80,0.6)'; ctx.lineWidth = tw * 0.19; ctx.stroke(path);
+    ctx.strokeStyle = 'rgba(196,190,178,0.98)'; ctx.lineWidth = tw * 0.14; ctx.stroke(path);
+    ctx.setLineDash([tw * 0.03, tw * 0.045]); ctx.strokeStyle = 'rgba(140,134,124,0.55)'; ctx.lineWidth = tw * 0.1; ctx.stroke(path); ctx.setLineDash([]);
+  } else {
+    ctx.strokeStyle = 'rgba(120,92,60,0.55)'; ctx.lineWidth = tw * 0.17; ctx.stroke(path);
+    ctx.strokeStyle = 'rgba(206,176,128,0.95)'; ctx.lineWidth = tw * 0.12; ctx.stroke(path);
+  }
   ctx.lineCap = 'butt';
+}
+// A little iron lantern post (drawn at some road tiles in towns with street lanterns).
+export function drawLantern(ctx, x, y, s, lit) {
+  ctx.strokeStyle = '#3c3a40'; ctx.lineWidth = Math.max(1, 1.1 * s);
+  ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y - 13 * s); ctx.stroke();
+  ctx.fillStyle = lit ? '#ffd88a' : '#e8e0c8'; ctx.fillRect(x - 1.6 * s, y - 16 * s, 3.2 * s, 3.2 * s);
+  ctx.fillStyle = '#3c3a40'; ctx.fillRect(x - 2 * s, y - 16.8 * s, 4 * s, 1 * s);
+}
+// Sea routes: a dotted curve across the water with ships sailing along it.
+export function drawRoutes(ctx, t, routes, townById, sx, sy, tw) {
+  for (const r of routes) {
+    const a = townById(r.a), b = townById(r.b); if (!a || !b) continue;
+    const ha = harbourOf(a), hb = harbourOf(b); if (!ha || !hb) continue;
+    let X1 = tileWX(ha[0], ha[1]), X2 = tileWX(hb[0], hb[1]);
+    const Y1 = tileWY(ha[1]), Y2 = tileWY(hb[1]);
+    if (X2 - X1 > W / 2) X2 -= W; else if (X1 - X2 > W / 2) X2 += W;
+    // bow the route out towards the open sea
+    const mx = (X1 + X2) / 2, my = (Y1 + Y2) / 2, len = Math.hypot(X2 - X1, (Y2 - Y1) * 2);
+    const cxw = mx - ((Y2 - Y1) * 2 / len) * len * 0.18, cyw = my + ((X2 - X1) / len) * len * 0.09;
+    const ax = sx(X1), ay = sy(Y1), bx = ax + (X2 - X1) * tw, by = sy(Y2), cx = ax + (cxw - X1) * tw, cy = sy(cyw);
+    const done = r.p >= 1;
+    ctx.save();
+    ctx.setLineDash([6, 6]); ctx.lineDashOffset = -t * 12;
+    ctx.strokeStyle = done ? 'rgba(255,246,220,0.85)' : 'rgba(255,246,220,0.4)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ax, ay);
+    if (done) ctx.quadraticCurveTo(cx, cy, bx, by);
+    else { // only the charted part so far
+      const n = 24, k = r.p;
+      for (let i = 1; i <= n; i++) { const u = (i / n) * k, x = (1 - u) * (1 - u) * ax + 2 * (1 - u) * u * cx + u * u * bx, y = (1 - u) * (1 - u) * ay + 2 * (1 - u) * u * cy + u * u * by; ctx.lineTo(x, y); }
+    }
+    ctx.stroke(); ctx.restore();
+    const ships = done ? [((t * 0.012) % 1), ((t * 0.012 + 0.5) % 1)] : [r.p];
+    for (const [k, u0] of ships.entries()) {
+      const u = done && k === 1 ? 1 - u0 : u0;
+      const x = (1 - u) * (1 - u) * ax + 2 * (1 - u) * u * cx + u * u * bx, y = (1 - u) * (1 - u) * ay + 2 * (1 - u) * u * cy + u * u * by;
+      const dx = 2 * (1 - u) * (cx - ax) + 2 * u * (bx - cx);
+      drawBoat(ctx, x, y, Math.max(0.5, Math.min(1.1, tw / 40)), t, k * 3, true, (dx >= 0) !== (done && k === 1) ? 1 : -1);
+    }
+  }
+}
+const harbourCache = new Map();
+function harbourOf(t) {
+  const c = harbourCache.get(t.id);
+  if (c && S.buildings.get(c[2]) && S.buildings.get(c[2]).t === 'harbour') return c;
+  for (const [i, b] of S.buildings) if (b.t === 'harbour' && b.town === t.id && b.p >= 1) { const v = [i % W, Math.floor(i / W), i]; harbourCache.set(t.id, v); return v; }
+  return null;
 }
