@@ -4,7 +4,10 @@ import { M, S } from './game.js';
 import { handleTap, paintAt, endPaint } from './ui.js';
 
 const pointers = new Map();
-let dragging = false, downPos = null, pinch = null, painting = false;
+let dragging = false, downPos = null, pinch = null, painting = false, erasing = false;
+// Once an S Pen (or any stylus) is used, the pen draws and fingers only move the map.
+let penSeen = false;
+const penErase = (e) => (e.buttons & 2) !== 0 || (e.buttons & 32) !== 0 || e.button === 2 || e.button === 5;
 const TAP_SLOP = 8;
 
 function zoomAt(px, py, factor) {
@@ -17,14 +20,18 @@ function zoomAt(px, py, factor) {
 
 export function initInput(canvas) {
   canvas.addEventListener('pointerdown', (e) => {
-    canvas.setPointerCapture(e.pointerId);
+    try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* synthetic or already released */ }
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     cancelFlight();
     if (pointers.size === 1) {
       downPos = { x: e.clientX, y: e.clientY, t: performance.now() };
       dragging = false;
-      painting = M.mode && M.mode.kind === 'zone' && e.button !== 2;
-      if (painting) paintAt(pickTile(e.clientX, e.clientY));
+      const pen = e.pointerType === 'pen';
+      if (pen) penSeen = true;
+      const zoneMode = M.mode && M.mode.kind === 'zone';
+      erasing = pen && penErase(e);
+      painting = zoneMode && (pen || e.pointerType === 'mouse' || !penSeen) && (e.button !== 2 || pen);
+      if (painting) paintAt(pickTile(e.clientX, e.clientY), erasing);
     } else if (pointers.size === 2) {
       const [a, b] = [...pointers.values()];
       pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2 };
@@ -34,7 +41,7 @@ export function initInput(canvas) {
   canvas.addEventListener('pointermove', (e) => {
     const p = pointers.get(e.pointerId);
     if (!p) {
-      if (e.pointerType === 'mouse' && M.mode) setHover(pickTile(e.clientX, e.clientY));
+      if (e.pointerType === 'mouse' || e.pointerType === 'pen') { if (e.pointerType === 'pen') penSeen = true; setHover(pickTile(e.clientX, e.clientY)); }
       return;
     }
     const dx = e.clientX - p.x, dy = e.clientY - p.y;
@@ -49,14 +56,16 @@ export function initInput(canvas) {
     }
     if (!dragging && downPos && Math.hypot(e.clientX - downPos.x, e.clientY - downPos.y) > TAP_SLOP) dragging = true;
     if (painting) {
-      if (e.pointerType === 'mouse') setHover(pickTile(e.clientX, e.clientY));
-      paintAt(pickTile(e.clientX, e.clientY));
+      const t = pickTile(e.clientX, e.clientY);
+      if (e.pointerType !== 'touch') setHover(t);
+      if (e.pointerType === 'pen') erasing = erasing || penErase(e);
+      paintAt(t, erasing);
       return;
     }
     if (dragging) {
       cam.x -= dx / cam.tw; cam.y -= dy / cam.tw; clampCam(); markDirty();
     }
-    if (e.pointerType === 'mouse' && M.mode) setHover(pickTile(e.clientX, e.clientY));
+    if (e.pointerType !== 'touch') setHover(pickTile(e.clientX, e.clientY));
   });
   const up = (e) => {
     if (!pointers.has(e.pointerId)) return;
@@ -64,7 +73,8 @@ export function initInput(canvas) {
     if (pointers.size < 2) pinch = null;
     if (pointers.size === 0) {
       if (!dragging && downPos && !painting && e.type === 'pointerup') handleTap(e.clientX, e.clientY);
-      dragging = false; downPos = null; painting = false; endPaint();
+      dragging = false; downPos = null; painting = false; erasing = false; endPaint();
+      if (e.pointerType === 'touch') setHover(null);
     }
   };
   canvas.addEventListener('pointerup', up);

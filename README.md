@@ -18,6 +18,12 @@ there are no timers, and you can pause whenever you like.
   plays alongside birdsong, and building gives a little vibration.
 - Autosaves on the device. Works in portrait and landscape.
 
+## Tuned for the Galaxy S26 Ultra
+- Renders at up to 3× pixel density, with art drawn at 3× so it stays crisp on the QHD+ screen. Runs at the full 120 Hz refresh rate.
+- **S Pen**: hover to see a tile's name. In Zones, the pen paints and fingers move the map. Hold the side button to erase.
+- Immersive full screen (system bars hidden, swipe to peek). Landscape controls stay clear of the punch-hole camera.
+- The Back gesture closes menus and modes. With nothing open, it sends the game to the background instead of quitting.
+
 ## Play in a browser
 ```
 npx http-server web -p 8080
@@ -47,5 +53,6 @@ cd android && ./gradlew assembleDebug
 | `web/js/sprites.js` | All art, drawn in code |
 | `web/js/ui.js` | HUD, menus, modes and the start flow |
 | `web/js/audio.js` | Generative music, nature sounds, sound effects, haptics |
+| `android-overrides/MainActivity.java` | Full screen and Back gesture handling, copied into the Android project at build time |
 
 Map data: Natural Earth (public domain) via [world-atlas](https://github.com/topojson/world-atlas).

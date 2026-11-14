@@ -1,5 +1,5 @@
 // Isometric renderer with an overview (atlas) mode for far zoom levels.
-import { W, H, B, world, wrapX, tileWX, tileWY, biomeAt, isWater } from './world.js';
+import { BIOMES, W, H, B, world, wrapX, tileWX, tileWY, biomeAt, isWater } from './world.js';
 import { SPR, TB, DECOR_DENSITY } from './sprites.js';
 import { S, M, DEFS, ZONES, townById, canPlace, canZone, canFound, canStart, ownerOf, groundDist2, CONTACT_RANGE, inContact } from './game.js';
 import { hash2 } from './noise.js';
@@ -19,7 +19,7 @@ export function initRender(c) {
   window.addEventListener('resize', resize);
 }
 export function resize() {
-  dpr = Math.min(window.devicePixelRatio || 1, 2);
+  dpr = Math.min(window.devicePixelRatio || 1, 3); // sharp on high-density phones like the S26 Ultra
   cw = window.innerWidth; ch = window.innerHeight;
   canvas.width = Math.round(cw * dpr); canvas.height = Math.round(ch * dpr);
   canvas.style.width = cw + 'px'; canvas.style.height = ch + 'px';
@@ -327,6 +327,9 @@ function drawTiles() {
     outline(hoverTile, ok ? '#b8ffb0' : '#ff9a8a', 2.5);
   }
   outline(M.selected, '#ffffff', 2.5);
+  // S Pen / mouse hover: outline plus a small name tag (drawn after objects below)
+  const hoverInfo = hoverTile && !mode ? hoverText(hoverTile) : null;
+  if (hoverInfo) outline(hoverTile, 'rgba(255,255,255,0.85)', 1.5);
 
   // Pass 2: objects (row order for correct overlap)
   for (let y = yA; y <= yB; y++) {
@@ -365,6 +368,15 @@ function drawTiles() {
       }
     }
   }
+  if (hoverInfo) label(hoverInfo, sx(tileWX(hoverTile.x, hoverTile.y)), sy(tileWY(hoverTile.y)) - tw * 0.45, 11);
+}
+
+function hoverText(t) {
+  const i = t.y * W + t.x, nb = S.nbIndex.get(i), b = S.buildings.get(i), z = S.zones.get(i);
+  if (nb) return nb.name;
+  if (b) { const tn = b.t === 'townhall' ? townById(b.town) : null; return tn ? tn.name : DEFS[b.t].name + (b.p < 1 ? ` · ${Math.round(b.p * 100)}%` : ''); }
+  if (z) return `${ZONES[z].name} zone`;
+  return BIOMES[world.biome[i]].name;
 }
 
 function drawLabels(tileMode) {

@@ -11,6 +11,8 @@ const progress = (p, msg) => { $('#loadfill').style.width = `${Math.round(p * 10
 
 async function boot() {
   loadSettings();
+  const cap = window.Capacitor;
+  if (cap && cap.isNativePlatform && cap.isNativePlatform()) document.body.classList.add('native');
   progress(0.01, 'Sharpening quills…');
   await new Promise((r) => setTimeout(r, 30));
   buildSprites();

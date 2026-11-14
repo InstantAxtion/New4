@@ -28,6 +28,9 @@ jobs:
       - name: Create Android project
         run: npx cap add android
 
+      - name: Use the game's MainActivity (full screen, back gesture)
+        run: cp android-overrides/MainActivity.java android/app/src/main/java/com/hearthlands/game/MainActivity.java
+
       - name: Generate app icon and splash
         run: npx capacitor-assets generate --android
         continue-on-error: true

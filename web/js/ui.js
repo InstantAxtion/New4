@@ -90,7 +90,7 @@ export function setMode(mode) {
     html = Object.entries(ZONES).map(([k, z]) =>
       `<button class="tool ${mode.zone === k ? 'on' : ''} ${DEFS[z.builds].tier > S.tier ? 'disabled' : ''}" data-act="zone" data-arg="${k}"><span class="sw" style="background:${z.color}"></span>${z.name}</button>`).join('')
       + `<button class="tool ${mode.zone === 'erase' ? 'on' : ''}" data-act="zone" data-arg="erase"><span class="sw erase"></span>Erase</button>`;
-    if (!S.settings.zoneHint) { S.settings.zoneHint = true; saveSettings(); toast('Tap or drag on the map to paint. Use two fingers to move.'); }
+    if (!S.settings.zoneHint) { S.settings.zoneHint = true; saveSettings(); toast('Paint with your finger or S Pen. Two fingers move the map (with the S Pen, one finger does).'); }
   } else if (mode.kind === 'found') {
     html = `<div class="mlabel"><span>Pick land for settlers</span></div><div class="cost">${costChips(FOUND_COST)}</div>`;
   }
@@ -228,9 +228,10 @@ function showMenu() {
       • <b>Build</b>: place Lumber Camps by woods, Quarries and Mines by hills, Docks on the shore.<br>
       • Your border grows as your town grows. Watchtowers push it further.<br>
       • Trade with nearby villages and send gifts. Close friends may join your kingdom.<br>
-      • Nothing can go wrong. Pause whenever you like, and the realm waits for you.</div></div>
+      • Nothing can go wrong. Pause whenever you like, and the realm waits for you.<br>
+      • <b>S Pen</b>: hover to see what's there. In Zones, the pen paints and fingers move the map. Hold the pen's side button to erase.</div></div>
       <div class="section"><h3>Map data</h3><div class="note">Earth outlines from Natural Earth (public domain) via world-atlas.</div></div>
-      <div class="row"><button class="btn small" data-act="savenow">Save now</button><button class="btn small" data-act="restart">Start a new realm…</button></div>`);
+      <div class="row"><button class="btn small" data-act="savenow">Save now</button>${document.body.classList.contains('native') || !document.documentElement.requestFullscreen ? '' : '<button class="btn small" data-act="fullscreen">Full screen</button>'}<button class="btn small" data-act="restart">Start a new realm…</button></div>`);
 }
 
 // ---------------- tile info ----------------
@@ -320,6 +321,7 @@ function act(name, arg, el) {
     case 'found': closeSheet(); setMode({ kind: 'found' }); toast('Pick open land anywhere for your settlers.'); if (cam.tw > 30) flyTo(null, null, 10, 0.8, true); break;
     case 'set': S.settings[arg] = !S.settings[arg]; saveSettings(); applySettings(); refreshSheet(); if (arg === 'haptics' && S.settings.haptics) haptic(); break;
     case 'savenow': save(); toast('Your realm is saved.'); break;
+    case 'fullscreen': if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen().catch(() => {}); break;
     case 'restart':
       if (el.dataset.confirm) { resetSave(); location.reload(); }
       else { el.dataset.confirm = '1'; el.textContent = 'Tap again to abandon this realm'; el.classList.add('primary'); }
@@ -384,11 +386,18 @@ export function handleTap(px, py) {
   }
 }
 let lastPaint = null;
-export function paintAt(tile) {
+export function paintAt(tile, erase = false) {
   if (!M.mode || M.mode.kind !== 'zone' || !tile) return;
-  const key = tile.x + ',' + tile.y; if (key === lastPaint) return; lastPaint = key;
-  if (setZone(M.mode.zone, tile.x, tile.y)) { sfx(M.mode.zone === 'erase' ? 'tap' : 'place'); haptic(); }
+  const zone = erase ? 'erase' : M.mode.zone;
+  const key = tile.x + ',' + tile.y + zone; if (key === lastPaint) return; lastPaint = key;
+  if (setZone(zone, tile.x, tile.y)) { sfx(zone === 'erase' ? 'tap' : 'place'); haptic(); }
 }
+// Android back gesture: close whatever is open; returns false when nothing was.
+window.hlBack = () => {
+  if (M.mode && M.mode.kind !== 'start') { setMode(null); setHover(null); return true; }
+  if (sheetKind) { closeSheet(); return true; }
+  return false;
+};
 export const endPaint = () => { lastPaint = null; };
 
 // ---------------- title & start ----------------

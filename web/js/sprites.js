@@ -3,7 +3,7 @@ import { B, BIOMES } from './world.js';
 import { mulberry32 } from './noise.js';
 
 export const TB = 64;          // base tile width
-const R = 2;                   // render resolution multiplier
+const R = 3;                   // render resolution multiplier (crisp at 3x pixel density)
 export const SPR = { ground: [], decor: [], build: {}, misc: {} };
 
 function make(w, h, ax, ay, draw) {
