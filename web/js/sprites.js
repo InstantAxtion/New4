@@ -602,10 +602,26 @@ function buildingSprites() {
 }
 
 // ---------------- zone markers ----------------
-function zoneMarker(color) {
+// Zone markers: a clear fill, a dark outline under a coloured dashed edge, and an icon,
+// so zones stay readable on any ground (sand, steppe, snow, forest).
+function zoneMarker(color, icon) {
   return make(66, 34, 33, 17, (g) => {
-    diamond(g, 28, 14); g.fillStyle = color + '40'; g.fill();
-    g.setLineDash([3, 2.5]); g.strokeStyle = color; g.lineWidth = 1.4; g.stroke();
+    diamond(g, 28, 14); g.fillStyle = color + '8c'; g.fill();
+    g.strokeStyle = 'rgba(40,28,18,0.6)'; g.lineWidth = 2.6; g.stroke();
+    g.setLineDash([3.2, 2.4]); g.strokeStyle = color; g.lineWidth = 1.5; g.stroke(); g.setLineDash([]);
+    // icon badge
+    g.fillStyle = 'rgba(255,250,238,0.95)'; g.strokeStyle = 'rgba(40,28,18,0.55)'; g.lineWidth = 0.8;
+    g.beginPath(); g.ellipse(0, 0, 6.2, 4.6, 0, 0, Math.PI * 2); g.fill(); g.stroke();
+    g.fillStyle = '#3c2e24'; g.strokeStyle = '#3c2e24'; g.lineWidth = 0.9;
+    if (icon === 'house') {
+      g.beginPath(); g.moveTo(-3, 0); g.lineTo(0, -2.6); g.lineTo(3, 0); g.closePath(); g.fill();
+      g.fillRect(-2.2, 0, 4.4, 2.4);
+    } else if (icon === 'wheat') {
+      g.beginPath(); g.moveTo(0, 3); g.lineTo(0, -2.8); g.stroke();
+      for (const [dx, dy] of [[-1, -1.6], [1, -1.6], [-1, 0.2], [1, 0.2]]) { g.beginPath(); g.ellipse(dx, dy, 0.8, 1.3, dx * 0.5, 0, Math.PI * 2); g.fill(); }
+    } else if (icon === 'hammer') {
+      g.save(); g.rotate(-0.6); g.fillRect(-0.5, -1, 1, 4.4); g.fillRect(-2.4, -2.6, 4.8, 1.8); g.restore();
+    }
   });
 }
 
@@ -655,9 +671,9 @@ export function buildSprites() {
     g.fillStyle = gr; g.fillRect(0, 0, 64, 64); return c;
   })();
   SPR.misc.zone = {};
-  SPR.misc.zone.housing = zoneMarker('#e8a25a');
-  SPR.misc.zone.farmland = zoneMarker('#d6c75a');
-  SPR.misc.zone.workshop = zoneMarker('#8f8ad8');
+  SPR.misc.zone.housing = zoneMarker('#f07a48', 'house');
+  SPR.misc.zone.farmland = zoneMarker('#e6cf3a', 'wheat');
+  SPR.misc.zone.workshop = zoneMarker('#8a7ef0', 'hammer');
 }
 // How often each biome shows decoration (0..1)
 export const DECOR_DENSITY = { [B.FOREST]: 0.92, [B.TAIGA]: 0.9, [B.JUNGLE]: 0.97, [B.SAVANNA]: 0.22, [B.GRASS]: 0.1, [B.STEPPE]: 0.08, [B.DESERT]: 0.04, [B.TUNDRA]: 0.15, [B.SNOW]: 0.06, [B.HILLS]: 0.85, [B.MOUNTAIN]: 1 };

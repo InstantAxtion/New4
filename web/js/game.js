@@ -109,9 +109,9 @@ export function improve(t, key) {
 export const MANUAL = ['lumber', 'dock', 'quarry', 'mine', 'tower', 'market', 'harbour'];
 export const WONDERS = ['library', 'gardens', 'lighthouse', 'greatcastle', 'cathedral'];
 export const ZONES = {
-  housing: { name: 'Housing', builds: 'house', color: '#e8a25a' },
-  farmland: { name: 'Farmland', builds: 'farm', color: '#d6c75a' },
-  workshop: { name: 'Workshops', builds: 'workshop', color: '#8f8ad8' },
+  housing: { name: 'Housing', builds: 'house', color: '#f07a48' },
+  farmland: { name: 'Farmland', builds: 'farm', color: '#e6cf3a' },
+  workshop: { name: 'Workshops', builds: 'workshop', color: '#8a7ef0' },
 };
 
 const BUILDABLE = new Set([B.GRASS, B.FOREST, B.JUNGLE, B.DESERT, B.SAVANNA, B.TUNDRA, B.TAIGA, B.HILLS, B.STEPPE]);

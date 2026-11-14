@@ -366,7 +366,7 @@ function drawTiles() {
           if (own(wx - 1 + o1, y + 1) !== o) { border.moveTo(cx, cy + hh); border.lineTo(cx - hw, cy); }
           if (placing && y <= yB - 6) {
             const ok = mode.kind === 'zone' ? (mode.zone === 'erase' ? S.zones.has(rowBase + wx) : canZone(wx, y)) : canPlace(mode.type, wx, y).ok;
-            if (ok) diamondPath(valid, cx, cy, hw * 0.8, hh * 0.8);
+            if (ok) { valid.moveTo(cx + Math.max(1.8, tw * 0.042), cy); valid.arc(cx, cy, Math.max(1.8, tw * 0.042), 0, 6.283); }
           }
         }
       }
@@ -375,7 +375,10 @@ function drawTiles() {
   if (anyRoad) { L.strokeRoads(ctx, roadPath, tw); L.strokeRoads(ctx, pavedPath, tw, true); }
   if (anyOwn) {
     ctx.fillStyle = 'rgba(255,226,150,0.10)'; ctx.fill(tint);
-    if (placing) { ctx.fillStyle = 'rgba(140,255,140,0.22)'; ctx.fill(valid); }
+    if (placing) { // a bright dot with a dark rim marks every tile you can use, on any ground
+      ctx.lineWidth = Math.max(1.6, tw * 0.03); ctx.strokeStyle = 'rgba(30,24,18,0.7)'; ctx.stroke(valid);
+      ctx.fillStyle = 'rgba(255,255,240,0.88)'; ctx.fill(valid);
+    }
     ctx.lineWidth = Math.max(1.5, tw / 22); ctx.strokeStyle = 'rgba(255,236,170,0.95)'; ctx.setLineDash([tw / 6, tw / 10]);
     ctx.stroke(border); ctx.setLineDash([]);
   }
@@ -394,7 +397,9 @@ function drawTiles() {
   const outline = (t, col, w = 2) => {
     if (!t) return;
     const cx = sx(tileWX(t.x, t.y)), cy = sy(tileWY(t.y));
-    ctx.beginPath(); diamondPath(ctx, cx, cy, hw, hh); ctx.strokeStyle = col; ctx.lineWidth = w; ctx.stroke();
+    ctx.beginPath(); diamondPath(ctx, cx, cy, hw, hh);
+    ctx.strokeStyle = 'rgba(25,20,15,0.6)'; ctx.lineWidth = w + 2.2; ctx.stroke(); // dark backing so it shows on snow and sand
+    ctx.strokeStyle = col; ctx.lineWidth = w; ctx.stroke();
   };
   if (hoverTile && mode) {
     let ok = true;
