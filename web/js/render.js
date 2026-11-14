@@ -59,6 +59,9 @@ export function flyTo(x, y, tw, dur = 1.2) {
   let d = tx - cam.x; if (d > W / 2) tx -= W; else if (d < -W / 2) tx += W;
   flight = { t: 0, dur, x0: cam.x, y0: cam.y, z0: Math.log(cam.tw), x1: tx, y1: ty, z1: Math.log(tw ?? cam.tw) };
 }
+export function panBy(dxPx, dyPx, dur = 0.4) {
+  flight = { t: 0, dur, x0: cam.x, y0: cam.y, z0: Math.log(cam.tw), x1: cam.x + dxPx / cam.tw, y1: cam.y + dyPx / cam.tw, z1: Math.log(cam.tw) };
+}
 export const cancelFlight = () => { flight = null; };
 function stepFlight(dt) {
   if (!flight) return;

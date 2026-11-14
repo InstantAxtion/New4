@@ -7,7 +7,7 @@ import {
   newGame, save, hasSave, load, resetSave, saveSettings, surveyStart, canStart, affordable, groundDist2, DAY_SECONDS,
 } from './game.js';
 import { SPR, spriteIcon } from './sprites.js';
-import { cam, markDirty, flyTo, centerOn, clampCam, screenSize, TILE_MODE_TW, sx, sy, pickTile, setHover } from './render.js';
+import { panBy, cam, markDirty, flyTo, centerOn, clampCam, screenSize, TILE_MODE_TW, sx, sy, pickTile, setHover } from './render.js';
 import { initAudio, sfx, haptic, applySettings, resumeAudio } from './audio.js';
 
 const $ = (s) => document.querySelector(s);
@@ -55,12 +55,14 @@ let sheetRender = null, sheetKind = null;
 export function openSheet(kind, render) {
   sheetKind = kind; sheetRender = render;
   $('#sheet').classList.remove('hidden');
+  document.body.classList.add('sheet-open');
   refreshSheet(true);
   highlightBottom();
 }
 export function closeSheet() {
   sheetKind = null; sheetRender = null;
   $('#sheet').classList.add('hidden');
+  document.body.classList.remove('sheet-open');
   if (M.selected && (!M.mode)) { M.selected = null; markDirty(); }
   highlightBottom();
 }
@@ -78,20 +80,21 @@ const head = (title, sub) => `<div class="sh-head"><div><h2>${title}</h2>${sub ?
 export function setMode(mode) {
   M.mode = mode;
   const bar = $('#modebar');
+  document.body.classList.toggle('moding', !!mode && mode.kind !== 'start');
   if (!mode || mode.kind === 'start') { bar.classList.add('hidden'); markDirty(); highlightBottom(); return; }
   let html = '';
   if (mode.kind === 'build') {
     const d = DEFS[mode.type];
-    html = `<div class="msg">Placing ${d.name}<small>Tap a highlighted tile inside your borders</small></div><div class="cost">${costChips(d.cost)}</div>`;
+    html = `<div class="mlabel"><img src="${bIcon(mode.type)}" alt=""><span>${d.name}</span></div><div class="cost">${costChips(d.cost)}</div>`;
   } else if (mode.kind === 'zone') {
-    html = `<div class="chips">${Object.entries(ZONES).map(([k, z]) =>
-      `<button data-act="zone" data-arg="${k}" class="${mode.zone === k ? 'on' : ''} ${DEFS[z.builds].tier > S.tier ? 'disabled' : ''}" style="${mode.zone === k ? '' : `box-shadow: inset 0 0 0 2px ${z.color}`}">${z.name}</button>`).join('')}
-      <button data-act="zone" data-arg="erase" class="${mode.zone === 'erase' ? 'on' : ''}">Erase</button></div>
-      <div class="msg"><small>Tap or drag to paint. Villagers build zoned tiles over time.</small></div>`;
+    html = Object.entries(ZONES).map(([k, z]) =>
+      `<button class="tool ${mode.zone === k ? 'on' : ''} ${DEFS[z.builds].tier > S.tier ? 'disabled' : ''}" data-act="zone" data-arg="${k}"><span class="sw" style="background:${z.color}"></span>${z.name}</button>`).join('')
+      + `<button class="tool ${mode.zone === 'erase' ? 'on' : ''}" data-act="zone" data-arg="erase"><span class="sw erase"></span>Erase</button>`;
+    if (!S.settings.zoneHint) { S.settings.zoneHint = true; saveSettings(); toast('Tap or drag on the map to paint. Use two fingers to move.'); }
   } else if (mode.kind === 'found') {
-    html = `<div class="msg">Choose a place for new settlers<small>Any open land on Earth outside existing borders</small></div><div class="cost">${costChips(FOUND_COST)}</div>`;
+    html = `<div class="mlabel"><span>Pick land for settlers</span></div><div class="cost">${costChips(FOUND_COST)}</div>`;
   }
-  html += `<button class="btn small primary" data-act="cancelmode">Done</button>`;
+  html += `<button class="tool done" data-act="cancelmode"><span class="ic">✓</span>Done</button>`;
   bar.innerHTML = html; bar.classList.remove('hidden');
   markDirty(); highlightBottom();
 }
@@ -124,7 +127,13 @@ function buildHUD() {
     const k = b.dataset.z === 'in' ? 1.6 : 1 / 1.6;
     flyTo(null, null, cam.tw * k, 0.35, true);
   });
-  $('#quests').addEventListener('click', () => { $('#quests').classList.toggle('collapsed'); });
+  let qOpen = false;
+  try { qOpen = localStorage.getItem('hearthlands-quests-open') === '1'; } catch (e) { /* ignore */ }
+  $('#quests').classList.toggle('collapsed', !qOpen);
+  $('#quests').addEventListener('click', () => {
+    const open = $('#quests').classList.toggle('collapsed') === false;
+    try { localStorage.setItem('hearthlands-quests-open', open ? '1' : '0'); } catch (e) { /* ignore */ }
+  });
 }
 function highlightBottom() {
   document.querySelectorAll('#bottombar button').forEach((b) => {
@@ -163,7 +172,7 @@ function renderQuests() {
   if (sig === questSig) return;
   questSig = sig;
   const done = S.questsDone.size;
-  $('#quests').innerHTML = `<h3>Gentle goals <span>${done}/${QUESTS.length}</span></h3><ul>${qs.map((q) =>
+  $('#quests').innerHTML = `<h3><span class="qic">📜</span><span class="qtop">${qs[0] ? esc(qs[0].text) : 'All goals complete'}</span><span class="qtitle">Gentle goals</span><span class="qcount">${done}/${QUESTS.length}</span></h3><ul>${qs.map((q) =>
     `<li><div>${esc(q.text)}<span class="reward">Reward: ${Object.entries(q.reward).map(([k, v]) => `${v} ${RES_NAMES[k].toLowerCase()}`).join(', ')}</span></div></li>`).join('') || '<li>Every goal complete. Your realm is a wonder.</li>'}</ul>`;
 }
 
@@ -366,6 +375,13 @@ export function handleTap(px, py) {
   if (M.selected && M.selected.x === tile.x && M.selected.y === tile.y && sheetKind === 'info') { closeSheet(); return; }
   sfx('tap');
   showInfo(tile.x, tile.y);
+  // Keep the chosen tile visible beside a side sheet (landscape phones).
+  const { cw, ch } = screenSize();
+  if (cw > ch && ch <= 520) {
+    const sheetW = Math.min(380, cw * 0.48), free = cw - sheetW - 12;
+    const tx = sx(tileWX(tile.x, tile.y));
+    if (tx > free - 30) panBy(tx - free / 2, 0);
+  }
 }
 let lastPaint = null;
 export function paintAt(tile) {
