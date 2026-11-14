@@ -6,6 +6,7 @@ import { initRender, frame, cam, clampCam, markDirty } from './render.js';
 import { initInput } from './input.js';
 import { initUI, showTitle, setMode } from './ui.js';
 import { initTutorial, updateTutorial } from './tutorial.js';
+import './folk.js';
 import { sfx, setAmbience } from './audio.js';
 import { buildSnowMasks, daylight, weather } from './life.js';
 

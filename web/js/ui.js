@@ -4,12 +4,14 @@ import {
   S, M, RES, RES_NAMES, TIERS, DEFS, MANUAL, WONDERS, ZONES, FOUND_COST, GIFT_AMOUNT, CONTACT_RANGE,
   on, emit, totalPop, totalCap, townById, hasWonder, wonderStarted, count, ownerOf, canPlace, placeBuilding, setZone,
   demolish, canFound, foundTown, inContact, tradeOffers, doTrade, gift, canInvite, invite, activeQuests, QUESTS,
-  newGame, PACE, TRAITS, IMPROVEMENTS, IMPROVE_TIER, charm, improve, continentAt, realmContinents, harbourTowns, routeOptions, openRoute, ROUTE_COST, ROUTE_DAYS, routesDone, maxTowns, fulfil, nbExtra, HOUSE_LEVELS, HOUSE_CAP_MULT, save, hasSave, load, resetSave, slotInfo, setSlot, deleteSlot, SLOT_COUNT, saveSettings, surveyStart, canStart, affordable, groundDist2, DAY_SECONDS,
+  newGame, PACE, GOODS, EVERYDAY, GOODS_BUILDINGS, SPECIALTIES, ALL_WONDERS, MOODS, moodOf, townStyleOf, TRAITS, IMPROVEMENTS, IMPROVE_TIER, charm, improve, continentAt, realmContinents, harbourTowns, routeOptions, openRoute, ROUTE_COST, ROUTE_DAYS, routesDone, maxTowns, fulfil, nbExtra, HOUSE_LEVELS, HOUSE_CAP_MULT, save, hasSave, load, resetSave, slotInfo, setSlot, deleteSlot, SLOT_COUNT, saveSettings, surveyStart, canStart, affordable, groundDist2, DAY_SECONDS,
 } from './game.js';
 import { SPR, spriteIcon } from './sprites.js';
 import { panBy, cam, markDirty, flyTo, centerOn, clampCam, screenSize, TILE_MODE_TW, sx, sy, pickTile, setHover } from './render.js';
 import { initAudio, sfx, haptic, applySettings, resumeAudio } from './audio.js';
-import { tutorialActive } from './tutorial.js';
+import { tutorialActive, hint } from './tutorial.js';
+import { ageOf, fullName, personById, JOBS, thought } from './folk.js';
+import { walkerAt } from './render.js';
 import { STYLES } from './sprites.js';
 import { townStyle } from './render.js';
 import { seasonIndex, SEASONS, SEASON_ICONS, nightAt, farmSeason } from './seasons.js';
@@ -23,6 +25,10 @@ export const ICON = {
   stone: '<svg viewBox="0 0 24 24"><path d="M3 17 6 9l6-3 6 2 3 8-4 3H7Z" fill="#a8a29a" stroke="#6e6860" stroke-width="1"/><path d="M6 9l5 3 7-4M11 12l-1 7" stroke="#857e76" stroke-width=".9" fill="none"/></svg>',
   gold: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="#e8b84a" stroke="#a87a1a" stroke-width="1.2"/><circle cx="12" cy="12" r="6" fill="none" stroke="#c8962a" stroke-width="1"/><path d="M12 8v8M10 10h3a1.5 1.5 0 0 1 0 3h-2a1.5 1.5 0 0 0 0 3h3" stroke="#a87a1a" stroke-width="1.1" fill="none"/></svg>',
   iron: '<svg viewBox="0 0 24 24"><path d="M3 16 6 9h12l3 7Z" fill="#8a96a6" stroke="#4e5a6a" stroke-width="1"/><path d="M6 9h12l-2 3H8Z" fill="#b4c0ce"/></svg>',
+  bread: '<svg viewBox="0 0 24 24"><path d="M3 14c0-4 4-7 9-7s9 3 9 7v2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" fill="#d8a05a" stroke="#9a6a30" stroke-width="1"/><path d="M8 9.5l1.5 3M12 8.5v3.5M16 9.5l-1.5 3" stroke="#f2d6a0" stroke-width="1.3" stroke-linecap="round"/></svg>',
+  tools: '<svg viewBox="0 0 24 24"><path d="M5 19 14 10" stroke="#8a5a3c" stroke-width="2.6" stroke-linecap="round"/><path d="M11 6l5-2 4 4-2 5-3-1Z" fill="#8a96a6" stroke="#4e5a6a" stroke-width="1"/></svg>',
+  cloth: '<svg viewBox="0 0 24 24"><path d="M4 7h14l2 3-2 3H4Z" fill="#c0503e" stroke="#7a2a20" stroke-width="1"/><path d="M4 13h14l2 3-2 3H4Z" fill="#4a78a8" stroke="#2a4a70" stroke-width="1"/><path d="M7 7v6M11 7v6M15 7v6" stroke="#e8a080" stroke-width="0.8"/></svg>',
+  ale: '<svg viewBox="0 0 24 24"><rect x="5" y="7" width="11" height="13" rx="2" fill="#d8a040" stroke="#8a5a20" stroke-width="1"/><path d="M5 9c0-3 11-3 11 0Z" fill="#fbf4e4"/><path d="M16 10h2.5a2 2 0 0 1 0 6H16" fill="none" stroke="#8a5a20" stroke-width="1.6"/></svg>',
   pop: '<svg viewBox="0 0 24 24"><circle cx="8" cy="8" r="3" fill="#e0b088"/><path d="M3 19c0-4 2-6 5-6s5 2 5 6Z" fill="#4a78a8"/><circle cx="16" cy="9" r="2.6" fill="#e0b088"/><path d="M12 19c.5-3.5 2-5 4-5s4 1.5 4.5 5Z" fill="#c0503e"/></svg>',
 };
 const fmt = (n) => (n >= 10000 ? (n / 1000).toFixed(0) + 'k' : n >= 1000 ? (n / 1000).toFixed(1) + 'k' : Math.floor(n).toString());
@@ -115,6 +121,7 @@ export function setMode(mode, background = false) {
 function buildHUD() {
   $('#resbar').innerHTML = RES.map((r) => `<div class="res" id="res-${r}" title="${RES_NAMES[r]}">${ICON[r]}<div class="rv"><span class="v">0</span><small class="flat">+0</small></div></div>`).join('')
     + `<div class="res" id="res-pop" title="Villagers">${ICON.pop}<div class="rv"><span class="v">0</span><small class="flat">/0</small></div></div>`;
+  $('#goodsbar').innerHTML = GOODS.map((r) => `<div class="res" id="res-${r}" title="${RES_NAMES[r]}">${ICON[r]}<div class="rv"><span class="v">0</span><small class="flat">+0</small></div></div>`).join('');
   $('#speed').innerHTML = [[0, '❚❚', 'Pause'], [1, '▶', 'Play']].map(([v, l, a]) => `<button data-speed="${v}" aria-label="${a}">${l}</button>`).join('');
   $('#speed').addEventListener('click', (e) => {
     const b = e.target.closest('button'); if (!b) return;
@@ -156,7 +163,8 @@ export function updateHUD() {
   if (!S.started) return;
   $('#realmname').textContent = S.name;
   $('#tierbadge').textContent = TIERS[S.tier].name;
-  for (const r of RES) {
+  $('#goodsbar').classList.toggle('hidden', !(S.tier >= 1 || GOODS.some((g) => S.res[g] > 0)));
+  for (const r of [...RES, ...GOODS]) {
     const el = $('#res-' + r); if (!el) continue;
     const v = Math.floor(S.res[r]);
     el.querySelector('.v').textContent = fmt(v);
@@ -198,21 +206,50 @@ function renderQuests(force) {
 let buildTab = 'buildings';
 function showBuild() {
   openSheet('build', () => {
-    const list = buildTab === 'buildings' ? MANUAL : WONDERS;
+    const styles = new Set(S.towns.map(townStyleOf));
+    const list = buildTab === 'buildings' ? [...MANUAL, ...GOODS_BUILDINGS, ...SPECIALTIES.filter((k) => styles.has(DEFS[k].style))]
+      : buildTab === 'everyday' ? EVERYDAY : ALL_WONDERS;
     const cards = list.map((t) => {
       const d = DEFS[t], locked = d.tier > S.tier, built = d.wonder && wonderStarted(t);
       return `<button class="card ${locked || built ? 'locked' : ''}" data-act="pick" data-arg="${t}">
+        ${d.style ? '<span class="spec">Specialty</span>' : ''}
         ${locked ? `<span class="lock">${TIERS[d.tier].name}</span>` : built ? '<span class="lock">Built</span>' : ''}
         <img src="${bIcon(t)}" alt=""><b>${d.name}</b><div class="cost">${costChips(d.cost)}</div>
-        <p>${d.desc || ''}${d.prod ? ` Makes ${Object.entries(d.prod).map(([k, v]) => `${v}/day ${RES_NAMES[k].toLowerCase()}`).join(', ')}.` : ''}${d.jobs ? ` Needs ${d.jobs} workers.` : ''}</p></button>`;
+        <p>${d.desc || ''}${d.use ? ` Uses ${Object.entries(d.use).map(([k, v]) => `${v}/day ${RES_NAMES[k].toLowerCase()}`).join(', ')}.` : ''}${d.prod ? ` Makes ${Object.entries(d.prod).map(([k, v]) => `${v}/day ${RES_NAMES[k].toLowerCase()}`).join(', ')}.` : ''}${d.mood ? ` Mood +${d.mood}.` : ''}${d.jobs ? ` Needs ${d.jobs} worker${d.jobs > 1 ? 's' : ''}.` : ''}</p></button>`;
     }).join('');
-    return head('Build', 'Key buildings you place yourself. Homes, fields and workshops are painted with Zones.')
-      + `<div class="tabs"><button data-act="btab" data-arg="buildings" class="${buildTab === 'buildings' ? 'on' : ''}">Buildings</button><button data-act="btab" data-arg="wonders" class="${buildTab === 'wonders' ? 'on' : ''}">Wonders</button></div>
+    const tab = (k, l) => `<button data-act="btab" data-arg="${k}" class="${buildTab === k ? 'on' : ''}">${l}</button>`;
+    return head('Build', buildTab === 'everyday' ? 'Everyday buildings make a town happier, and happy towns grow faster.' : 'Key buildings you place yourself. Homes, fields and workshops are painted with Zones.')
+      + `<div class="tabs">${tab('buildings', 'Buildings')}${tab('everyday', 'Everyday')}${tab('wonders', 'Wonders')}</div>
       <div class="grid">${cards}</div>`;
   });
 }
 
-// ---------------- realm ----------------
+// ---------------- people ----------------
+const AVATAR_BG = ['#f2d6c0', '#d8e8c8', '#cfe0f0', '#f0e0b0', '#e8d0e8', '#d8d8d0'];
+function personCard(t, p) {
+  if (!p) return head('Moved on', esc(t.name)) + '<div class="note">This villager has moved on. Tap someone else walking about.</div>';
+  const age = ageOf(p), partner = p.p ? personById(t, p.p) : null;
+  const kids = (t.folk || []).filter((c) => c.par && c.par.includes(p.i));
+  const parents = (p.par || []).map((id) => personById(t, id)).filter(Boolean);
+  const stage = age < 3 ? '👶' : age < 16 ? '🧒' : age >= 65 ? '🧓' : '🧑';
+  const job = p.j ? JOBS[p.j] : age < 16 ? (age < 6 ? 'Little one' : 'Schoolchild') : age >= 65 ? 'Retired' : 'Helping the builders';
+  const stars = p.j ? '★'.repeat(1 + Math.floor(p.k / 25)) + '☆'.repeat(4 - Math.floor(p.k / 25)) : '';
+  const link = (q) => `<button class="btn small" data-act="person" data-arg="${t.id}:${q.i}">${esc(q.f)}</button>`;
+  return head(esc(fullName(p)), `${esc(t.name)} · ${age} year${age === 1 ? '' : 's'} old`)
+    + `<div class="person"><div class="avatar" style="background:${AVATAR_BG[p.i % AVATAR_BG.length]}">${stage}</div>
+      <div><b>${job}</b>${p.k >= 80 && p.j ? ' · Master' : ''}<div class="stars">${stars}</div></div></div>
+      <div class="note" style="font-style:italic">“${esc(thought(t, p))}”</div>
+      <div class="kv">${partner ? `<span>Partner</span><span>${link(partner)}</span>` : ''}
+      ${parents.length ? `<span>Parents</span><span>${parents.map(link).join(' ')}</span>` : ''}
+      ${kids.length ? `<span>Children</span><span>${kids.map(link).join(' ')}</span>` : ''}
+      <span>Family</span><span>The ${esc(p.l)} family</span></div>`;
+}
+export function showPerson(townId, pid) {
+  const t = townById(townId); if (!t) return;
+  openSheet('person', () => personCard(t, personById(t, pid)));
+}
+
+// ---------------- realm ----------------// ---------------- realm ----------------
 function showRealm() {
   openSheet('realm', () => {
     const p = totalPop(), next = TIERS[S.tier + 1];
@@ -311,6 +348,28 @@ export function showInfo(x, y) {
       + (town && !BIOMES[bm].water ? `<div class="row"><button class="btn small primary" data-act="openbuild">Build here…</button><button class="btn small" data-act="quickzone" data-arg="housing">Zone housing</button><button class="btn small" data-act="quickzone" data-arg="farmland">Zone farmland</button></div>` : '');
   });
 }
+function moodSection(t) {
+  const m = moodOf(t), M2 = MOODS[m.level];
+  return `<div class="section"><h3>Mood</h3><div class="moodline"><span class="face">${M2.face}</span><span>${M2.name}${m.level < 2 ? `<div class="meta" style="font-weight:500;color:var(--ink-soft);font-size:12px">${m.level === 0 ? 'Happier towns attract families faster.' : 'A little more and they will be joyful.'}</div>` : '<div class="meta" style="font-weight:500;color:var(--ink-soft);font-size:12px">Families flock here.</div>'}</span></div>
+    <div class="chips2">${m.parts.map(([l]) => `<span>✓ ${esc(l)}</span>`).join('')}${m.missing.slice(0, 4).map((l) => `<span class="want">+ ${esc(l)}</span>`).join('')}</div></div>`;
+}
+function folkSection(t) {
+  const f = t.folk || [];
+  if (!f.length) return '';
+  const kids = f.filter((p) => ageOf(p) < 16).length, elders = f.filter((p) => ageOf(p) >= 65).length;
+  const couples = f.filter((p) => p.p && p.i < p.p).length;
+  const masters = f.filter((p) => p.j && p.k >= 80).slice(0, 3);
+  const oldest = f.reduce((a, b) => (ageOf(b) > ageOf(a) ? b : a), f[0]);
+  const youngest = f.reduce((a, b) => (b.b > a.b ? b : a), f[0]);
+  const notable = [...masters.map((p) => [p, `Master ${JOBS[p.j].toLowerCase()}`]), [oldest, `Eldest, ${ageOf(oldest)}`], [youngest, ageOf(youngest) < 1 ? 'Newest baby' : `Youngest, ${ageOf(youngest)}`]];
+  const seen = new Set();
+  return `<div class="section"><h3>The folk of ${esc(t.name)}</h3>
+    <div class="note">${f.length} villagers: ${f.length - kids - elders} adults, ${kids} children and ${elders} elders, with ${couples} couples.</div>
+    <div class="list">${notable.filter(([p]) => !seen.has(p.i) && seen.add(p.i)).map(([p, why]) =>
+      `<button class="item" data-act="person" data-arg="${t.id}:${p.i}"><div><b>${esc(fullName(p))}</b><div class="meta">${why}${p.j ? ` · ${JOBS[p.j]}` : ''}</div></div><span>➜</span></button>`).join('')}</div>
+    ${(t.chron || []).length ? `<div class="section"><h3>Town chronicle</h3><div class="note">${t.chron.slice(0, 8).map((e) => `• ${esc(e.s)} <span style="opacity:.6">(Year ${Math.floor(e.d / 48) + 1})</span>`).join('<br>')}</div></div>` : ''}
+    <div class="note">Tip: tap anyone walking about to meet them.</div></div>`;
+}
 function townInfo(t, sub) {
   const next = TIERS[S.tier + 1];
   return head(`${esc(t.name)}${t.capital ? ' 👑' : ''}`, sub)
@@ -319,6 +378,7 @@ function townInfo(t, sub) {
       <div class="note">${t.pop >= t.cap - 0.5 ? 'Every home is full. Zone more housing to grow.' : S.fed ? 'Families are moving in.' : 'Growth has paused until there is more food.'}</div>
       ${t.capital && next ? `<div class="note">The keep grows grander as your realm reaches ${next.name}.</div>` : ''}
       <div class="kv"><span>Continent</span><span>${continentAt(t.x, t.y)}</span><span>Harbour</span><span>${harbourTowns().includes(t) ? 'Yes ⚓' : 'None yet'}</span><span>Charm</span><span>${'✿'.repeat(charm(t)) || '—'} ${charm(t)}/5</span></div>
+      ${moodSection(t)}${folkSection(t)}
       <div class="section"><h3>Make ${esc(t.name)} lovelier</h3>${S.tier < IMPROVE_TIER ? `<div class="note">Civic improvements unlock when your realm becomes a ${TIERS[IMPROVE_TIER].name}.</div>` : `<div class="note">Each improvement changes how the town looks and makes room for 4% more villagers.</div>
         <div class="list">${Object.entries(IMPROVEMENTS).map(([k, d]) => {
           const done = t.imp && t.imp[k];
@@ -387,6 +447,7 @@ function act(name, arg, el) {
     case 'gift': { const n = sel && nbAt(sel); if (n && gift(n, arg)) { sfx('coin'); haptic(); toast(`${n.name} is delighted by your gift!`); refreshSheet(); } break; }
     case 'improve': { const [tid, key] = arg.split(':'); const t = townById(+tid); if (t && improve(t, key)) { sfx('built'); haptic('medium'); toast(`${IMPROVEMENTS[key].name} added to ${t.name}.`); refreshSheet(); } else sfx('error'); break; }
     case 'route': { const o = routeOptions()[+arg]; if (o && openRoute(o[0], o[1])) { sfx('quest'); haptic('medium'); refreshSheet(); } else sfx('error'); break; }
+    case 'person': { const [tid, pid] = arg.split(':'); showPerson(+tid, +pid); break; }
     case 'fulfil': { const n = nbAt(sel); if (n && fulfil(n)) { sfx('quest'); haptic('medium'); refreshSheet(); } else sfx('error'); break; }
     case 'invite': { const n = sel && nbAt(sel); if (n && invite(n)) { closeSheet(); } break; }
   }
@@ -406,6 +467,7 @@ export function handleTap(px, py) {
   const tile = pickTile(px, py);
   if (!tile) return;
   const mode = M.mode;
+  if (!mode && cam.tw >= TILE_MODE_TW) { const w = walkerAt(px, py); if (w && w.pid) { sfx('tap'); showPerson(w.town, w.pid); return; } }
   if (mode && mode.kind === 'start') return startTap(tile);
   if (mode && mode.kind === 'build') {
     const r = placeBuilding(mode.type, tile.x, tile.y);
@@ -600,6 +662,16 @@ export function initUI() {
   on('joined', () => sfx('tier'));
   on('request', (n) => { toast(`✉ A letter from ${n.leader} of ${n.name}`); sfx('coin'); });
   on('story', ({ text }) => toast(text));
+  on('folk', (text) => toast(`🏡 ${text}`));
+  on('tier', (t) => {
+    if (t === 1) {
+      hint('everyday', 'Your realm is a Village! New <b>Everyday</b> buildings (well, chapel, tavern…) make towns happier, and happy towns grow faster. You can now make <b>goods</b> too, and build your region\'s <b>specialty</b>.', '#bottombar [data-tab=build]');
+    }
+    if (t === 3) hint('wonders2', 'Four new regional wonders await: a Cliff Monastery, a Great Bridge, an Observatory and a Botanical Dome. Look under Build → Wonders.', '#bottombar [data-tab=build]');
+  });
+  on('stepped', () => {
+    if (S.towns.some((t) => (t.folk || []).length >= 12)) hint('folk', 'Everyone in your realm has a name, a family and a trade now. <b>Tap anyone walking about</b> to meet them!', null);
+  });
   document.addEventListener('keydown', (e) => {
     if (e.target.tagName === 'INPUT') return;
     if (e.key === 'Escape') { if (M.mode && M.mode.kind !== 'start') setMode(null); else closeSheet(); }

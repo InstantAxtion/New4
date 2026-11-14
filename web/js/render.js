@@ -7,9 +7,11 @@ import { idxOf } from './world.js';
 import * as L from './life.js';
 import { styleAt } from './regions.js';
 import { nbExtra } from './game.js';
+const MOOD_FACES = ['🙂', '😊', '😄'];
 
 export const TILE_MODE_TW = 20;
-const LIT = new Set(['house', 'townhall', 'workshop', 'market', 'tower', 'dock', 'library', 'cathedral', 'greatcastle', 'lighthouse', 'lumber', 'harbour', 'fountain']);
+const LIT = new Set(['house', 'townhall', 'workshop', 'market', 'tower', 'dock', 'library', 'cathedral', 'greatcastle', 'lighthouse', 'lumber', 'harbour', 'fountain',
+  'chapel', 'tavern', 'school', 'bakery', 'brewery', 'weaver', 'smithy', 'windmill', 'monastery', 'bridge', 'observatory', 'dome', 'icehut', 'well']);
 export const MAX_TW = 160;
 const OCEAN = '#2e628c';
 
@@ -80,6 +82,20 @@ function stepFlight(dt) {
 
 // --- villagers walking about (visual only) ---
 export const walkers = new Map(); // townId -> array (exported for tests)
+// Each walker is one of the town's named villagers (who is out and about depends on the hour).
+function pickFolk(t) {
+  const f = t.folk; if (!f || !f.length) return 0;
+  return f[Math.floor(Math.random() * f.length)].i;
+}
+// The walker under a screen point, if any (for tapping someone to meet them).
+export function walkerAt(px, py) {
+  const s = cam.tw / TB; let best = null, bd = (14 * Math.max(1, s)) ** 2;
+  for (const [tid, ws] of walkers) for (const w of ws) {
+    const dx = sx(w.X) - px, dy = sy(w.Y) - 5 * s - py, d = dx * dx + dy * dy;
+    if (d < bd) { bd = d; best = { town: tid, pid: w.pid, w }; }
+  }
+  return best;
+}
 const CLOTHES = ['#c0503e', '#4a78a8', '#5a9a5a', '#d9a440', '#8a5aa8', '#e8e0d0', '#7a5634'];
 function townTiles(t) {
   const arr = [];
@@ -140,7 +156,7 @@ function updateWalkers(dt, visibleTowns) {
     while (ws.length < want) {
       const tile = tiles[Math.floor(Math.random() * tiles.length)];
       const [X, Y] = tileSpot(tile, tileWX(t.x, t.y));
-      ws.push({ X, Y, tile, pts: null, wait: Math.random() * 3, sp: 0.32 + Math.random() * 0.18, face: 1,
+      ws.push({ pid: pickFolk(t), X, Y, tile, pts: null, wait: Math.random() * 3, sp: 0.32 + Math.random() * 0.18, face: 1,
         lx: (Math.random() - 0.5) * LANE, ly: (Math.random() - 0.5) * LANE * 0.4,
         c: CLOTHES[Math.floor(Math.random() * CLOTHES.length)], carry: Math.random() < 0.3, ph: Math.random() * 6, moving: false });
     }
@@ -442,6 +458,17 @@ function drawTiles() {
             ctx.fillRect(cx + (-10 + k * 6.5) * s, cy + (2 + (k % 2) * 3) * s, 2.2 * s, 2.2 * s);
           }
         }
+        if (bld.t === 'windmill' && bld.p >= 1) { // turning sails
+          const hx = cx, hy = cy - 24 * s, a0 = animTime * 0.9 + wx;
+          ctx.strokeStyle = '#6a4a2a'; ctx.lineWidth = Math.max(1, 1.2 * s); ctx.fillStyle = 'rgba(245,238,220,0.92)';
+          for (let k = 0; k < 4; k++) {
+            const a = a0 + (k * Math.PI) / 2, ca = Math.cos(a), sa = Math.sin(a), L = 15 * s;
+            ctx.beginPath(); ctx.moveTo(hx, hy); ctx.lineTo(hx + ca * L, hy + sa * L * 0.9); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(hx + ca * L * 0.25, hy + sa * L * 0.22); ctx.lineTo(hx + ca * L, hy + sa * L * 0.9);
+            ctx.lineTo(hx + ca * L - sa * 3.2 * s, hy + sa * L * 0.9 + ca * 3 * s); ctx.lineTo(hx + ca * L * 0.25 - sa * 3.2 * s, hy + sa * L * 0.22 + ca * 3 * s); ctx.closePath(); ctx.fill();
+          }
+          ctx.fillStyle = '#4a3a2c'; ctx.beginPath(); ctx.arc(hx, hy, 1.6 * s, 0, 6.3); ctx.fill();
+        }
         if (bld.p >= 1 && LIT.has(bld.t)) lights.push([cx, cy - tw * 0.18, bld.t === 'lighthouse' ? 2.4 : bld.t === 'house' ? 0.8 : 1.1]);
         if (bld.t === 'dock' && bld.p >= 1 && tw >= 24) {
           const spot = L.dockBoatSpot(i);
@@ -524,8 +551,9 @@ function drawLabels(tileMode) {
   for (const t of S.towns) {
     const x = sx(tileWX(t.x, t.y)), y = sy(tileWY(t.y));
     if (x < -100 || x > cw + 100 || y < -60 || y > ch + 100) continue;
-    if (tileMode) label(t.name, x, y - tw * 0.9, 13, `${Math.floor(t.pop)} folk`);
-    else label(t.name, x, y - 20, 12);
+    const face = t.mood ? MOOD_FACES[t.mood.level] : '';
+    if (tileMode) label(`${t.name} ${face}`, x, y - tw * 0.9, 13, `${Math.floor(t.pop)} folk`);
+    else label(`${t.name} ${face}`, x, y - 20, 12);
   }
   if ((tileMode && tw >= 24) || (!tileMode && tw >= 6)) {
     for (const n of S.neighbors) {

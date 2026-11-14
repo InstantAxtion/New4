@@ -24,6 +24,11 @@ there are no timers, and you can pause whenever you like.
 - **Wildlife and weather**: sheep, cows and chickens on the farms. Deer, reindeer, rabbits, gazelles and camels in the wild. Flocks of birds, fishing boats and sailing ships. Drifting clouds with shadows, showers with soft rain sound, snowfall in winter, and crickets at night.
 - **Regional building styles**: towns build in the style of where they stand on Earth (timber-framed, Nordic, Mediterranean, adobe, tropical stilt houses or curved-eave). Homes improve by themselves from cottage to town house to manor as a town grows, and each step holds more people.
 - **Neighbours with personality**: each village has a leader with a temperament. Leaders send letters with small requests (help is rewarded, ignoring them costs nothing), share little stories with friends, and their villages visibly grow on the map.
+- **Town mood**: everyday buildings (well, apiary, windmill, chapel, tavern, school), goods and charm make towns 🙂 Content, 😊 Happy or 😄 Joyful. Happier towns attract families faster, and mood never punishes.
+- **Goods**: bread (bakery), tools (smithy), cloth (weaver) and ale or wine (brewery). Each is a simple one-step workshop, and the goods row appears once goods unlock.
+- **Regional specialties**: orchards in timber-framed towns, ice-fishing huts in Nordic ones, vineyards in Mediterranean ones, oasis gardens in adobe towns, cacao groves in the tropics and rice terraces in curved-eave towns.
+- **Villagers with lives**: everyone has a name from their region, an age, a family, a home, a job and a growing skill. Weddings, babies, coming of age, master craftspeople, retirements and young families moving between towns all appear in each town's chronicle. Tap anyone walking about to meet them.
+- **Regional wonders**: Cliff Monastery, Great Bridge, Observatory and Botanical Dome.
 - **The late game**: build a **Harbour** to send settlers to other continents. Chart **sea routes** between harbour towns on different continents (ships sail them, each adds gold and room for another settlement). Make towns lovelier with **civic improvements**: town green, paved streets, fountain square, street lanterns and window boxes. Long-term goals include settling six continents.
 - **Roads** form by themselves from each building to its town hall, and villagers walk along them.
 - Works in portrait and landscape.
@@ -64,6 +69,7 @@ cd android && ./gradlew assembleDebug
 | `web/js/ui.js` | HUD, menus, modes and the start flow |
 | `web/js/seasons.js` | Seasons per hemisphere, day and night |
 | `web/js/regions.js` | Which building style a place uses |
+| `web/js/folk.js` | Villagers' lives: names, families, jobs, skills, life events, chronicle |
 | `web/js/life.js` | Weather, clouds, birds, animals, boats, roads, night lighting |
 | `web/js/tutorial.js` | Pip the messenger bird's first-time guide |
 | `web/js/audio.js` | Generative music, nature sounds, sound effects, haptics |

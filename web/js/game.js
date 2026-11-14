@@ -2,9 +2,13 @@
 import { W, H, B, BIOMES, world, idxOf, wrapX, tileWX, tileWY, neighbors, biomeAt, isWater, tileLat } from './world.js';
 import { mulberry32, hash2 } from './noise.js';
 import { farmSeason, seasonIndex } from './seasons.js';
+import { styleAt } from './regions.js';
 
 export const RES = ['food', 'wood', 'stone', 'gold', 'iron'];
-export const RES_NAMES = { food: 'Food', wood: 'Wood', stone: 'Stone', gold: 'Gold', iron: 'Iron' };
+export const RES_NAMES = { food: 'Food', wood: 'Wood', stone: 'Stone', gold: 'Gold', iron: 'Iron', bread: 'Bread', tools: 'Tools', cloth: 'Cloth', ale: 'Ale & wine' };
+// Goods are made from basic resources in simple one-step workshops.
+export const GOODS = ['bread', 'tools', 'cloth', 'ale'];
+export const ALL_RES = [...RES, ...GOODS];
 
 export const TIERS = [
   { name: 'Hamlet', pop: 0, maxTowns: 1, radiusCap: 6 },
@@ -28,12 +32,41 @@ export const DEFS = {
   green: { name: 'Town Green', hidden: true, civic: true, time: 1 },
   fountain: { name: 'Fountain Square', hidden: true, civic: true, time: 1 },
   market: { name: 'Market', cost: { wood: 40, stone: 30, gold: 20 }, prod: { gold: 1.5 }, jobs: 3, time: 5, tier: 2, desc: 'Earns gold and sweetens every trade.' },
+  // ---- everyday buildings (lift a town's mood) ----
+  well: { name: 'Well', cost: { stone: 15 }, time: 2, tier: 0, mood: 1, cat: 'everyday', desc: 'Fresh water close to home.' },
+  apiary: { name: 'Apiary', cost: { wood: 15 }, prod: { food: 0.5 }, jobs: 1, time: 2, tier: 0, mood: 1, cat: 'everyday', desc: 'Bees, honey and wildflowers.' },
+  windmill: { name: 'Windmill', cost: { wood: 30, stone: 10 }, jobs: 1, time: 3, tier: 1, mood: 1, cat: 'everyday', desc: "Grinds grain: +15% food from this town's farms." },
+  chapel: { name: 'Chapel', cost: { wood: 30, stone: 30 }, jobs: 1, time: 4, tier: 1, mood: 2, cat: 'everyday', desc: 'A quiet place for the whole town.' },
+  tavern: { name: 'Tavern', cost: { wood: 40, stone: 10 }, use: { ale: 0.2 }, jobs: 2, time: 4, tier: 1, mood: 1, cat: 'everyday', desc: 'Warm and lively. Even merrier when it can serve ale or wine.' },
+  school: { name: 'School', cost: { wood: 40, stone: 30, gold: 20 }, jobs: 2, time: 5, tier: 2, mood: 1, cat: 'everyday', desc: 'Villagers learn their trades faster.' },
+  // ---- goods workshops ----
+  bakery: { name: 'Bakery', cost: { wood: 30, stone: 15 }, use: { food: 1.2 }, prod: { bread: 1.6 }, jobs: 2, time: 3, tier: 1, cat: 'goods', desc: 'Turns food into bread, which feeds folk well and lifts their mood.' },
+  brewery: { name: 'Brewery', cost: { wood: 30, stone: 10 }, use: { food: 0.8 }, prod: { ale: 0.6 }, jobs: 2, time: 3, tier: 1, cat: 'goods', desc: 'Brews ale for the taverns.' },
+  weaver: { name: 'Weaver', cost: { wood: 25 }, use: { food: 0.3 }, prod: { cloth: 0.5 }, jobs: 2, time: 3, tier: 1, cat: 'goods', desc: 'Weaves cloth. Fine clothes make folk happier.' },
+  smithy: { name: 'Smithy', cost: { wood: 30, stone: 30 }, use: { iron: 0.3, wood: 0.5 }, prod: { tools: 0.4 }, jobs: 3, time: 4, tier: 2, cat: 'goods', desc: 'Forges tools: building goes faster and every trade works a little better.' },
+  // ---- regional specialties (only towns of that style can build them) ----
+  vineyard: { name: 'Vineyard', style: 'mediterranean', cost: { wood: 25 }, prod: { ale: 0.8 }, jobs: 2, time: 3, tier: 1, mood: 1, cat: 'special', desc: 'Mediterranean towns: sun-warmed grapes and wine.' },
+  riceterrace: { name: 'Rice Terraces', style: 'eastasian', cost: { wood: 15, stone: 15 }, prod: { food: 2 }, jobs: 3, time: 3, tier: 1, cat: 'special', desc: 'Curved-eave towns: rich harvests, best on hills.' },
+  icehut: { name: 'Ice-fishing Hut', style: 'nordic', cost: { wood: 15 }, prod: { food: 1.5 }, jobs: 2, time: 2, tier: 1, cat: 'special', noSeason: true, desc: 'Nordic towns: fishing all year round, even in deep winter. Touch the water.' },
+  oasis: { name: 'Oasis Garden', style: 'desert', cost: { wood: 20, stone: 10 }, prod: { food: 1.2 }, jobs: 2, time: 3, tier: 1, mood: 1, cat: 'special', desc: 'Adobe towns: palms, dates and cool shade.' },
+  cacao: { name: 'Cacao Grove', style: 'tropical', cost: { wood: 20 }, prod: { gold: 1 }, jobs: 2, time: 3, tier: 1, mood: 1, cat: 'special', desc: 'Tropical towns: cacao, much loved by traders.' },
+  orchard: { name: 'Orchard', style: 'temperate', cost: { wood: 20 }, prod: { food: 1.1, ale: 0.2 }, jobs: 2, time: 3, tier: 1, mood: 1, cat: 'special', desc: 'Timber-framed towns: apples and cider.' },
   library: { name: 'Grand Library', wonder: true, cost: { wood: 300, stone: 200, gold: 300 }, time: 30, tier: 2, desc: '+10% to all production.' },
   gardens: { name: 'Royal Gardens', wonder: true, cost: { food: 300, wood: 200, gold: 150 }, time: 25, tier: 2, desc: '+25% food from every source.' },
   lighthouse: { name: 'Great Lighthouse', wonder: true, cost: { stone: 300, wood: 200, iron: 80 }, time: 30, tier: 2, desc: 'Coastal. +50% fishing and better trades.' },
   greatcastle: { name: 'Great Castle', wonder: true, cost: { stone: 400, iron: 100, gold: 200 }, time: 40, tier: 3, desc: '+4 border for every town, +20% gold.' },
   cathedral: { name: 'Cathedral', wonder: true, cost: { stone: 500, gold: 300, iron: 50 }, time: 40, tier: 3, desc: '+30% housing everywhere.' },
+  // ---- regional wonders ----
+  monastery: { name: 'Cliff Monastery', wonder: true, cost: { stone: 400, wood: 200, gold: 200 }, time: 40, tier: 3, desc: 'Beside mountains. +1 mood in every town.' },
+  bridge: { name: 'Great Bridge', wonder: true, cost: { stone: 500, iron: 120, tools: 40 }, time: 45, tier: 3, desc: 'On a shore. +15% gold, and neighbours visit more often.' },
+  observatory: { name: 'Observatory', wonder: true, cost: { stone: 300, gold: 300, tools: 30 }, time: 40, tier: 3, desc: 'On desert, steppe or hills. Villagers learn faster; +5% to everything.' },
+  dome: { name: 'Botanical Dome', wonder: true, cost: { stone: 300, gold: 250, cloth: 40 }, time: 40, tier: 3, desc: 'On green land. +1 mood everywhere and +10% food.' },
 };
+export const EVERYDAY = ['well', 'apiary', 'windmill', 'chapel', 'tavern', 'school'];
+export const GOODS_BUILDINGS = ['bakery', 'brewery', 'weaver', 'smithy'];
+export const SPECIALTIES = ['orchard', 'icehut', 'vineyard', 'oasis', 'cacao', 'riceterrace'];
+export const NEW_WONDERS = ['monastery', 'bridge', 'observatory', 'dome'];
+export const townStyleOf = (t) => t.style || (t.style = styleAt(t.x, t.y));
 // Homes upgrade by themselves as towns grow: cottage -> town house -> manor.
 export const HOUSE_LEVELS = ['Cottages', 'Town house', 'Manor'];
 export const HOUSE_CAP_MULT = [1, 1.35, 1.7];
@@ -75,6 +108,40 @@ export function openRoute(a, b) {
   emit('toast', `Ships set out to chart a route from ${a.name} to ${b.name}.`); emit('change');
   return true;
 }
+// ---- town mood: never punishes, happier towns grow faster ----
+export const MOODS = [{ name: 'Content', face: '🙂' }, { name: 'Happy', face: '😊' }, { name: 'Joyful', face: '😄' }];
+const MOOD_SOURCES = [
+  ['well', 'A well', 1], ['apiary', 'Honey from the apiary', 1], ['windmill', 'The windmill', 1], ['chapel', 'A chapel', 2],
+  ['tavern', 'A tavern', 1], ['school', 'A school', 1],
+  ['vineyard', 'Their vineyard', 1], ['oasis', 'The oasis garden', 1], ['cacao', 'The cacao grove', 1], ['orchard', 'The orchard', 1],
+];
+export function moodOf(t) {
+  const have = new Set();
+  for (const b of S.buildings.values()) if (b.town === t.id && b.p >= 1) have.add(b.t);
+  const parts = [], missing = [];
+  let score = 0;
+  for (const [type, label, v] of MOOD_SOURCES) {
+    const d = DEFS[type];
+    if (have.has(type)) { parts.push([label, v]); score += v; }
+    else if (!d.style && d.tier <= S.tier) missing.push(DEFS[type].name);
+  }
+  if (t.served) { parts.push(['Ale or wine at the tavern', 1]); score += 1; }
+  if (S.res.bread > 0.5) { parts.push(['Fresh bread', 1]); score += 1; }
+  if (S.res.cloth > 0.5) { parts.push(['Fine clothes', 1]); score += 1; }
+  const c = charm(t); if (c) { parts.push(['Civic charm', c * 0.5]); score += c * 0.5; }
+  if (hasWonder('monastery')) { parts.push(['The Cliff Monastery', 1]); score += 1; }
+  if (hasWonder('dome')) { parts.push(['The Botanical Dome', 1]); score += 1; }
+  const level = score >= 6 ? 2 : score >= 2.5 ? 1 : 0;
+  return { score, level, parts, missing };
+}
+function updateMoods() {
+  for (const t of S.towns) {
+    const m = moodOf(t), prev = t.mood ? t.mood.level : 0;
+    t.mood = { score: m.score, level: m.level };
+    if (m.level > prev && m.level === 2) emit('toast', `${MOODS[2].face} ${t.name} is joyful!`);
+  }
+}
+
 // ---- civic improvements: making a town lovelier ----
 export const IMPROVEMENTS = {
   green: { name: 'Town green', cost: { wood: 60, food: 60 }, desc: 'Flower beds and shade trees beside the hall.' },
@@ -108,6 +175,7 @@ export function improve(t, key) {
 }
 export const MANUAL = ['lumber', 'dock', 'quarry', 'mine', 'tower', 'market', 'harbour'];
 export const WONDERS = ['library', 'gardens', 'lighthouse', 'greatcastle', 'cathedral'];
+export const ALL_WONDERS = [...WONDERS, 'monastery', 'bridge', 'observatory', 'dome'];
 export const ZONES = {
   housing: { name: 'Housing', builds: 'house', color: '#f07a48' },
   farmland: { name: 'Farmland', builds: 'farm', color: '#e6cf3a' },
@@ -126,8 +194,8 @@ export const emit = (e, d) => (listeners[e] || []).forEach((f) => f(d));
 // ---------------- state ----------------
 export const S = {
   started: false, name: 'Hearthlands', day: 0, speed: 1, tier: 0,
-  res: { food: 0, wood: 0, stone: 0, gold: 0, iron: 0 },
-  rates: { food: 0, wood: 0, stone: 0, gold: 0, iron: 0 },
+  res: { food: 0, wood: 0, stone: 0, gold: 0, iron: 0, bread: 0, tools: 0, cloth: 0, ale: 0 },
+  rates: { food: 0, wood: 0, stone: 0, gold: 0, iron: 0, bread: 0, tools: 0, cloth: 0, ale: 0 },
   towns: [], buildings: new Map(), zones: new Map(),
   neighbors: [], nbIndex: new Map(),
   questsDone: new Set(), stats: { trades: 0, gifts: 0, joins: 0 }, tutorial: 99,
@@ -202,6 +270,11 @@ export function canPlace(type, x, y) {
   if (nb) return { ok: false, reason: `Too close to ${nb.name}.` };
   if (d.tier > S.tier) return { ok: false, reason: `Unlocks at ${TIERS[d.tier].name}.` };
   if (d.wonder && wonderStarted(type)) return { ok: false, reason: 'This wonder is already built.' };
+  if (d.style && townStyleOf(own) !== d.style) return { ok: false, reason: `Only ${d.desc.split(':')[0]} can build this.` };
+  if ((type === 'icehut' || type === 'bridge') && !adjacent(x, y, (n) => n === B.SHALLOW || n === B.OCEAN || n === B.SEAICE)) return { ok: false, reason: 'Must touch the water.' };
+  if (type === 'monastery' && !adjacent(x, y, (n) => n === B.MOUNTAIN || n === B.SNOW)) return { ok: false, reason: 'Must stand beside mountains.' };
+  if (type === 'observatory' && !(b === B.DESERT || b === B.STEPPE || b === B.HILLS || b === B.TUNDRA)) return { ok: false, reason: 'Needs open desert, steppe or hills.' };
+  if (type === 'dome' && !(b === B.GRASS || b === B.FOREST || b === B.JUNGLE || b === B.SAVANNA)) return { ok: false, reason: 'Needs green land.' };
   if (type === 'lumber' && !WOODS.has(b) && !adjacent(x, y, (n) => WOODS.has(n))) return { ok: false, reason: 'Needs woodland nearby.' };
   if ((type === 'dock' || type === 'lighthouse' || type === 'harbour') && !adjacent(x, y, (n) => n === B.SHALLOW || n === B.OCEAN)) return { ok: false, reason: 'Must touch the water.' };
   if (type === 'mine' && !(b === B.HILLS || adjacent(x, y, (n) => n === B.MOUNTAIN || n === B.SNOW))) return { ok: false, reason: 'Needs hills or mountains.' };
@@ -219,6 +292,7 @@ function yieldMult(type, x, y) {
     return 0.6 + Math.min(n, 8) * 0.1;
   }
   if (type === 'quarry') return rocky(x, y) ? 1 : 0.5;
+  if (type === 'riceterrace') return b === B.HILLS ? 1.25 : 1;
   return 1;
 }
 
@@ -473,7 +547,12 @@ export const QUESTS = [
   Q('pop15', 'Grow to 15 villagers', () => totalPop() >= 15, { gold: 25 }),
   Q('quarry', 'Build a Quarry near the hills', () => count('quarry') >= 1, { wood: 30 }),
   Q('trade', 'Trade with a neighbouring village', () => S.stats.trades >= 1, { gold: 30 }),
+  Q('well', 'Dig a Well (Build → Everyday)', () => count('well') >= 1, { stone: 20 }),
   Q('village', 'Become a Village (25 villagers)', () => S.tier >= 1, { food: 60, wood: 40 }),
+  Q('happy', 'Make a town Happy 😊', () => S.towns.some((t) => t.mood && t.mood.level >= 1), { gold: 40 }),
+  Q('bread', 'Bake your first bread', () => count('bakery') >= 1 && S.res.bread > 0, { food: 60 }),
+  Q('specialty', "Build your region's specialty", () => SPECIALTIES.some((k) => count(k) >= 1), { gold: 60 }),
+  Q('wedding', 'Celebrate a wedding in your realm', () => (S.stats.weddings || 0) >= 1, { food: 40, gold: 20 }),
   Q('tower', 'Raise a Watchtower', () => count('tower') >= 1, { stone: 30 }),
   Q('found', 'Found a second settlement', () => S.towns.length >= 2, { food: 50, wood: 50 }),
   Q('mine', 'Dig an Iron Mine', () => count('mine') >= 1, { gold: 40 }),
@@ -481,9 +560,13 @@ export const QUESTS = [
   Q('gift', 'Send a gift to a neighbour', () => S.stats.gifts >= 1, { gold: 20 }),
   Q('town', 'Become a Town (80 villagers)', () => S.tier >= 2, { stone: 80, gold: 60 }),
   Q('market', 'Open a Market', () => count('market') >= 1, { iron: 30 }),
+  Q('tools', 'Forge tools at a Smithy', () => count('smithy') >= 1 && S.res.tools > 0, { iron: 30 }),
+  Q('joyful', 'Make a town Joyful 😄', () => S.towns.some((t) => t.mood && t.mood.level >= 2), { gold: 120 }),
+  Q('master', 'A villager becomes a master of their trade', () => (S.stats.masters || 0) >= 1, { gold: 100 }),
   Q('join', 'Welcome a neighbour into your kingdom', () => S.stats.joins >= 1, { gold: 100 }),
   Q('wonder1', 'Complete a Wonder', () => WONDERS.some(hasWonder), { gold: 150, iron: 50 }),
   Q('city', 'Become a City (200 villagers)', () => S.tier >= 3, { stone: 200, gold: 200 }),
+  Q('newwonder', 'Complete a regional wonder', () => NEW_WONDERS.some(hasWonder), { gold: 300 }),
   Q('kingdom', 'Become a Kingdom (500 villagers)', () => S.tier >= 4, { gold: 500 }),
   Q('harbour', 'Build a Harbour on the coast', () => count('harbour') >= 1, { gold: 80 }),
   Q('charm1', 'Give a town its first civic improvement', () => S.towns.some((t) => charm(t) >= 1), { stone: 60 }),
@@ -523,13 +606,15 @@ function step(dd) {
   const gardens = hasWonder('gardens') ? 1.25 : 1;
   const gcGold = (hasWonder('greatcastle') ? 1.2 : 1) * (1 + 0.08 * routesDone());
   const lh = hasWonder('lighthouse') ? 1.5 : 1;
+  const hasTools = S.res.tools > 1;
+  const obs = hasWonder('observatory') ? 1.05 : 1, dome = hasWonder('dome') ? 1.1 : 1, bridge = hasWonder('bridge') ? 1.15 : 1;
   let changed = false;
 
   // Construction
   for (const [i, b] of S.buildings) {
     if (b.p >= 1) continue;
     const t = townById(b.town);
-    b.p += (dd / (DEFS[b.t].time * PACE.build)) * (t && t.pop >= 2 ? 1 : 0.5);
+    b.p += (dd / (DEFS[b.t].time * PACE.build)) * (t && t.pop >= 2 ? 1 : 0.5) * (hasTools ? 1.25 : 1);
     if (b.p >= 1) {
       b.p = 1; changed = true;
       emit('built', { b, i, x: i % W, y: Math.floor(i / W) });
@@ -563,29 +648,52 @@ function step(dd) {
   let jobs = 0; for (const t of S.towns) jobs += t.jobs;
   const eff = jobs ? Math.min(1, pop / jobs) : 1;
   const before = { ...S.res };
+  const mills = new Set(); let producers = 0;
+  for (const b of S.buildings.values()) if (b.t === 'windmill' && b.p >= 1) mills.add(b.town);
+  for (const t of S.towns) t.served = false;
   for (const [i, b] of S.buildings) {
     if (b.p < 1) continue;
-    const d = DEFS[b.t]; if (!d.prod) continue;
+    const d = DEFS[b.t];
+    const t = townById(b.town);
+    // Workshops need their inputs; they slow down gracefully when stores run low.
+    let f = 1;
+    if (d.use) {
+      for (const [r, v] of Object.entries(d.use)) { const need = v * dd * PACE.prod; f = Math.min(f, need > 0 ? Math.min(1, S.res[r] / need) : 1); }
+      for (const [r, v] of Object.entries(d.use)) S.res[r] = Math.max(0, S.res[r] - v * dd * PACE.prod * f);
+      if (b.t === 'tavern' && t && f > 0.5) t.served = true;
+    }
+    if (!d.prod || f <= 0) continue;
+    producers++;
     // Fields rest in winter and give a harvest boost in late summer and autumn (stronger far from the equator).
-    const season = b.t === 'farm' ? farmSeason(S.day, tileLat(Math.floor(i / W))) : 1;
+    const seasonal = (b.t === 'farm' || b.t === 'riceterrace' || b.t === 'orchard' || b.t === 'vineyard') && !d.noSeason;
+    const season = seasonal ? farmSeason(S.day, tileLat(Math.floor(i / W))) : 1;
+    const skill = (t && t.skillMult) || 1;
     for (const [r, v] of Object.entries(d.prod)) {
-      let amt = v * dd * PACE.prod * (b.t === 'townhall' ? 1 : eff) * (b.m || 1) * lib * season;
-      if (r === 'food') amt *= gardens * (b.t === 'dock' ? lh : 1);
-      if (r === 'gold') amt *= gcGold;
+      let amt = v * dd * PACE.prod * f * (b.t === 'townhall' ? 1 : eff) * (b.m || 1) * lib * season * skill * obs * (hasTools ? 1.08 : 1);
+      if (r === 'food') amt *= gardens * dome * (b.t === 'dock' ? lh : 1) * (b.t === 'farm' && mills.has(b.town) ? 1.15 : 1);
+      if (r === 'gold') amt *= gcGold * bridge;
       S.res[r] += amt;
     }
   }
+  // Tools wear out slowly; cloth is worn; bread is eaten in place of some food.
+  if (S.res.tools > 0) S.res.tools = Math.max(0, S.res.tools - 0.003 * producers * dd);
   S.res.gold += pop * 0.02 * PACE.prod * dd * gcGold;
 
   // Food and growth: nobody starves, growth just pauses.
-  const eat = pop * 0.1 * PACE.eat * dd;
+  const breadEat = Math.min(S.res.bread * 0.5, pop * 0.0015 * dd); // a loaf now and then, so bread keeps in the stores
+  S.res.bread -= breadEat;
+  S.res.cloth = Math.max(0, S.res.cloth - pop * 0.0004 * dd);
+  const eat = Math.max(0, pop * 0.1 * PACE.eat * dd - breadEat * 2);
   S.fed = S.res.food >= eat;
   S.res.food = Math.max(0, S.res.food - eat);
+  updateMoods();
   for (const t of S.towns) {
-    if (t.pop < t.cap && S.fed) t.pop = Math.min(t.cap, t.pop + Math.max(t.pop < 30 ? PACE.minGrowth : 0.02, (t.cap - t.pop) * 0.06 * PACE.growth) * dd);
+    const mg = 1 + 0.2 * (t.mood ? t.mood.level : 0); // happier towns attract families faster (mood never punishes)
+    if (t.pop < t.cap && S.fed) t.pop = Math.min(t.cap, t.pop + Math.max(t.pop < 30 ? PACE.minGrowth : 0.02, (t.cap - t.pop) * 0.06 * PACE.growth) * mg * dd);
     else if (t.pop > t.cap) t.pop = Math.max(t.cap, t.pop - 0.5 * dd);
   }
-  for (const r of RES) S.rates[r] = S.rates[r] * 0.8 + ((S.res[r] - before[r]) / dd) * 0.2;
+  for (const r of ALL_RES) S.rates[r] = (S.rates[r] || 0) * 0.8 + ((S.res[r] - before[r]) / dd) * 0.2;
+  emit('stepped', dd);
   neighbourLife(dd);
   for (const r of S.routes || []) {
     if (r.p >= 1) continue;
@@ -632,7 +740,8 @@ function step(dd) {
 // ---------------- new game / save / load ----------------
 export function newGame(name, x, y) {
   S.started = true; S.name = name || 'Hearthlands'; S.day = 0; S.tier = 0; S.speed = 1;
-  S.res = { food: 60, wood: 50, stone: 20, gold: 30, iron: 0 };
+  S.res = { food: 60, wood: 50, stone: 20, gold: 30, iron: 0, bread: 0, tools: 0, cloth: 0, ale: 0 };
+  S.hints = [];
   S.towns = []; S.buildings = new Map(); S.zones = new Map(); S.nextTownId = 1;
   S.questsDone = new Set(); S.stats = { trades: 0, gifts: 0, joins: 0 }; S.routes = [];
   S.tutorial = 0;
@@ -666,7 +775,7 @@ export function save() {
     v: 1, name: S.name, day: S.day, speed: S.speed, tier: S.tier, res: S.res, towns: S.towns,
     buildings: [...S.buildings].map(([i, b]) => [i, b.t, +b.p.toFixed(3), b.town, +(b.m || 1).toFixed(2), b.z ? 1 : 0, b.lv || 1]),
     zones: [...S.zones], nb: S.neighbors.filter((n) => n.friend || n.joined || n.req || (n.log && n.log.length) || n.pop > 70).map((n) => [n.id, n.friend, n.joined ? 1 : 0, +n.pop.toFixed(1), n.req || null, n.log || []]),
-    quests: [...S.questsDone], stats: S.stats, routes: S.routes || [], cam: S.cam, nextTownId: S.nextTownId, tutorial: S.tutorial,
+    quests: [...S.questsDone], stats: S.stats, routes: S.routes || [], hints: S.hints || [], cam: S.cam, nextTownId: S.nextTownId, tutorial: S.tutorial,
     meta: {
       pop: Math.floor(totalPop()), savedAt: Date.now(),
       place: capital && world.country ? (world.countryNames[world.country[idxOf(capital.x, capital.y)] - 1] || '') : '',
@@ -698,6 +807,8 @@ export function load(n = currentSlot) {
   S.tier = d.tier; S.res = d.res;
   S.towns = d.towns; S.routes = d.routes || []; S.nextTownId = d.nextTownId; S.stats = d.stats; S.questsDone = new Set(d.quests);
   S.tutorial = d.tutorial ?? 99; // realms from before the tutorial existed skip it
+  for (const g of GOODS) if (S.res[g] === undefined) S.res[g] = 0;
+  S.hints = d.hints || [];
   S.buildings = new Map(d.buildings.map(([i, t, p, town, m, z, lv]) => [i, { t, p, town, m, z, lv: lv || 1 }]));
   S.zones = new Map(d.zones);
   S.neighbors = generateNeighbors();

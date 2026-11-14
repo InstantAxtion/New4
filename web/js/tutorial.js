@@ -62,6 +62,7 @@ function ensureDom() {
     const b = e.target.closest('button'); if (!b) return;
     if (b.dataset.pip === 'skip') { finish(); return; }
     if (b.dataset.pip === 'next') advance();
+    if (b.dataset.pip === 'hintok') hintDone();
   });
 }
 function finish() {
@@ -79,15 +80,42 @@ function advance() {
 }
 
 // Called every frame.
-export function updateTutorial() {
-  if (!tutorialActive() || $('#hud').classList.contains('hidden')) { if (el && !tutorialActive()) finish(); return; }
-  ensureDom();
-  const step = STEPS[S.tutorial];
-  if (!step.button && step.done()) { advance(); return; }
+// ---- one-off hints when new features unlock (after the first guide is done) ----
+const hintQueue = [];
+export function hint(id, text, target) {
+  if (!S.started) return;
+  S.hints ||= [];
+  if (S.hints.includes(id) || hintQueue.some((h) => h.id === id)) return;
+  hintQueue.push({ id, text, target, hint: true });
+}
+function removeDom() {
+  for (const n of [el, bubble, ring]) if (n) n.remove();
+  el = bubble = ring = null; lastStep = -1;
+  document.querySelectorAll('.tut-target').forEach((n) => n.classList.remove('tut-target'));
+}
+function hintDone() {
+  const h = hintQueue.shift(); if (h) (S.hints ||= []).push(h.id);
+  if (sfxFn) sfxFn('tap');
+  if (!hintQueue.length) removeDom();
+}
 
-  if (lastStep !== S.tutorial) {
-    lastStep = S.tutorial;
-    bubble.innerHTML = `<div>${step.text}</div><div class="pipbtns"><button data-pip="skip">Skip guide</button>${step.button ? `<button data-pip="next" class="primary">${step.button}</button>` : ''}</div>`;
+export function updateTutorial() {
+  const hud = !$('#hud').classList.contains('hidden');
+  let step = null, key = null;
+  if (tutorialActive() && hud) {
+    step = STEPS[S.tutorial]; key = S.tutorial;
+    if (!step.button && step.done()) { advance(); return; }
+  } else if (!tutorialActive() && hud && hintQueue.length && !document.body.classList.contains('moding') && $('#sheet').classList.contains('hidden')) {
+    step = hintQueue[0]; key = 'h:' + step.id;
+  }
+  if (!step) { if (el) removeDom(); return; }
+  ensureDom();
+
+  if (lastStep !== key) {
+    lastStep = key;
+    bubble.innerHTML = step.hint
+      ? `<div>${step.text}</div><div class="pipbtns"><button data-pip="hintok" class="primary">Got it</button></div>`
+      : `<div>${step.text}</div><div class="pipbtns"><button data-pip="skip">Skip guide</button>${step.button ? `<button data-pip="next" class="primary">${step.button}</button>` : ''}</div>`;
     el.classList.add('flying'); setTimeout(() => el && el.classList.remove('flying'), 900);
   }
   // Locate the target on screen.
@@ -103,7 +131,7 @@ export function updateTutorial() {
     }
   } else {
     ring.style.display = 'none';
-    const tgt = $(step.target);
+    const tgt = step.target ? $(step.target) : null;
     if (tgt && tgt.offsetParent !== null) {
       const r = tgt.getBoundingClientRect();
       if (r.width) rect = r;
