@@ -10,7 +10,7 @@ import { nbExtra } from './game.js';
 const MOOD_FACES = ['🙂', '😊', '😄'];
 
 export const TILE_MODE_TW = 20;
-const LIT = new Set(['house', 'townhall', 'workshop', 'market', 'tower', 'dock', 'library', 'cathedral', 'greatcastle', 'lighthouse', 'lumber', 'harbour', 'fountain',
+const LIT = new Set(['stable', 'house', 'townhall', 'workshop', 'market', 'tower', 'dock', 'library', 'cathedral', 'greatcastle', 'lighthouse', 'lumber', 'harbour', 'fountain',
   'chapel', 'tavern', 'school', 'bakery', 'brewery', 'weaver', 'smithy', 'windmill', 'monastery', 'bridge', 'observatory', 'dome', 'icehut', 'well']);
 export const MAX_TW = 160;
 const OCEAN = '#2e628c';
@@ -36,8 +36,15 @@ export const minTW = () => Math.max(ch / 1000, cw / 2000) * 0.98;
 export function clampCam() {
   cam.tw = Math.max(minTW(), Math.min(MAX_TW, cam.tw));
   cam.x = ((cam.x % W) + W) % W;
+  // Let the map scroll a little past its top and bottom so the far north and south
+  // never hide under the top bar, goods row or bottom toolbar.
   const halfH = ch / 2 / cam.tw;
-  cam.y = halfH * 2 >= 1000 ? 500 : Math.max(halfH, Math.min(1000 - halfH, cam.y));
+  const hudShown = typeof document !== 'undefined' && !document.querySelector('#hud').classList.contains('hidden');
+  const hudB = hudShown ? (parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--hud-bottom')) || 110) + 10 : 10;
+  const sb = document.querySelector('#startbar');
+  const padBottom = hudShown ? 96 : sb && !sb.classList.contains('hidden') ? sb.getBoundingClientRect().height + 20 : 10;
+  const minY = halfH - hudB / cam.tw, maxY = 1000 - halfH + padBottom / cam.tw;
+  cam.y = minY > maxY ? (minY + maxY) / 2 : Math.max(minY, Math.min(maxY, cam.y));
 }
 export const screenSize = () => ({ cw, ch });
 
@@ -103,6 +110,8 @@ function townTiles(t) {
   return arr;
 }
 const tileCache = new Map(); let tileCacheStamp = -1;
+const stableTowns = new Set();
+const HORSE_COLS = ['#8a5a3a', '#5a3e2c', '#c8a070', '#3c3430', '#e8e0d0'];
 export function invalidateTowns() { tileCacheStamp = -1; }
 // Ground distance between two world points (undo the 2:1 iso squash).
 const gdist = (ax, ay, bx, by) => Math.hypot(bx - ax, (by - ay) * 2);
@@ -143,7 +152,10 @@ function planWalk(w, tiles, t) {
   w.d = 0; w.k = 0; w.dest = target;
 }
 function updateWalkers(dt, visibleTowns) {
-  if (tileCacheStamp !== S.buildings.size) { tileCache.clear(); tileCacheStamp = S.buildings.size; }
+  if (tileCacheStamp !== S.buildings.size) {
+    tileCache.clear(); tileCacheStamp = S.buildings.size; stableTowns.clear();
+    for (const b of S.buildings.values()) if (b.t === 'stable' && b.p >= 1) stableTowns.add(b.town);
+  }
   const pace = 1;
   for (const t of visibleTowns) {
     if (!tileCache.has(t.id)) tileCache.set(t.id, townTiles(t));
@@ -156,7 +168,9 @@ function updateWalkers(dt, visibleTowns) {
     while (ws.length < want) {
       const tile = tiles[Math.floor(Math.random() * tiles.length)];
       const [X, Y] = tileSpot(tile, tileWX(t.x, t.y));
-      ws.push({ pid: pickFolk(t), X, Y, tile, pts: null, wait: Math.random() * 3, sp: 0.32 + Math.random() * 0.18, face: 1,
+      const ride = stableTowns.has(t.id) && Math.random() < 0.28; // with stables, some folk ride or drive a cart
+      ws.push({ pid: pickFolk(t), X, Y, tile, pts: null, wait: Math.random() * 3, sp: (0.32 + Math.random() * 0.18) * (ride ? 2.2 : 1), face: 1,
+        rider: ride, cart: ride && Math.random() < 0.35, hc: HORSE_COLS[Math.floor(Math.random() * HORSE_COLS.length)],
         lx: (Math.random() - 0.5) * LANE, ly: (Math.random() - 0.5) * LANE * 0.4,
         c: CLOTHES[Math.floor(Math.random() * CLOTHES.length)], carry: Math.random() < 0.3, ph: Math.random() * 6, moving: false });
     }
@@ -184,6 +198,26 @@ function drawWalkers(visibleTowns) {
       const x = sx(w.X), y = sy(w.Y);
       if (x < -20 || x > cw + 20 || y < -20 || y > ch + 20) continue;
       const step = w.moving ? Math.sin(w.ph) : 0, bob = Math.abs(step) * 0.7 * s;
+      if (w.rider) { // on horseback, or driving a little cart
+        if (w.cart) {
+          const bx = x - w.face * 8 * s;
+          ctx.fillStyle = 'rgba(30,40,20,0.22)'; ctx.beginPath(); ctx.ellipse(bx, y, 4.5 * s, 1.6 * s, 0, 0, 6.3); ctx.fill();
+          ctx.fillStyle = '#9a7048'; ctx.fillRect(bx - 4 * s, y - 5 * s, 8 * s, 3 * s);
+          ctx.fillStyle = '#c8a070'; ctx.fillRect(bx - 3 * s, y - 7.5 * s, 3 * s, 2.5 * s); ctx.fillStyle = '#7aa04a'; ctx.fillRect(bx + 0.3 * s, y - 7 * s, 2.6 * s, 2 * s);
+          ctx.fillStyle = '#4a3a2c'; ctx.beginPath(); ctx.arc(bx - 2 * s, y - 1.6 * s, 1.6 * s, 0, 6.3); ctx.arc(bx + 2.4 * s, y - 1.6 * s, 1.6 * s, 0, 6.3); ctx.fill();
+          ctx.strokeStyle = '#5a4030'; ctx.lineWidth = Math.max(0.7, 0.6 * s); ctx.beginPath(); ctx.moveTo(bx + w.face * 4 * s, y - 4 * s); ctx.lineTo(x, y - 4.4 * s); ctx.stroke();
+        }
+        L.drawAnimal(ctx, 'horse', x, y, s * 1.15, w.face, animTime * (w.moving ? 1.6 : 0), w.ph);
+        if (!w.cart) {
+          ctx.fillStyle = w.c; ctx.fillRect(x - 1.5 * s, y - 11.5 * s - bob, 3 * s, 4.2 * s);
+          ctx.fillStyle = '#f0c8a0'; ctx.beginPath(); ctx.arc(x + w.face * 0.3 * s, y - 12.9 * s - bob, 1.5 * s, 0, 6.3); ctx.fill();
+        } else {
+          const bx = x - w.face * 8 * s;
+          ctx.fillStyle = w.c; ctx.fillRect(bx + w.face * 2 * s - 1.4 * s, y - 10.5 * s, 2.8 * s, 3.6 * s);
+          ctx.fillStyle = '#f0c8a0'; ctx.beginPath(); ctx.arc(bx + w.face * 2 * s, y - 11.8 * s, 1.4 * s, 0, 6.3); ctx.fill();
+        }
+        continue;
+      }
       ctx.fillStyle = 'rgba(30,40,20,0.25)'; ctx.beginPath(); ctx.ellipse(x, y, 2.4 * s, 1.1 * s, 0, 0, 6.3); ctx.fill();
       // legs
       ctx.strokeStyle = '#4a3a2c'; ctx.lineWidth = Math.max(0.8, 0.9 * s);
@@ -447,7 +481,7 @@ function drawTiles() {
           drawSprite(snowy ? SPR.build.farmSnow[(hash2(wx, y, 3) * 2) | 0] : buildingSprite(bld, wx, y), cx, cy, s);
           const rm = L.roads.get(i);
           if (rm) { const p = new Path2D(); L.addRoad(p, rm, cx, cy, hw, hh); L.strokeRoads(ctx, p, tw, isPaved(i)); }
-          if (!snowy && tw >= 30) L.drawFarmAnimals(ctx, cx, cy, s, wx, y, animTime);
+          if (!snowy && tw >= 30) { L.drawFarmAnimals(ctx, cx, cy, s, wx, y, animTime); if (stableTowns.has(bld.town) && hash2(wx, y, 27) < 0.5) L.drawPlough(ctx, cx, cy, s, animTime, hash2(wx, y, 28) * 6.28); }
           continue;
         }
         drawSprite(buildingSprite(bld, wx, y), cx, cy, s);

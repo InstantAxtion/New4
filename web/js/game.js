@@ -38,6 +38,7 @@ export const DEFS = {
   windmill: { name: 'Windmill', cost: { wood: 30, stone: 10 }, jobs: 1, time: 3, tier: 1, mood: 1, cat: 'everyday', desc: "Grinds grain: +15% food from this town's farms." },
   chapel: { name: 'Chapel', cost: { wood: 30, stone: 30 }, jobs: 1, time: 4, tier: 1, mood: 2, cat: 'everyday', desc: 'A quiet place for the whole town.' },
   tavern: { name: 'Tavern', cost: { wood: 40, stone: 10 }, use: { ale: 0.2 }, jobs: 2, time: 4, tier: 1, mood: 1, cat: 'everyday', desc: 'Warm and lively. Even merrier when it can serve ale or wine.' },
+  stable: { name: 'Stables', cost: { wood: 40, stone: 15, food: 30 }, jobs: 2, time: 4, tier: 1, cat: 'everyday', desc: 'Horses! Riders and carts speed about town, settlers set out faster, traders bring more, and horses help plough the fields.' },
   school: { name: 'School', cost: { wood: 40, stone: 30, gold: 20 }, jobs: 2, time: 5, tier: 2, mood: 1, cat: 'everyday', desc: 'Villagers learn their trades faster.' },
   // ---- goods workshops ----
   bakery: { name: 'Bakery', cost: { wood: 30, stone: 15 }, use: { food: 1.2 }, prod: { bread: 1.6 }, jobs: 2, time: 3, tier: 1, cat: 'goods', desc: 'Turns food into bread, which feeds folk well and lifts their mood.' },
@@ -62,7 +63,8 @@ export const DEFS = {
   observatory: { name: 'Observatory', wonder: true, cost: { stone: 300, gold: 300, tools: 30 }, time: 40, tier: 3, desc: 'On desert, steppe or hills. Villagers learn faster; +5% to everything.' },
   dome: { name: 'Botanical Dome', wonder: true, cost: { stone: 300, gold: 250, cloth: 40 }, time: 40, tier: 3, desc: 'On green land. +1 mood everywhere and +10% food.' },
 };
-export const EVERYDAY = ['well', 'apiary', 'windmill', 'chapel', 'tavern', 'school'];
+export const EVERYDAY = ['well', 'apiary', 'windmill', 'chapel', 'tavern', 'school', 'stable'];
+export const hasStables = () => count('stable') >= 1;
 export const GOODS_BUILDINGS = ['bakery', 'brewery', 'weaver', 'smithy'];
 export const SPECIALTIES = ['orchard', 'icehut', 'vineyard', 'oasis', 'cacao', 'riceterrace'];
 export const NEW_WONDERS = ['monastery', 'bridge', 'observatory', 'dome'];
@@ -368,8 +370,10 @@ function addTown(x, y, opts = {}) {
 export function foundTown(x, y) {
   const r = canFound(x, y); if (!r.ok) return r;
   pay(FOUND_COST);
-  const t = addTown(x, y, { pop: 3 });
-  emit('toast', `Settlers have founded ${t.name}!`); emit('founded', t); emit('change');
+  const horses = hasStables();
+  const t = addTown(x, y, { pop: horses ? 6 : 3 });
+  if (horses) { const h = S.buildings.get(idxOf(x, y)); if (h) h.p = 0.5; } // settlers ride in with supplies
+  emit('toast', horses ? `Settlers rode in on horseback and founded ${t.name}!` : `Settlers have founded ${t.name}!`); emit('founded', t); emit('change');
   return { ok: true, town: t };
 }
 
@@ -487,7 +491,7 @@ function indexNeighbors() {
 export const CONTACT_RANGE = 45;
 export function inContact(n) { return S.towns.some((t) => groundDist2(n.x, n.y, t.x, t.y) <= CONTACT_RANGE ** 2); }
 export function tradeOffers(n) {
-  const bonus = Math.floor(n.friend * 0.1) + (count('market') ? 5 : 0) + (hasWonder('lighthouse') ? 4 : 0) + (n.trait === 'generous' ? 3 : 0);
+  const bonus = Math.floor(n.friend * 0.1) + (count('market') ? 5 : 0) + (hasWonder('lighthouse') ? 4 : 0) + (n.trait === 'generous' ? 3 : 0) + (hasStables() ? 3 : 0);
   const offers = [{ give: { [n.want]: 20 }, get: { [n.surplus]: 14 + bonus } }];
   if (n.surplus !== 'gold') offers.push({ give: { gold: 15 }, get: { [n.surplus]: 16 + bonus } });
   else offers.push({ give: { food: 25 }, get: { gold: 10 + Math.floor(bonus / 2) } });
@@ -506,7 +510,7 @@ export const GIFT_AMOUNT = 25;
 export function gift(n, res) {
   if (!inContact(n) || S.res[res] < GIFT_AMOUNT) return false;
   S.res[res] -= GIFT_AMOUNT;
-  n.friend = Math.min(100, n.friend + Math.round((res === n.want ? 18 : 10) * TRAITS[n.trait || 'cheerful'].gift)); S.stats.gifts++;
+  n.friend = Math.min(100, n.friend + Math.round((res === n.want ? 18 : 10) * TRAITS[n.trait || 'cheerful'].gift * (hasStables() ? 1.15 : 1))); S.stats.gifts++;
   addLog(n, `You sent a gift of ${GIFT_AMOUNT} ${res}.`);
   emit('change');
   return true;
@@ -552,6 +556,7 @@ export const QUESTS = [
   Q('happy', 'Make a town Happy 😊', () => S.towns.some((t) => t.mood && t.mood.level >= 1), { gold: 40 }),
   Q('bread', 'Bake your first bread', () => count('bakery') >= 1 && S.res.bread > 0, { food: 60 }),
   Q('specialty', "Build your region's specialty", () => SPECIALTIES.some((k) => count(k) >= 1), { gold: 60 }),
+  Q('stable', 'Build Stables and bring horses to town', () => count('stable') >= 1, { food: 40, wood: 30 }),
   Q('wedding', 'Celebrate a wedding in your realm', () => (S.stats.weddings || 0) >= 1, { food: 40, gold: 20 }),
   Q('tower', 'Raise a Watchtower', () => count('tower') >= 1, { stone: 30 }),
   Q('found', 'Found a second settlement', () => S.towns.length >= 2, { food: 50, wood: 50 }),

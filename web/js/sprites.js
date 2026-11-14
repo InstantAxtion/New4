@@ -654,6 +654,28 @@ function lifeSprites() {
     box(g, 0.47, 0.44, 0.55, 0.52, 5, '#d8c49a', 17); cone(g, 0.51, 0.48, 22, 3.5, 5, '#4a6a8a');
     g.strokeStyle = '#8a6a44'; g.lineWidth = 0.8; g.beginPath(); for (let k = 0; k <= 6; k++) { const [x, y] = P(0.1 + k * 0.13, 0.92, 0); g.moveTo(x, y); g.lineTo(x, y - 3); } g.moveTo(...P(0.1, 0.92, 2)); g.lineTo(...P(0.88, 0.92, 2)); g.stroke();
   })];
+  S.stable = [frame((g) => {
+    shadow(g, 22, 10);
+    // paddock fence
+    g.strokeStyle = '#8a6a44'; g.lineWidth = 1;
+    g.beginPath(); for (const z of [2, 4]) { g.moveTo(...P(0.55, 0.95, z)); g.lineTo(...P(0.98, 0.95, z)); g.lineTo(...P(0.98, 0.5, z)); }
+    for (const [u, v] of [[0.55, 0.95], [0.76, 0.95], [0.98, 0.95], [0.98, 0.72], [0.98, 0.5]]) { g.moveTo(...P(u, v, 0)); g.lineTo(...P(u, v, 5)); }
+    g.stroke();
+    // barn
+    box(g, 0.08, 0.15, 0.55, 0.6, 12, '#a0503a');
+    g.strokeStyle = '#f2e6d0'; g.lineWidth = 0.9; const [dx, dy] = P(0.31, 0.6, 0);
+    g.strokeRect(dx - 4, dy - 9, 8, 9); g.beginPath(); g.moveTo(dx - 4, dy - 9); g.lineTo(dx + 4, dy); g.moveTo(dx + 4, dy - 9); g.lineTo(dx - 4, dy); g.stroke();
+    gable(g, 0.08, 0.15, 0.55, 0.6, 12, 9, '#5a4a40');
+    const [lx, ly] = P(0.55, 0.38, 15); g.fillStyle = '#e0bf5a'; g.fillRect(lx - 2, ly - 3, 4, 3);
+    // a horse in the paddock
+    const [hx, hy] = P(0.78, 0.74, 0);
+    g.fillStyle = '#8a5a3a'; g.beginPath(); g.ellipse(hx, hy - 4.5, 4, 1.9, 0, 0, 7); g.fill();
+    g.strokeStyle = '#8a5a3a'; g.lineWidth = 1.6; g.beginPath(); g.moveTo(hx + 3, hy - 5); g.lineTo(hx + 4.4, hy - 8); g.stroke();
+    g.beginPath(); g.ellipse(hx + 5.1, hy - 8.2, 1.6, 0.9, 0, 0, 7); g.fill();
+    g.strokeStyle = '#3a2a20'; g.lineWidth = 0.8; g.beginPath();
+    for (const lx2 of [-2.6, -1.4, 1.6, 2.8]) { g.moveTo(hx + lx2, hy - 3); g.lineTo(hx + lx2, hy); }
+    g.moveTo(hx - 3.8, hy - 5); g.quadraticCurveTo(hx - 5.4, hy - 4, hx - 5, hy - 2); g.stroke();
+  })];
   S.bakery = [frame((g) => {
     shadow(g, 20, 9);
     box(g, 0.2, 0.25, 0.65, 0.7, 11, '#efe0c4'); gable(g, 0.2, 0.25, 0.65, 0.7, 11, 8, '#b5543c');

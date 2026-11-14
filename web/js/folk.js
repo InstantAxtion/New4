@@ -22,7 +22,7 @@ export const JOBS = {
   farm: 'Farmer', lumber: 'Woodcutter', quarry: 'Stonecutter', mine: 'Miner', dock: 'Fisher', workshop: 'Craftsperson', market: 'Merchant',
   harbour: 'Sailor', tower: 'Lookout', bakery: 'Baker', brewery: 'Brewer', weaver: 'Weaver', smithy: 'Smith', tavern: 'Innkeeper',
   chapel: 'Chapel keeper', school: 'Teacher', apiary: 'Beekeeper', windmill: 'Miller', vineyard: 'Vintner', riceterrace: 'Rice grower',
-  icehut: 'Ice fisher', oasis: 'Gardener', cacao: 'Cacao grower', orchard: 'Orchard keeper',
+  icehut: 'Ice fisher', stable: 'Stablehand', oasis: 'Gardener', cacao: 'Cacao grower', orchard: 'Orchard keeper',
 };
 export const ageOf = (p) => Math.max(0, Math.floor((S.day - p.b) / YEAR));
 const pick = (a) => a[Math.floor(Math.random() * a.length)];

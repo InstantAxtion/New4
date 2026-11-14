@@ -264,6 +264,14 @@ export function drawAnimal(ctx, kind, x, y, s, face, t, ph) {
     body(ctx, x, y - 1.3 * s - hop, 1.5 * s, 1.1 * s, '#9a8470'); body(ctx, x + 1.3 * s, y - 2 * s - hop, 0.8 * s, 0.7 * s, '#9a8470');
     ctx.strokeStyle = '#9a8470'; ctx.lineWidth = 0.6 * s; ctx.beginPath(); ctx.moveTo(x + 1.3 * s, y - 2.6 * s - hop); ctx.lineTo(x + 1 * s, y - 4.2 * s - hop); ctx.stroke();
     body(ctx, x - 1.5 * s, y - 1.5 * s - hop, 0.5 * s, 0.5 * s, '#fff');
+  } else if (kind === 'horse') {
+    const col = ph % 5 < 1 ? '#5a3e2c' : ph % 5 < 2 ? '#c8a070' : ph % 5 < 3 ? '#3c3430' : '#8a5a3a';
+    legs(ctx, x, y - 3.2 * s, s, 2.2, 3.2, '#3a2a20', step);
+    body(ctx, x, y - 4.4 * s, 3.8 * s, 1.8 * s, col);
+    ctx.strokeStyle = col; ctx.lineWidth = 1.6 * s; ctx.beginPath(); ctx.moveTo(x + 2.8 * s, y - 5 * s); ctx.lineTo(x + 4.2 * s, y - 7.8 * s); ctx.stroke();
+    body(ctx, x + 4.9 * s, y - 8 * s, 1.5 * s, 0.85 * s, col);
+    ctx.strokeStyle = '#2a2018'; ctx.lineWidth = 0.9 * s; ctx.beginPath(); ctx.moveTo(x + 2.6 * s, y - 6 * s); ctx.lineTo(x + 3.9 * s, y - 8.6 * s);
+    ctx.moveTo(x - 3.6 * s, y - 4.8 * s); ctx.quadraticCurveTo(x - 5.2 * s, y - 4 * s, x - 4.8 * s, y - 2 * s); ctx.stroke();
   } else if (kind === 'camel') {
     legs(ctx, x, y - 3.2 * s, s, 1.9, 3.2, '#8a6a44', step);
     body(ctx, x, y - 4 * s, 3.4 * s, 1.5 * s, '#c8a066'); body(ctx, x - 0.4 * s, y - 5.4 * s, 1.6 * s, 1.2 * s, '#c8a066');
@@ -280,7 +288,7 @@ export function wander(t, ph, range = 0.22) {
 export function drawFarmAnimals(ctx, x, y, s, wx, wy, t) {
   const h = hash2(wx, wy, 21);
   if (h > 0.6) return;
-  const kind = h < 0.25 ? 'sheep' : h < 0.42 ? 'cow' : 'chicken';
+  const kind = h < 0.22 ? 'sheep' : h < 0.36 ? 'cow' : h < 0.46 ? 'horse' : 'chicken';
   const n = kind === 'chicken' ? 4 : kind === 'sheep' ? 3 : 2;
   for (let i = 0; i < n; i++) {
     const ph = hash2(wx + i, wy, 22) * 6.28;
@@ -288,6 +296,19 @@ export function drawFarmAnimals(ctx, x, y, s, wx, wy, t) {
     const bx = x + ((i % 2 ? 0.14 : -0.12) + ox) * s * 64, by = y + (((i >> 1) ? 0.06 : -0.05) + oy) * s * 64;
     drawAnimal(ctx, kind, bx, by, s * 1.2, face, t, ph);
   }
+}
+
+// A horse pulling a plough up and down the furrows, with the farmer walking behind.
+export function drawPlough(ctx, x, y, s, t, ph) {
+  const k = (Math.sin(t * 0.18 + ph) + 1) / 2, face = Math.cos(t * 0.18 + ph) >= 0 ? 1 : -1;
+  const hx = x + (k - 0.5) * 34 * s, hy = y + (k - 0.5) * 17 * s + 2 * s;
+  drawAnimal(ctx, 'horse', hx, hy, s * 1.15, face, t, ph);
+  const px = hx - face * 7 * s, py = hy - face * 3.5 * s;
+  ctx.strokeStyle = '#5a4030'; ctx.lineWidth = Math.max(0.7, 0.7 * s);
+  ctx.beginPath(); ctx.moveTo(hx - face * 3 * s, hy - 4 * s); ctx.lineTo(px, py - 1 * s); ctx.lineTo(px - face * 1.5 * s, py + 1 * s); ctx.stroke();
+  const fx = px - face * 3 * s, fy = py - 1.5 * s;
+  ctx.fillStyle = '#7a5a3c'; ctx.fillRect(fx - 1.3 * s, fy - 5 * s, 2.6 * s, 4 * s);
+  ctx.fillStyle = '#f0c8a0'; ctx.beginPath(); ctx.arc(fx, fy - 6.3 * s, 1.3 * s, 0, 6.3); ctx.fill();
 }
 
 // ---------------- boats ----------------
