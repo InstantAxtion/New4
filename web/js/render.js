@@ -115,9 +115,14 @@ const HORSE_COLS = ['#8a5a3a', '#5a3e2c', '#c8a070', '#3c3430', '#e8e0d0'];
 export function invalidateTowns() { tileCacheStamp = -1; }
 // Ground distance between two world points (undo the 2:1 iso squash).
 const gdist = (ax, ay, bx, by) => Math.hypot(bx - ax, (by - ay) * 2);
+// Open ground people may walk across; every other building is solid (people go inside instead).
+const OPEN = new Set(['farm', 'green', 'fountain', 'apiary', 'vineyard', 'riceterrace', 'oasis', 'cacao', 'orchard', 'quarry', 'smithy', 'dock', 'market']);
 function tileSpot(i, nearX) {
   const x = i % W, y = Math.floor(i / W);
-  let X = tileWX(x, y) + (Math.random() - 0.5) * 0.35, Y = tileWY(y) + 0.04 + (Math.random() - 0.5) * 0.1;
+  const b = S.buildings.get(i), solid = b && !OPEN.has(b.t);
+  // at a solid building, stand by the front door; on open ground, anywhere
+  let X = tileWX(x, y) + (Math.random() - 0.5) * (solid ? 0.18 : 0.35);
+  let Y = tileWY(y) + (solid ? 0.15 + Math.random() * 0.04 : 0.04 + (Math.random() - 0.5) * 0.1);
   if (X - nearX > W / 2) X -= W; else if (nearX - X > W / 2) X += W; // stay on the same side of the date line
   return [X, Y];
 }
@@ -190,10 +195,45 @@ function updateWalkers(dt, visibleTowns) {
     }
   }
 }
-function drawWalkers(visibleTowns) {
-  const s = cam.tw / TB;
+// The tile containing a world point, and how deep inside it the point is (0 = centre, 1 = edge).
+function tileOfWorld(X, Y) {
+  const r0 = Math.round((Y - 0.25) / 0.25);
+  let best = null, bm = Infinity;
+  for (let y = r0 - 1; y <= r0 + 1; y++) {
+    if (y < 0 || y >= H) continue;
+    const off = (y & 1) * 0.5, x = Math.round(X - 0.5 - off);
+    const m = Math.abs(X - (x + 0.5 + off)) / 0.5 + Math.abs(Y - tileWY(y)) / 0.25;
+    if (m < bm) { bm = m; best = [wrapX(x), y, m]; }
+  }
+  return best;
+}
+// Sort walkers into the map rows they stand in, so buildings in front hide them correctly.
+// Anyone deep inside a solid building's tile is indoors, and not drawn at all.
+let walkerRows = new Map();
+function bucketWalkers(visibleTowns) {
+  walkerRows = new Map();
   for (const t of visibleTowns) {
     const ws = walkers.get(t.id); if (!ws) continue;
+    for (const w of ws) {
+      const tl = tileOfWorld(w.X, w.Y); if (!tl) continue;
+      const b = S.buildings.get(tl[1] * W + tl[0]);
+      if (b && !OPEN.has(b.t) && tl[2] < 0.62) continue; // indoors
+      if (!walkerRows.has(tl[1])) walkerRows.set(tl[1], []);
+      walkerRows.get(tl[1]).push(w);
+    }
+  }
+}
+function drawRowWalkers(y) {
+  const ws = walkerRows.get(y); if (!ws) return;
+  ws.sort((a, b) => a.Y - b.Y);
+  drawWalkerList(ws);
+}
+function drawWalkers(visibleTowns) {
+  for (const t of visibleTowns) { const ws = walkers.get(t.id); if (ws) drawWalkerList(ws); }
+}
+function drawWalkerList(ws) {
+  const s = cam.tw / TB;
+  {
     for (const w of ws) {
       const x = sx(w.X), y = sy(w.Y);
       if (x < -20 || x > cw + 20 || y < -20 || y > ch + 20) continue;
@@ -288,8 +328,8 @@ export function frame(now) {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.fillStyle = OCEAN; ctx.fillRect(0, 0, cw, ch);
   lights.length = 0;
-  if (tileMode) drawTiles(); else drawOverview();
-  if (visTowns.length) drawWalkers(visTowns);
+  if (tileMode) { bucketWalkers(visTowns); drawTiles(); } else drawOverview();
+  if (visTowns.length && !tileMode) drawWalkers(visTowns);
   if (S.routes && S.routes.length) L.drawRoutes(ctx, animTime, S.routes, townById, sx, sy, cam.tw);
   L.drawClouds(ctx, animTime, cam, cw, ch, sx, sy, tileMode);
   L.drawBirds(ctx, animTime, cam, cw, ch, sx, sy);
@@ -568,6 +608,7 @@ function drawTiles() {
           L.drawAnimal(ctx, wk, cx + ox * tw, cy + oy * tw + tw * 0.06, s * (wk === 'camel' ? 1.15 : 1), face, animTime, ph); }
       }
     }
+    drawRowWalkers(y);
   }
   if (hoverInfo) label(hoverInfo, sx(tileWX(hoverTile.x, hoverTile.y)), sy(tileWY(hoverTile.y)) - tw * 0.45, 11);
 }
