@@ -28,6 +28,9 @@ there are no timers, and you can pause whenever you like.
 - **Goods**: bread (bakery), tools (smithy), cloth (weaver) and ale or wine (brewery). Each is a simple one-step workshop, and the goods row appears once goods unlock.
 - **Regional specialties**: orchards in timber-framed towns, ice-fishing huts in Nordic ones, vineyards in Mediterranean ones, oasis gardens in adobe towns, cacao groves in the tropics and rice terraces in curved-eave towns.
 - **Villagers with lives**: everyone has a name from their region, an age, a family, a home, a job and a growing skill. Weddings, babies, coming of age, master craftspeople, retirements and young families moving between towns all appear in each town's chronicle. Tap anyone walking about to meet them.
+- **Rivers and bridges**: 44 great rivers follow their real courses (Nile, Amazon, Mississippi, Rhine, Danube, Volga, Yangtze, Ganges and more). Docks can be built on a riverbank, riverside farms get a fertile-floodplain bonus, and wooden bridges appear wherever a road crosses a river.
+- **Pets**: many families keep a dog or a cat. Dogs trot along behind their owners, cats doze on doorsteps, and each villager's card shows the family pet.
+- **Market days and visitors**: every 8 days, towns with a Market hold a market day. Covered wagons and travellers come in from the neighbouring villages, bringing gold and goodwill, and travellers also stop by the tavern.
 - **Regional wonders**: Cliff Monastery, Great Bridge, Observatory and Botanical Dome.
 - **The late game**: build a **Harbour** to send settlers to other continents. Chart **sea routes** between harbour towns on different continents (ships sail them, each adds gold and room for another settlement). Make towns lovelier with **civic improvements**: town green, paved streets, fountain square, street lanterns and window boxes. Long-term goals include settling six continents.
 - **Roads** form by themselves from each building to its town hall, and villagers walk along them.
@@ -69,6 +72,7 @@ cd android && ./gradlew assembleDebug
 | `web/js/ui.js` | HUD, menus, modes and the start flow |
 | `web/js/seasons.js` | Seasons per hemisphere, day and night |
 | `web/js/regions.js` | Which building style a place uses |
+| `web/js/rivers.js` | The real rivers' courses |
 | `web/js/folk.js` | Villagers' lives: names, families, jobs, skills, life events, chronicle |
 | `web/js/life.js` | Weather, clouds, birds, animals, boats, roads, night lighting |
 | `web/js/tutorial.js` | Pip the messenger bird's first-time guide |

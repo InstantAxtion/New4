@@ -1,6 +1,7 @@
 // Villagers with lives: names, ages, families, jobs, skills and gentle life events.
 // The population number stays the source of truth; this module keeps a named person for each villager.
 import { S, DEFS, on, emit, townById, hasWonder, townStyleOf } from './game.js';
+import { idxOf } from './world.js';
 import { YEAR } from './seasons.js';
 
 // Name pools by building style (common given names and family names, for flavour).
@@ -24,6 +25,16 @@ export const JOBS = {
   chapel: 'Chapel keeper', school: 'Teacher', apiary: 'Beekeeper', windmill: 'Miller', vineyard: 'Vintner', riceterrace: 'Rice grower',
   icehut: 'Ice fisher', stable: 'Stablehand', oasis: 'Gardener', cacao: 'Cacao grower', orchard: 'Orchard keeper',
 };
+const PET_NAMES = ['Biscuit', 'Pepper', 'Maple', 'Bramble', 'Clover', 'Juniper', 'Bean', 'Hazel', 'Sage', 'Tansy', 'Rusty', 'Willow',
+  'Pudding', 'Socks', 'Mittens', 'Barley', 'Fennel', 'Nutmeg', 'Poppy', 'Toffee', 'Pebble', 'Acorn', 'Thistle', 'Sooty'];
+const newPet = () => ({ k: Math.random() < 0.55 ? 'dog' : 'cat', n: PET_NAMES[Math.floor(Math.random() * PET_NAMES.length)] });
+// A family's pet lives with either partner.
+export function petOf(t, p) {
+  if (p.pet) return p.pet;
+  const q = p.p ? personById(t, p.p) : null; if (q && q.pet) return q.pet;
+  for (const id of p.par || []) { const r = personById(t, id); if (r && r.pet && ageOf(p) < 18) return r.pet; }
+  return null;
+}
 export const ageOf = (p) => Math.max(0, Math.floor((S.day - p.b) / YEAR));
 const pick = (a) => a[Math.floor(Math.random() * a.length)];
 const nameSet = (t) => NAMES[townStyleOf(t)] || NAMES.temperate;
@@ -52,7 +63,7 @@ function bootstrap(t, n) {
     const p = newPerson(t, age); folk.push(p); if (age >= 18 && age < 62) adults.push(p);
   }
   // pair about half the adults, and give children to couples
-  for (let k = 0; k + 1 < adults.length; k += 2) if (Math.random() < 0.55) { adults[k].p = adults[k + 1].i; adults[k + 1].p = adults[k].i; adults[k + 1].l = adults[k].l; }
+  for (let k = 0; k + 1 < adults.length; k += 2) if (Math.random() < 0.55) { adults[k].p = adults[k + 1].i; adults[k + 1].p = adults[k].i; adults[k + 1].l = adults[k].l; if (Math.random() < 0.45) adults[k].pet = newPet(); }
   const couples = adults.filter((p) => p.p && p.i < p.p);
   for (const c of folk) if (ageOf(c) < 16 && couples.length) { const a = pick(couples); c.l = a.l; c.par = [a.i, a.p]; }
 }
@@ -70,6 +81,7 @@ function addOne(t) {
     S.stats.births = (S.stats.births || 0) + 1;
   } else {
     const p = newPerson(t, 18 + Math.random() * 24);
+    if (Math.random() < 0.2) p.pet = newPet();
     folk.push(p);
     if (Math.random() < 0.15) chron(t, `${fullName(p)} arrived to make a new home in ${t.name}.`);
   }
@@ -125,7 +137,14 @@ function lifeDay(t) {
   if (singles.length >= 2 && Math.random() < Math.min(0.06, singles.length * 0.003)) {
     const a = singles.splice(Math.floor(Math.random() * singles.length), 1)[0], b = pick(singles);
     a.p = b.i; b.p = a.i; b.l = a.l;
+    if (Math.random() < 0.35) a.pet = newPet();
     chron(t, `${a.f} and ${b.f} were married. The ${a.l} family grows!`, true);
+  }
+  // now and then a family takes in a puppy or a kitten
+  const petless = folk.filter((p) => p.p && p.i < p.p && !petOf(t, p));
+  if (petless.length && Math.random() < 0.15) {
+    const a = pick(petless); a.pet = newPet();
+    chron(t, `The ${a.l} family took in a ${a.pet.k === 'dog' ? 'puppy' : 'kitten'} named ${a.pet.n}.`);
     S.stats.weddings = (S.stats.weddings || 0) + 1;
   }
 }
@@ -150,6 +169,9 @@ function maybeMove() {
 }
 
 let dayAcc = 0, jobAcc = 0;
+on('marketday', ({ t, visitors }) => {
+  chron(t, visitors.length ? `Market day! Traders came from ${visitors.map((n) => n.name).join(', ')}.` : 'Market day: stalls full of local goods.', false);
+});
 on('stepped', (dd) => {
   dayAcc += dd; jobAcc += dd;
   const newDay = dayAcc >= 1, jobs = jobAcc >= 2;
@@ -191,5 +213,8 @@ export function thought(t, p) {
   if (mood >= 2) lines.push(`Loves living in ${t.name}.`);
   if (S.res.bread > 1) lines.push('Smells fresh bread and is very content.');
   if (p.p) { const q = personById(t, p.p); if (q) lines.push(`Off to meet ${q.f} by the well.`); }
+  const pet = petOf(t, p);
+  if (pet) lines.push(pet.k === 'dog' ? `Taking ${pet.n} for a long walk.` : `${pet.n} the cat is asleep on the doorstep again.`);
+  if (t.marketUntil && S.day < t.marketUntil) lines.push('Off to the market to see what the traders brought.');
   return lines[Math.floor((p.i * 7 + Math.floor(S.day / 3)) % lines.length)];
 }

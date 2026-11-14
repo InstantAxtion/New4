@@ -2,6 +2,7 @@
 // The world is a staggered isometric grid: W columns x H rows (odd rows shifted half a tile right).
 // 2000 x 4000 = 8,000,000 tiles, mapped equirectangularly onto Earth.
 import { fbm, hash2 } from './noise.js';
+import { RIVERS, meander, riverSeed } from './rivers.js';
 
 export const W = 2000, H = 4000;
 
@@ -32,6 +33,7 @@ export const world = {
   country: null,  // Uint8Array(W*H), 0 = none, else index+1
   countryNames: [],
   overview: null, // canvas W x (H/2)
+  river: null,    // Uint8Array(W*H): bits 0-3 flow directions to neighbours, bits 4-5 river size + 1
   ready: false,
 };
 
@@ -314,9 +316,51 @@ export async function generateWorld(onProgress = () => {}) {
 
   onProgress(0.9, 'Drawing the atlas…');
   world.biome = biome; world.country = country;
+  carveRivers(biome);
   world.overview = buildOverview(biome);
+  drawRiversOnOverview(world.overview);
   world.ready = true;
   onProgress(1, 'Ready');
+}
+
+// ---------- rivers ----------
+const RSTEP = [[0, 1, 1], [-1, 0, -1], [-1, 0, 1], [0, 1, -1]]; // down-right, up-left, down-left, up-right
+const ROPP = [1, 0, 3, 2];
+const stepT = (x, y, d) => [wrapX(x + ((y & 1) ? RSTEP[d][1] : RSTEP[d][0])), y + RSTEP[d][2]];
+const toTile = (lon, lat) => { const y = Math.max(1, Math.min(H - 2, Math.round(((90 - lat) / 180) * H - 0.5))); return [wrapX(Math.round(((lon + 180) / 360) * W - 0.5 - (y & 1) * 0.5)), y]; };
+function gd2(ax, ay, bx, by) { let dx = tileWX(ax, ay) - tileWX(bx, by); if (dx > W / 2) dx -= W; else if (dx < -W / 2) dx += W; const dy = (tileWY(ay) - tileWY(by)) * 2; return dx * dx + dy * dy; }
+function carveRivers(biome) {
+  const river = new Uint8Array(W * H);
+  const land = (x, y) => biome[y * W + x] > 2;
+  for (const [name, size, pts] of RIVERS) {
+    const path = meander(pts, riverSeed(name)).map(([lo, la]) => toTile(lo, la));
+    let [cx, cy] = path[0];
+    for (let k = 1; k < path.length; k++) {
+      const [tx, ty] = path[k];
+      for (let guard = 0; guard < 300 && (cx !== tx || cy !== ty); guard++) {
+        let bd = Infinity, bdir = 0;
+        for (let d = 0; d < 4; d++) { const [nx, ny] = stepT(cx, cy, d); const dd = gd2(nx, ny, tx, ty); if (dd < bd) { bd = dd; bdir = d; } }
+        const [nx, ny] = stepT(cx, cy, bdir);
+        const a = cy * W + cx, b = ny * W + nx;
+        if (land(cx, cy)) river[a] |= (1 << bdir) | ((size + 1) << 4);
+        if (land(nx, ny)) river[b] |= (1 << ROPP[bdir]) | ((size + 1) << 4);
+        cx = nx; cy = ny;
+      }
+    }
+  }
+  world.river = river;
+}
+export const riverAt = (x, y) => (world.river ? world.river[y * W + wrapX(x)] : 0);
+export const riverSize = (m) => (m >> 4) - 1;
+function drawRiversOnOverview(c) {
+  const g = c.getContext('2d'), sc = c.width / 360, sy = c.height / 180;
+  g.lineJoin = 'round'; g.lineCap = 'round';
+  for (const [name, size, pts] of RIVERS) {
+    g.strokeStyle = '#3f7fae'; g.lineWidth = 1 + size * 0.6;
+    g.beginPath();
+    meander(pts, riverSeed(name)).forEach(([lo, la], i) => { const x = (lo + 180) * sc, y = (90 - la) * sy; if (i) g.lineTo(x, y); else g.moveTo(x, y); });
+    g.stroke();
+  }
 }
 
 function buildOverview(biome) {

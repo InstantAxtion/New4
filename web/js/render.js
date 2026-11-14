@@ -5,6 +5,7 @@ import { S, M, DEFS, ZONES, townById, canPlace, canZone, canFound, canStart, own
 import { hash2 } from './noise.js';
 import { idxOf } from './world.js';
 import * as L from './life.js';
+import { petOf, personById } from './folk.js';
 import { styleAt } from './regions.js';
 import { nbExtra } from './game.js';
 const MOOD_FACES = ['🙂', '😊', '😄'];
@@ -156,6 +157,62 @@ function planWalk(w, tiles, t) {
   for (let k = 1; k < pts.length; k++) { const d = gdist(pts[k - 1][0], pts[k - 1][1], pts[k][0], pts[k][1]); w.seg.push(d); w.len += d; }
   w.d = 0; w.k = 0; w.dest = target;
 }
+// Visitors: market-day wagons from neighbouring villages, and the odd traveller heading for the tavern.
+export const visitors = new Map(); // townId -> array
+function routeVisitor(v, fromTile, toTile, nearX) {
+  const p = L.lPath(fromTile % W, Math.floor(fromTile / W), toTile % W, Math.floor(toTile / W));
+  const pts = []; let lastX = nearX;
+  for (const [x, y] of p) { let X = tileWX(x, y); if (X - lastX > W / 2) X -= W; else if (lastX - X > W / 2) X += W; pts.push([X, tileWY(y) + 0.05]); lastX = X; }
+  if (pts.length < 2) pts.push([pts[0][0] + 0.01, pts[0][1]]);
+  v.pts = pts; v.seg = []; v.len = 0; v.d = 0; v.k = 0;
+  for (let k = 1; k < pts.length; k++) { const d = gdist(pts[k - 1][0], pts[k - 1][1], pts[k][0], pts[k][1]); v.seg.push(d); v.len += d; }
+  v.X = pts[0][0]; v.Y = pts[0][1];
+}
+function edgeTileToward(t, nx, ny) {
+  const X0 = tileWX(t.x, t.y), Y0 = tileWY(t.y);
+  let dX = tileWX(nx, ny) - X0; if (dX > W / 2) dX -= W; else if (dX < -W / 2) dX += W;
+  const dY = (tileWY(ny) - Y0) * 2, len = Math.hypot(dX, dY) || 1, r = Math.max(2, t.radius - 0.8);
+  const tl = tileOfWorld(X0 + (dX / len) * r, Y0 + ((dY / len) * r) / 2);
+  return tl ? tl[1] * W + tl[0] : idxOf(t.x, t.y);
+}
+function updateVisitors(dt, t, tiles) {
+  let vs = visitors.get(t.id); if (!vs) visitors.set(t.id, (vs = []));
+  const market = tiles.find((i) => { const b = S.buildings.get(i); return b && b.t === 'market'; });
+  const tavern = tiles.find((i) => { const b = S.buildings.get(i); return b && b.t === 'tavern'; });
+  if (market != null && t.marketUntil && S.day < t.marketUntil && !vs.some((v) => v.market)) {
+    for (const nid of (t.marketFrom || []).slice(0, 3)) {
+      const n = S.neighbors.find((q) => q.id === nid); if (!n) continue;
+      const start = edgeTileToward(t, n.x, n.y);
+      for (let k = 0; k < 2; k++) {
+        const v = { market: true, kind: k ? 'traveller' : 'wagon', start, dest: market, wait: k * 3 + Math.random() * 2, sp: k ? 0.36 : 0.5, face: 1, ph: Math.random() * 6,
+          c: `hsl(${n.hue},45%,48%)`, rider: !k, cart: !k, cover: !k, moving: false, leaving: false };
+        routeVisitor(v, start, market, tileWX(t.x, t.y)); vs.push(v);
+      }
+    }
+  }
+  if (tavern != null && vs.length < 3 && Math.random() < dt / 45) { // a traveller wanders in for a bed and a meal
+    const n = S.neighbors[Math.floor(Math.random() * S.neighbors.length)];
+    const start = edgeTileToward(t, n ? n.x : t.x + 20, n ? n.y : t.y);
+    const v = { kind: 'traveller', start, dest: tavern, wait: 0, sp: 0.34, face: 1, ph: Math.random() * 6, c: CLOTHES[Math.floor(Math.random() * CLOTHES.length)], moving: false, leaving: false };
+    routeVisitor(v, start, tavern, tileWX(t.x, t.y)); vs.push(v);
+  }
+  for (let j = vs.length - 1; j >= 0; j--) {
+    const v = vs[j];
+    v.moving = false;
+    if (v.wait > 0) { v.wait -= dt; continue; }
+    v.d += dt * v.sp;
+    while (v.k < v.seg.length - 1 && v.d > v.seg[v.k]) { v.d -= v.seg[v.k]; v.k++; }
+    const a = v.pts[v.k], b = v.pts[v.k + 1], f = Math.min(1, v.seg[v.k] ? v.d / v.seg[v.k] : 1);
+    const nx = a[0] + (b[0] - a[0]) * f, ny = a[1] + (b[1] - a[1]) * f;
+    if (Math.abs(nx - v.X) > 1e-4) v.face = nx > v.X ? 1 : -1;
+    v.X = nx; v.Y = ny; v.moving = true; v.ph += dt * 9;
+    if (v.k >= v.seg.length - 1 && f >= 1) {
+      if (v.leaving) { vs.splice(j, 1); continue; }
+      v.leaving = true; v.wait = 8 + Math.random() * 8; // trade, rest, then head home
+      routeVisitor(v, v.dest, v.start, v.X);
+    }
+  }
+}
 function updateWalkers(dt, visibleTowns) {
   if (tileCacheStamp !== S.buildings.size) {
     tileCache.clear(); tileCacheStamp = S.buildings.size; stableTowns.clear();
@@ -174,12 +231,14 @@ function updateWalkers(dt, visibleTowns) {
       const tile = tiles[Math.floor(Math.random() * tiles.length)];
       const [X, Y] = tileSpot(tile, tileWX(t.x, t.y));
       const ride = stableTowns.has(t.id) && Math.random() < 0.28; // with stables, some folk ride or drive a cart
-      ws.push({ pid: pickFolk(t), X, Y, tile, pts: null, wait: Math.random() * 3, sp: (0.32 + Math.random() * 0.18) * (ride ? 2.2 : 1), face: 1,
+      const pid = pickFolk(t), person = pid && personById(t, pid), pet = person && petOf(t, person);
+      ws.push({ dog: !ride && pet && pet.k === 'dog' ? pet : null, pid, X, Y, tile, pts: null, wait: Math.random() * 3, sp: (0.32 + Math.random() * 0.18) * (ride ? 2.2 : 1), face: 1,
         rider: ride, cart: ride && Math.random() < 0.35, hc: HORSE_COLS[Math.floor(Math.random() * HORSE_COLS.length)],
         lx: (Math.random() - 0.5) * LANE, ly: (Math.random() - 0.5) * LANE * 0.4,
         c: CLOTHES[Math.floor(Math.random() * CLOTHES.length)], carry: Math.random() < 0.3, ph: Math.random() * 6, moving: false });
     }
     if (ws.length > want) ws.length = want;
+    updateVisitors(dt, t, tiles);
     for (const w of ws) {
       w.moving = false;
       if (w.wait > 0) { w.wait -= dt * pace; continue; }
@@ -213,7 +272,7 @@ let walkerRows = new Map();
 function bucketWalkers(visibleTowns) {
   walkerRows = new Map();
   for (const t of visibleTowns) {
-    const ws = walkers.get(t.id); if (!ws) continue;
+    const ws = [...(walkers.get(t.id) || []), ...(visitors.get(t.id) || [])];
     for (const w of ws) {
       const tl = tileOfWorld(w.X, w.Y); if (!tl) continue;
       const b = S.buildings.get(tl[1] * W + tl[0]);
@@ -243,7 +302,8 @@ function drawWalkerList(ws) {
           const bx = x - w.face * 8 * s;
           ctx.fillStyle = 'rgba(30,40,20,0.22)'; ctx.beginPath(); ctx.ellipse(bx, y, 4.5 * s, 1.6 * s, 0, 0, 6.3); ctx.fill();
           ctx.fillStyle = '#9a7048'; ctx.fillRect(bx - 4 * s, y - 5 * s, 8 * s, 3 * s);
-          ctx.fillStyle = '#c8a070'; ctx.fillRect(bx - 3 * s, y - 7.5 * s, 3 * s, 2.5 * s); ctx.fillStyle = '#7aa04a'; ctx.fillRect(bx + 0.3 * s, y - 7 * s, 2.6 * s, 2 * s);
+          if (w.cover) { ctx.fillStyle = '#f2ead8'; ctx.beginPath(); ctx.ellipse(bx, y - 5 * s, 4.4 * s, 4.8 * s, 0, Math.PI, 0); ctx.fill(); ctx.strokeStyle = 'rgba(120,100,70,0.6)'; ctx.lineWidth = 0.6 * s; for (const k of [-2, 0, 2]) { ctx.beginPath(); ctx.moveTo(bx + k * s, y - 5 * s); ctx.lineTo(bx + k * s * 0.8, y - 9.6 * s); ctx.stroke(); } }
+          else { ctx.fillStyle = '#c8a070'; ctx.fillRect(bx - 3 * s, y - 7.5 * s, 3 * s, 2.5 * s); ctx.fillStyle = '#7aa04a'; ctx.fillRect(bx + 0.3 * s, y - 7 * s, 2.6 * s, 2 * s); }
           ctx.fillStyle = '#4a3a2c'; ctx.beginPath(); ctx.arc(bx - 2 * s, y - 1.6 * s, 1.6 * s, 0, 6.3); ctx.arc(bx + 2.4 * s, y - 1.6 * s, 1.6 * s, 0, 6.3); ctx.fill();
           ctx.strokeStyle = '#5a4030'; ctx.lineWidth = Math.max(0.7, 0.6 * s); ctx.beginPath(); ctx.moveTo(bx + w.face * 4 * s, y - 4 * s); ctx.lineTo(x, y - 4.4 * s); ctx.stroke();
         }
@@ -266,6 +326,15 @@ function drawWalkerList(ws) {
       ctx.fillStyle = w.c; ctx.fillRect(x - 1.6 * s, y - 6 * s - bob, 3.2 * s, 4.6 * s);
       ctx.fillStyle = '#f0c8a0'; ctx.beginPath(); ctx.arc(x + w.face * 0.3 * s, y - 7.6 * s - bob, 1.6 * s, 0, 6.3); ctx.fill();
       if (w.carry) { ctx.fillStyle = '#b08a52'; ctx.fillRect(x + (w.face > 0 ? 0.6 : -3.2) * s, y - 9.5 * s - bob, 2.6 * s, 2.2 * s); }
+      if (w.kind === 'traveller') { // a wide hat and a pack: clearly from out of town
+        ctx.fillStyle = '#6a4a2a'; ctx.fillRect(x - w.face * 2.6 * s - 1.2 * s, y - 6.4 * s - bob, 2.4 * s, 3.6 * s);
+        ctx.fillStyle = '#7a5a34'; ctx.beginPath(); ctx.ellipse(x + w.face * 0.3 * s, y - 8.8 * s - bob, 2.6 * s, 0.8 * s, 0, 0, 6.3); ctx.fill();
+        ctx.fillRect(x + w.face * 0.3 * s - 1 * s, y - 10 * s - bob, 2 * s, 1.4 * s);
+      }
+      if (w.dog) { // the family dog trots along behind
+        const dxp = x - w.face * 6 * s, hop = w.moving ? Math.abs(Math.sin(w.ph * 1.3)) * 0.8 * s : 0;
+        L.drawAnimal(ctx, 'dog', dxp, y + 0.5 * s - hop, s, w.face, animTime * (w.moving ? 1.8 : 0.3), w.pid || 1);
+      }
     }
   }
 }
@@ -426,7 +495,8 @@ function drawTiles() {
   // Pass 1: ground
   const tint = new Path2D(), border = new Path2D(), valid = new Path2D(), invalid = new Path2D(), roadPath = new Path2D(), pavedPath = new Path2D();
   const isPaved = (i) => { const t = townById(L.roadTown.get(i)); return !!(t && t.imp && t.imp.paved); };
-  let anyRoad = false;
+  let anyRoad = false, anyRiver = false, anyBridge = false;
+  const riverPaths = [new Path2D(), new Path2D(), new Path2D()], bridgePath = new Path2D();
   let anyOwn = false;
   for (let y = yA; y <= yB; y++) {
     const off = (y & 1) * 0.5, cy = sy(tileWY(y));
@@ -440,7 +510,10 @@ function drawTiles() {
       if (b !== B.OCEAN) {
         const arr = L.tileSnowy(wx, y, b, rs) && SPR.groundSnow[b] ? SPR.groundSnow[b] : SPR.ground[b];
         drawSprite(arr[(hash2(wx, y, 1) * 4) | 0], cx, cy, s);
+        const rv = world.river[rowBase + wx];
+        if (rv) { const sz = (rv >> 4) - 1; L.addRoad(riverPaths[sz], rv & 15, cx, cy, hw, hh); riverPaths[sz].moveTo(cx + tw * 0.06, cy); riverPaths[sz].arc(cx, cy, tw * 0.06, 0, 6.283); anyRiver = true; }
         const rm = b > 2 ? L.roads.get(rowBase + wx) : 0;
+        if (rm && rv) { L.addRoad(bridgePath, rm, cx, cy, hw * 0.92, hh * 0.92); anyBridge = true; }
         if (rm) { L.addRoad(isPaved(rowBase + wx) ? pavedPath : roadPath, rm, cx, cy, hw, hh); anyRoad = true; }
       }
       if (showOwn && nearTowns.length && b > 2) {
@@ -462,7 +535,21 @@ function drawTiles() {
       }
     }
   }
+  if (anyRiver) {
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    for (let sz = 0; sz < 3; sz++) { ctx.strokeStyle = 'rgba(70,100,80,0.45)'; ctx.lineWidth = tw * (0.17 + 0.08 * sz); ctx.stroke(riverPaths[sz]); }
+    for (let sz = 0; sz < 3; sz++) { ctx.strokeStyle = '#5c9cc4'; ctx.lineWidth = tw * (0.12 + 0.08 * sz); ctx.stroke(riverPaths[sz]); }
+    ctx.setLineDash([tw * 0.06, tw * 0.22]); ctx.lineDashOffset = -animTime * tw * 0.05;
+    for (let sz = 0; sz < 3; sz++) { ctx.strokeStyle = 'rgba(255,255,255,0.35)'; ctx.lineWidth = tw * 0.025; ctx.stroke(riverPaths[sz]); }
+    ctx.setLineDash([]); ctx.lineCap = 'butt';
+  }
   if (anyRoad) { L.strokeRoads(ctx, roadPath, tw); L.strokeRoads(ctx, pavedPath, tw, true); }
+  if (anyBridge) { // little wooden bridges where the roads cross a river
+    ctx.lineCap = 'butt';
+    ctx.strokeStyle = '#5a4030'; ctx.lineWidth = tw * 0.24; ctx.stroke(bridgePath);
+    ctx.strokeStyle = '#b08458'; ctx.lineWidth = tw * 0.18; ctx.stroke(bridgePath);
+    ctx.setLineDash([tw * 0.02, tw * 0.035]); ctx.strokeStyle = 'rgba(90,64,48,0.6)'; ctx.lineWidth = tw * 0.16; ctx.stroke(bridgePath); ctx.setLineDash([]);
+  }
   if (anyOwn) {
     ctx.fillStyle = 'rgba(255,226,150,0.10)'; ctx.fill(tint);
     if (placing) { // a bright dot with a dark rim marks every tile you can use, on any ground
@@ -525,6 +612,16 @@ function drawTiles() {
           continue;
         }
         drawSprite(buildingSprite(bld, wx, y), cx, cy, s);
+        if (bld.t === 'house' && bld.p >= 1 && tw >= 40 && hash2(wx, y, 51) < 0.2) { // a cat on the doorstep
+          const kx = cx + tw * 0.13, ky = cy + tw * 0.2, col = ['#e0a050', '#3c3430', '#9a9a9a', '#f4efe6'][(hash2(wx, y, 52) * 4) | 0], k = s * 1.1;
+          const wag = Math.sin(animTime * 2 + wx) * 1.4 * k;
+          ctx.fillStyle = 'rgba(30,40,20,0.2)'; ctx.beginPath(); ctx.ellipse(kx, ky, 2.4 * k, 0.9 * k, 0, 0, 6.3); ctx.fill();
+          ctx.strokeStyle = col; ctx.lineWidth = 0.9 * k; ctx.beginPath(); ctx.moveTo(kx + 1.4 * k, ky - 0.6 * k); ctx.quadraticCurveTo(kx + 3.4 * k, ky - 1 * k, kx + 3 * k + wag * 0.4, ky - 3 * k); ctx.stroke();
+          ctx.fillStyle = col; ctx.beginPath(); ctx.ellipse(kx, ky - 1.6 * k, 1.6 * k, 1.9 * k, 0, 0, 6.3); ctx.fill();
+          ctx.beginPath(); ctx.arc(kx - 0.3 * k, ky - 3.9 * k, 1.2 * k, 0, 6.3); ctx.fill();
+          ctx.beginPath(); ctx.moveTo(kx - 1.3 * k, ky - 4.4 * k); ctx.lineTo(kx - 1 * k, ky - 5.6 * k); ctx.lineTo(kx - 0.4 * k, ky - 4.8 * k);
+          ctx.moveTo(kx + 0.1 * k, ky - 4.8 * k); ctx.lineTo(kx + 0.6 * k, ky - 5.6 * k); ctx.lineTo(kx + 0.8 * k, ky - 4.4 * k); ctx.fill();
+        }
         if (bld.t === 'house' && bld.p >= 1 && tw >= 30) {
           const ht = townById(bld.town);
           if (ht && ht.imp && ht.imp.flowers) for (let k = 0; k < 4; k++) {
@@ -585,7 +682,7 @@ function drawTiles() {
           L.drawBoat(ctx, sx(x + 0.5 + off + ox), cy + oy * tw, s, animTime, ph, true, face); }
         continue;
       }
-      if (S.zones.has(i)) continue;
+      if (S.zones.has(i) || world.river[i]) continue;
       if (tw >= 28 && L.roads.has(i) && hash2(wx, y, 43) < 0.4) {
         const lt = townById(L.roadTown.get(i));
         if (lt && lt.imp && lt.imp.lanterns) {

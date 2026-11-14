@@ -272,6 +272,13 @@ export function drawAnimal(ctx, kind, x, y, s, face, t, ph) {
     body(ctx, x + 4.9 * s, y - 8 * s, 1.5 * s, 0.85 * s, col);
     ctx.strokeStyle = '#2a2018'; ctx.lineWidth = 0.9 * s; ctx.beginPath(); ctx.moveTo(x + 2.6 * s, y - 6 * s); ctx.lineTo(x + 3.9 * s, y - 8.6 * s);
     ctx.moveTo(x - 3.6 * s, y - 4.8 * s); ctx.quadraticCurveTo(x - 5.2 * s, y - 4 * s, x - 4.8 * s, y - 2 * s); ctx.stroke();
+  } else if (kind === 'dog') {
+    const col = ph % 3 < 1 ? '#a0703c' : ph % 3 < 2 ? '#3c3430' : '#d8c8a8';
+    legs(ctx, x, y - 1.6 * s, s, 1.3, 1.6, '#3a2a20', step);
+    body(ctx, x, y - 2.2 * s, 2.3 * s, 1.1 * s, col);
+    body(ctx, x + 2.4 * s, y - 3.2 * s, 1.1 * s, 0.9 * s, col);
+    ctx.fillStyle = '#2a2018'; ctx.beginPath(); ctx.ellipse(x + 2.1 * s, y - 3.9 * s, 0.5 * s, 0.8 * s, 0.4, 0, 6.3); ctx.fill();
+    ctx.strokeStyle = col; ctx.lineWidth = 0.7 * s; ctx.beginPath(); ctx.moveTo(x - 2.2 * s, y - 2.5 * s); ctx.lineTo(x - 3.2 * s, y - 3.6 * s + Math.sin(t * 9 + ph) * 0.6 * s); ctx.stroke();
   } else if (kind === 'camel') {
     legs(ctx, x, y - 3.2 * s, s, 1.9, 3.2, '#8a6a44', step);
     body(ctx, x, y - 4 * s, 3.4 * s, 1.5 * s, '#c8a066'); body(ctx, x - 0.4 * s, y - 5.4 * s, 1.6 * s, 1.2 * s, '#c8a066');

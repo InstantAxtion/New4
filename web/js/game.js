@@ -1,5 +1,5 @@
 // Game state, rules and simulation.
-import { W, H, B, BIOMES, world, idxOf, wrapX, tileWX, tileWY, neighbors, biomeAt, isWater, tileLat } from './world.js';
+import { W, H, B, BIOMES, world, idxOf, wrapX, tileWX, tileWY, neighbors, biomeAt, isWater, tileLat, riverAt } from './world.js';
 import { mulberry32, hash2 } from './noise.js';
 import { farmSeason, seasonIndex } from './seasons.js';
 import { styleAt } from './regions.js';
@@ -233,6 +233,7 @@ export function nearNeighbor(x, y, r = 2.6) {
   for (const n of S.neighbors) if (!n.joined && groundDist2(x, y, n.x, n.y) <= r * r) return n;
   return null;
 }
+export const byRiver = (x, y) => neighbors(x, y).some(([nx, ny]) => ny >= 0 && ny < H && riverAt(nx, ny));
 const adjacent = (x, y, pred) => neighbors(x, y).some(([nx, ny]) => ny >= 0 && ny < H && pred(biomeAt(nx, ny)));
 const affordable = (cost) => Object.entries(cost || {}).every(([k, v]) => S.res[k] >= v);
 const pay = (cost) => Object.entries(cost || {}).forEach(([k, v]) => (S.res[k] -= v));
@@ -265,6 +266,7 @@ export function canPlace(type, x, y) {
   const i = idxOf(x, y), b = world.biome[i], d = DEFS[type];
   if (S.buildings.has(i)) return { ok: false, reason: 'Something is already built here.' };
   if (isWater(b)) return { ok: false, reason: 'You cannot build on water.' };
+  if (riverAt(x, y)) return { ok: false, reason: 'A river flows here.' };
   if (!BUILDABLE.has(b)) return { ok: false, reason: `${BIOMES[b].name} is too rugged to build on.` };
   const own = ownerOf(x, y);
   if (!own) return { ok: false, reason: 'Outside your borders.' };
@@ -273,12 +275,12 @@ export function canPlace(type, x, y) {
   if (d.tier > S.tier) return { ok: false, reason: `Unlocks at ${TIERS[d.tier].name}.` };
   if (d.wonder && wonderStarted(type)) return { ok: false, reason: 'This wonder is already built.' };
   if (d.style && townStyleOf(own) !== d.style) return { ok: false, reason: `Only ${d.desc.split(':')[0]} can build this.` };
-  if ((type === 'icehut' || type === 'bridge') && !adjacent(x, y, (n) => n === B.SHALLOW || n === B.OCEAN || n === B.SEAICE)) return { ok: false, reason: 'Must touch the water.' };
+  if ((type === 'icehut' || type === 'bridge') && !adjacent(x, y, (n) => n === B.SHALLOW || n === B.OCEAN || n === B.SEAICE) && !(type === 'bridge' && byRiver(x, y))) return { ok: false, reason: 'Must touch the water.' };
   if (type === 'monastery' && !adjacent(x, y, (n) => n === B.MOUNTAIN || n === B.SNOW)) return { ok: false, reason: 'Must stand beside mountains.' };
   if (type === 'observatory' && !(b === B.DESERT || b === B.STEPPE || b === B.HILLS || b === B.TUNDRA)) return { ok: false, reason: 'Needs open desert, steppe or hills.' };
   if (type === 'dome' && !(b === B.GRASS || b === B.FOREST || b === B.JUNGLE || b === B.SAVANNA)) return { ok: false, reason: 'Needs green land.' };
   if (type === 'lumber' && !WOODS.has(b) && !adjacent(x, y, (n) => WOODS.has(n))) return { ok: false, reason: 'Needs woodland nearby.' };
-  if ((type === 'dock' || type === 'lighthouse' || type === 'harbour') && !adjacent(x, y, (n) => n === B.SHALLOW || n === B.OCEAN)) return { ok: false, reason: 'Must touch the water.' };
+  if ((type === 'dock' || type === 'lighthouse' || type === 'harbour') && !adjacent(x, y, (n) => n === B.SHALLOW || n === B.OCEAN) && !(type === 'dock' && byRiver(x, y))) return { ok: false, reason: 'Must touch the water.' };
   if (type === 'mine' && !(b === B.HILLS || adjacent(x, y, (n) => n === B.MOUNTAIN || n === B.SNOW))) return { ok: false, reason: 'Needs hills or mountains.' };
   if (!affordable(d.cost)) return { ok: false, reason: 'Not enough resources.', own };
   return { ok: true, own };
@@ -287,7 +289,7 @@ export function canPlace(type, x, y) {
 const rocky = (x, y) => { const b = biomeAt(x, y); return b === B.HILLS || b === B.DESERT || b === B.TUNDRA || adjacent(x, y, (n) => n === B.HILLS || n === B.MOUNTAIN || n === B.SNOW); };
 function yieldMult(type, x, y) {
   const b = biomeAt(x, y);
-  if (type === 'farm') return FARM_MULT[b] ?? 1;
+  if (type === 'farm') return (FARM_MULT[b] ?? 1) * (byRiver(x, y) ? 1.1 : 1); // fertile floodplain
   if (type === 'lumber') {
     let n = WOODS.has(b) ? 2 : 0;
     for (const [nx, ny] of neighbors(x, y)) if (WOODS.has(biomeAt(nx, ny))) n++;
@@ -315,7 +317,7 @@ export function canZone(x, y) {
   x = wrapX(x);
   if (y < 1 || y >= H - 1) return false;
   const i = idxOf(x, y), b = world.biome[i];
-  if (S.buildings.has(i) || !BUILDABLE.has(b)) return false;
+  if (S.buildings.has(i) || !BUILDABLE.has(b) || riverAt(x, y)) return false;
   if (!ownerOf(x, y) || nearNeighbor(x, y)) return false;
   return true;
 }
@@ -352,7 +354,7 @@ export function canFound(x, y) {
   const cont = continentAt(x, y);
   if (!realmContinents().includes(cont) && !hasHarbour()) return { ok: false, reason: `Settlers need a Harbour to sail to ${cont}.` };
   const b = biomeAt(x, y);
-  if (isWater(b) || !BUILDABLE.has(b)) return { ok: false, reason: 'Pick open land for a new settlement.' };
+  if (isWater(b) || !BUILDABLE.has(b) || riverAt(x, y)) return { ok: false, reason: 'Pick open land for a new settlement.' };
   for (const t of S.towns) if (groundDist2(x, y, t.x, t.y) < (t.radius + 3) ** 2) return { ok: false, reason: `Too close to ${t.name}.` };
   const nb = nearNeighbor(x, y, 5); if (nb) return { ok: false, reason: `Too close to ${nb.name}.` };
   if (!affordable(FOUND_COST)) return { ok: false, reason: 'Needs 50 food, 50 wood and 30 gold.' };
@@ -700,6 +702,21 @@ function step(dd) {
   for (const r of ALL_RES) S.rates[r] = (S.rates[r] || 0) * 0.8 + ((S.res[r] - before[r]) / dd) * 0.2;
   emit('stepped', dd);
   neighbourLife(dd);
+  // Market day every 8 days in towns with a market: neighbours bring wagons, a little gold and goodwill.
+  const md = Math.floor(S.day / 8), mdNext = Math.floor((S.day + dd) / 8);
+  if (mdNext > md) {
+    for (const t of S.towns) {
+      let hasMarket = false;
+      for (const b of S.buildings.values()) if (b.t === 'market' && b.town === t.id && b.p >= 1) { hasMarket = true; break; }
+      if (!hasMarket) continue;
+      const visitors = S.neighbors.filter((n) => !n.joined && groundDist2(n.x, n.y, t.x, t.y) <= CONTACT_RANGE ** 2).slice(0, 3);
+      S.res.gold += 5 + t.pop * 0.05;
+      for (const n of visitors) n.friend = Math.min(100, n.friend + 1);
+      t.marketUntil = S.day + dd + 1.5;
+      t.marketFrom = visitors.map((n) => n.id);
+      emit('marketday', { t, visitors });
+    }
+  }
   for (const r of S.routes || []) {
     if (r.p >= 1) continue;
     r.p = Math.min(1, r.p + dd / ROUTE_DAYS);
@@ -843,6 +860,7 @@ export function surveyStart(x, y) {
 export function canStart(x, y) {
   const b = biomeAt(x, y);
   if (isWater(b)) return { ok: false, reason: 'That is the sea. Pick a spot on land.' };
+  if (riverAt(x, y)) return { ok: false, reason: 'A river runs here. Pick a spot on its bank.' };
   if (!BUILDABLE.has(b)) return { ok: false, reason: `${BIOMES[b].name} is too harsh for a first home.` };
   return { ok: true };
 }

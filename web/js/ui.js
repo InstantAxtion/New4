@@ -10,7 +10,7 @@ import { SPR, spriteIcon } from './sprites.js';
 import { panBy, cam, markDirty, flyTo, centerOn, clampCam, screenSize, TILE_MODE_TW, sx, sy, pickTile, setHover } from './render.js';
 import { initAudio, sfx, haptic, applySettings, resumeAudio } from './audio.js';
 import { tutorialActive, hint } from './tutorial.js';
-import { ageOf, fullName, personById, JOBS, thought } from './folk.js';
+import { ageOf, fullName, personById, JOBS, thought, petOf } from './folk.js';
 import { walkerAt } from './render.js';
 import { STYLES } from './sprites.js';
 import { townStyle } from './render.js';
@@ -242,7 +242,8 @@ function personCard(t, p) {
       <div class="kv">${partner ? `<span>Partner</span><span>${link(partner)}</span>` : ''}
       ${parents.length ? `<span>Parents</span><span>${parents.map(link).join(' ')}</span>` : ''}
       ${kids.length ? `<span>Children</span><span>${kids.map(link).join(' ')}</span>` : ''}
-      <span>Family</span><span>The ${esc(p.l)} family</span></div>`;
+      <span>Family</span><span>The ${esc(p.l)} family</span>
+      ${petOf(t, p) ? `<span>Pet</span><span>${petOf(t, p).k === 'dog' ? '🐕' : '🐈'} ${esc(petOf(t, p).n)}, a ${petOf(t, p).k}</span>` : ''}</div>`;
 }
 export function showPerson(townId, pid) {
   const t = townById(townId); if (!t) return;
@@ -663,6 +664,7 @@ export function initUI() {
   on('request', (n) => { toast(`✉ A letter from ${n.leader} of ${n.name}`); sfx('coin'); });
   on('story', ({ text }) => toast(text));
   on('folk', (text) => toast(`🏡 ${text}`));
+  on('marketday', ({ t, visitors }) => { if (visitors.length) toast(`🛒 Market day in ${t.name}! Wagons from ${visitors.map((n) => n.name).join(', ')}.`); });
   on('tier', (t) => {
     if (t === 1) {
       hint('everyday', 'Your realm is a Village! New <b>Everyday</b> buildings (well, chapel, tavern…) make towns happier, and happy towns grow faster. You can now make <b>goods</b> too, and build your region\'s <b>specialty</b>.', '#bottombar [data-tab=build]');
