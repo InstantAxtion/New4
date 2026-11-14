@@ -66,14 +66,21 @@ export function closeSheet() {
   if (M.selected && (!M.mode)) { M.selected = null; markDirty(); }
   highlightBottom();
 }
+// Panels refresh as the realm changes, but never while a finger or pen is touching them
+// and only when the content really changed, so taps are never swallowed by a redraw.
+let touchingUI = false, sheetHTML = '';
 function refreshSheet(reset) {
   if (!sheetRender) return;
+  if (touchingUI && !reset) return;
   const body = $('#sheetbody'), top = body.scrollTop;
   const html = sheetRender();
   if (html === null) { closeSheet(); return; }
+  if (!reset && html === sheetHTML) return;
+  sheetHTML = html;
   body.innerHTML = html;
   body.scrollTop = reset ? 0 : top;
 }
+function setHTML(el, html) { if (el._html !== html) { el._html = html; el.innerHTML = html; } }
 const head = (title, sub) => `<div class="sh-head"><div><h2>${title}</h2>${sub ? `<div class="sub">${sub}</div>` : ''}</div><button class="close" data-act="close" aria-label="Close">✕</button></div>`;
 
 // ---------------- modes ----------------
@@ -95,7 +102,8 @@ export function setMode(mode) {
     html = `<div class="mlabel"><span>Pick land for settlers</span></div><div class="cost">${costChips(FOUND_COST)}</div>`;
   }
   html += `<button class="tool done" data-act="cancelmode"><span class="ic">✓</span>Done</button>`;
-  bar.innerHTML = html; bar.classList.remove('hidden');
+  if (!touchingUI) setHTML(bar, html);
+  bar.classList.remove('hidden');
   markDirty(); highlightBottom();
 }
 
@@ -483,6 +491,11 @@ export function enterGame(fresh) {
 // ---------------- wiring ----------------
 export function initUI() {
   buildHUD();
+  for (const el of [$('#sheet'), $('#modebar')]) {
+    el.addEventListener('pointerdown', () => { touchingUI = true; });
+    const release = () => { setTimeout(() => { touchingUI = false; }, 60); };
+    el.addEventListener('pointerup', release); el.addEventListener('pointercancel', release); el.addEventListener('pointerleave', release);
+  }
   bindActions($('#sheetbody'));
   bindActions($('#modebar'));
   let pending = false;
