@@ -97,10 +97,39 @@ function startNature() {
   src.connect(f); f.connect(g); g.connect(natureBus); src.start();
   const birds = () => {
     if (!ac) return;
-    if (!document.hidden && Math.random() < 0.6) chirp();
-    setTimeout(birds, 2500 + Math.random() * 6000);
+    // birdsong by day (quieter in the rain), crickets at night
+    if (!document.hidden) {
+      if (amb.night > 0.6) { if (Math.random() < 0.8) crickets(); }
+      else if (Math.random() < 0.6 * (1 - amb.rain * 0.7)) chirp();
+    }
+    setTimeout(birds, (amb.night > 0.6 ? 1500 : 2500) + Math.random() * 6000);
   };
   birds();
+  // soft rain: brighter filtered noise whose volume follows the weather
+  const rlen = ac.sampleRate * 3, rbuf = ac.createBuffer(1, rlen, ac.sampleRate), rd = rbuf.getChannelData(0);
+  for (let i = 0; i < rlen; i++) rd[i] = Math.random() * 2 - 1;
+  const rsrc = ac.createBufferSource(); rsrc.buffer = rbuf; rsrc.loop = true;
+  const rf = ac.createBiquadFilter(); rf.type = 'bandpass'; rf.frequency.value = 1400; rf.Q.value = 0.4;
+  rainGain = ac.createGain(); rainGain.gain.value = 0;
+  rsrc.connect(rf); rf.connect(rainGain); rainGain.connect(natureBus); rsrc.start();
+}
+const amb = { night: 0, rain: 0 };
+let rainGain = null;
+// Called from the game loop with the current darkness (0..1) and rain (0..1).
+export function setAmbience(night, rain) {
+  amb.night = night; amb.rain = rain;
+  if (rainGain && ac) rainGain.gain.setTargetAtTime(rain * 0.22, ac.currentTime, 1.5);
+}
+function crickets() {
+  const t = ac.currentTime + 0.05, f = 4200 + Math.random() * 600, pan = Math.random() * 1.4 - 0.7;
+  for (let r = 0; r < 3; r++) for (let i = 0; i < 3; i++) {
+    const o = ac.createOscillator(), g = ac.createGain(), st = t + r * 0.32 + i * 0.045;
+    o.type = 'sine'; o.frequency.value = f;
+    g.gain.setValueAtTime(0, st); g.gain.linearRampToValueAtTime(0.012, st + 0.008); g.gain.exponentialRampToValueAtTime(0.0003, st + 0.035);
+    const p = ac.createStereoPanner ? ac.createStereoPanner() : null;
+    if (p) { p.pan.value = pan; o.connect(g); g.connect(p); p.connect(natureBus); } else { o.connect(g); g.connect(natureBus); }
+    o.start(st); o.stop(st + 0.05);
+  }
 }
 function chirp() {
   const t = ac.currentTime + 0.05, n = 2 + Math.floor(Math.random() * 4), base = 2600 + Math.random() * 1600;

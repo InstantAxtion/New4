@@ -1,15 +1,16 @@
 // HUD, menus, sheets and interaction modes.
-import { world, BIOMES, B, describeTile, idxOf, wrapX, tileWX, tileWY, W } from './world.js';
+import { world, BIOMES, B, describeTile, idxOf, wrapX, tileWX, tileWY, tileLat, W } from './world.js';
 import {
   S, M, RES, RES_NAMES, TIERS, DEFS, MANUAL, WONDERS, ZONES, FOUND_COST, GIFT_AMOUNT, CONTACT_RANGE,
   on, emit, totalPop, totalCap, townById, hasWonder, wonderStarted, count, ownerOf, canPlace, placeBuilding, setZone,
   demolish, canFound, foundTown, inContact, tradeOffers, doTrade, gift, canInvite, invite, activeQuests, QUESTS,
-  newGame, save, hasSave, load, resetSave, slotInfo, setSlot, deleteSlot, SLOT_COUNT, saveSettings, surveyStart, canStart, affordable, groundDist2, DAY_SECONDS,
+  newGame, PACE, save, hasSave, load, resetSave, slotInfo, setSlot, deleteSlot, SLOT_COUNT, saveSettings, surveyStart, canStart, affordable, groundDist2, DAY_SECONDS,
 } from './game.js';
 import { SPR, spriteIcon } from './sprites.js';
 import { panBy, cam, markDirty, flyTo, centerOn, clampCam, screenSize, TILE_MODE_TW, sx, sy, pickTile, setHover } from './render.js';
 import { initAudio, sfx, haptic, applySettings, resumeAudio } from './audio.js';
 import { tutorialActive } from './tutorial.js';
+import { seasonIndex, SEASONS, SEASON_ICONS, nightAt, farmSeason } from './seasons.js';
 
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -167,8 +168,11 @@ export function updateHUD() {
   const pe = $('#res-pop');
   pe.querySelector('.v').textContent = Math.floor(totalPop());
   const ps = pe.querySelector('small'); ps.textContent = '/' + totalCap(); ps.className = S.fed ? 'flat' : 'down';
-  const y = Math.floor(S.day / 48) + 1, season = ['Spring', 'Summer', 'Autumn', 'Winter'][Math.floor((S.day % 48) / 12)];
-  $('#date').textContent = `Year ${y} · ${season} ${Math.floor(S.day % 12) + 1}`;
+  // Seasons follow the capital's hemisphere (Australia has summer while Europe has winter).
+  const capT = S.towns.find((t) => t.capital) || S.towns[0];
+  const si = seasonIndex(S.day, capT ? tileLat(capT.y) : 45);
+  const y = Math.floor(S.day / 48) + 1, night = nightAt(S.day).n > 0.5;
+  $('#date').textContent = `${night ? '🌙' : SEASON_ICONS[si]} Year ${y} · ${SEASONS[si]} ${Math.floor(S.day % 12) + 1}`;
   $('#date2').textContent = $('#date').textContent;
   document.querySelectorAll('#speed button').forEach((b) => b.classList.toggle('on', +b.dataset.speed === S.speed));
   renderQuests();
@@ -262,7 +266,9 @@ export function showInfo(x, y) {
       if (b.p < 1) body += `<div class="note">Under construction</div><div class="meter"><div style="width:${b.p * 100}%"></div></div>`;
       body += '<div class="kv">';
       if (t) body += `<span>Settlement</span><span>${esc(t.name)}</span>`;
-      if (d.prod) body += `<span>Produces</span><span>${Object.entries(d.prod).map(([k, v]) => `${(v * (b.m || 1)).toFixed(1)} ${RES_NAMES[k].toLowerCase()}/day`).join(', ')}</span>`;
+      const sf = b.t === 'farm' ? farmSeason(S.day, tileLat(y)) : 1;
+      if (d.prod) body += `<span>Produces</span><span>${Object.entries(d.prod).map(([k, v]) => `${(v * (b.m || 1) * PACE.prod * sf).toFixed(2)} ${RES_NAMES[k].toLowerCase()}/day`).join(', ')}</span>`;
+      if (b.t === 'farm' && Math.abs(sf - 1) > 0.01) body += `<span>Season</span><span>${sf < 1 ? 'Resting for winter' : 'Harvest time'} (${Math.round(sf * 100)}%)</span>`;
       if (d.cap) body += `<span>Houses</span><span>${d.cap} villagers</span>`;
       if (d.jobs) body += `<span>Workers</span><span>${d.jobs}</span>`;
       if (b.m && b.m !== 1 && d.prod) body += `<span>Land bonus</span><span>${Math.round(b.m * 100)}%</span>`;
@@ -544,6 +550,16 @@ export function initUI() {
   on('tier', (t) => { toast(`Your realm is now a ${TIERS[t].name}!`, true); sfx('tier'); haptic('medium'); });
   on('quest', (q) => { setTimeout(() => { toast(`Goal complete: ${q.text}`); sfx('quest'); }, 300); questSig = ''; });
   on('toast', (m) => toast(m));
+  on('season', ({ index, lat }) => {
+    const cold = Math.abs(lat) > 30;
+    const msg = [
+      'Spring arrives. The fields wake and blossom opens.',
+      cold ? 'Summer is here: long days and growing crops.' : 'Summer is here.',
+      cold ? 'Autumn: harvest time, and the woods turn gold.' : 'Autumn: harvest time.',
+      cold ? 'Winter settles in. The fields rest until spring.' : 'Winter comes, mild and gentle here.',
+    ][index];
+    toast(`${SEASON_ICONS[index]} ${msg}`);
+  });
   on('joined', () => sfx('tier'));
   document.addEventListener('keydown', (e) => {
     if (e.target.tagName === 'INPUT') return;

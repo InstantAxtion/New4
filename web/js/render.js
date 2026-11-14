@@ -3,8 +3,11 @@ import { BIOMES, W, H, B, world, wrapX, tileWX, tileWY, biomeAt, isWater } from 
 import { SPR, TB, DECOR_DENSITY } from './sprites.js';
 import { S, M, DEFS, ZONES, townById, canPlace, canZone, canFound, canStart, ownerOf, groundDist2, CONTACT_RANGE, inContact } from './game.js';
 import { hash2 } from './noise.js';
+import { idxOf } from './world.js';
+import * as L from './life.js';
 
 export const TILE_MODE_TW = 20;
+const LIT = new Set(['house', 'townhall', 'workshop', 'market', 'tower', 'dock', 'library', 'cathedral', 'greatcastle', 'lighthouse', 'lumber']);
 export const MAX_TW = 160;
 const OCEAN = '#2e628c';
 
@@ -92,43 +95,65 @@ function tileSpot(i, nearX) {
   return [X, Y];
 }
 // Plan a walk along the iso grid (like following streets): one leg on each axis.
-function planWalk(w, tiles) {
-  const [X, Y] = tileSpot(tiles[Math.floor(Math.random() * tiles.length)], w.X);
-  const dX = X - w.X, dY = Y - w.Y;
-  const firstAxis = Math.random() < 0.5 ? 1 : -1;            // e1 = (0.5, 0.25), e2 = (-0.5, 0.25)
-  const k = firstAxis === 1 ? dX + 2 * dY : 2 * dY - dX;      // distance along the first axis
-  const cX = w.X + firstAxis * k * 0.5, cY = w.Y + k * 0.25;
-  w.path = [[w.X, w.Y], [cX, cY], [X, Y]];
-  w.l1 = gdist(w.X, w.Y, cX, cY); w.l2 = gdist(cX, cY, X, Y); w.d = 0;
+// Villagers walk the roads: from where they are to the town hall, then out to their next stop.
+const LANE = 0.07;
+function planWalk(w, tiles, t) {
+  const target = tiles[Math.floor(Math.random() * tiles.length)];
+  const hall = idxOf(t.x, t.y);
+  const tilesPath = [];
+  const leg = (from, to, reverse) => {
+    let p = L.lPath(from % W, Math.floor(from / W), to % W, Math.floor(to / W));
+    if (reverse) p = p.slice().reverse();
+    for (const [x, y] of p) tilesPath.push([x, y]);
+  };
+  const here = w.tile ?? hall;
+  if (here !== hall) leg(here, hall, false);
+  if (target !== hall) leg(target, hall, true);
+  if (!tilesPath.length) tilesPath.push([t.x, t.y]);
+  const pts = [[w.X, w.Y]];
+  let lastX = w.X;
+  for (const [x, y] of tilesPath) {
+    let X = tileWX(x, y) + w.lx;
+    if (X - lastX > W / 2) X -= W; else if (lastX - X > W / 2) X += W;
+    pts.push([X, tileWY(y) + 0.03 + w.ly]); lastX = X;
+  }
+  // a little wander at the destination so people don't stack on one spot
+  const end = pts[pts.length - 1];
+  pts.push([end[0] + (Math.random() - 0.5) * 0.3, end[1] + (Math.random() - 0.5) * 0.08]);
+  w.pts = pts; w.seg = []; w.len = 0;
+  for (let k = 1; k < pts.length; k++) { const d = gdist(pts[k - 1][0], pts[k - 1][1], pts[k][0], pts[k][1]); w.seg.push(d); w.len += d; }
+  w.d = 0; w.k = 0; w.dest = target;
 }
 function updateWalkers(dt, visibleTowns) {
   if (tileCacheStamp !== S.buildings.size) { tileCache.clear(); tileCacheStamp = S.buildings.size; }
-  const pace = Math.min(2, Math.max(1, S.speed)); // brisker at higher speeds, but never zooming
+  const pace = 1;
   for (const t of visibleTowns) {
     if (!tileCache.has(t.id)) tileCache.set(t.id, townTiles(t));
     const tiles = tileCache.get(t.id);
     if (tiles.length < 1) continue;
     let ws = walkers.get(t.id);
     if (!ws) walkers.set(t.id, (ws = []));
-    const want = Math.min(28, Math.ceil(t.pop / 2));
+    const night = L.daylight().n;
+    const want = Math.round(Math.min(28, Math.ceil(t.pop / 2)) * (1 - night * 0.75)); // most folk are home at night
     while (ws.length < want) {
-      const [X, Y] = tileSpot(tiles[Math.floor(Math.random() * tiles.length)], tileWX(t.x, t.y));
-      ws.push({ X, Y, path: null, wait: Math.random() * 3, sp: 0.32 + Math.random() * 0.18, face: 1,
+      const tile = tiles[Math.floor(Math.random() * tiles.length)];
+      const [X, Y] = tileSpot(tile, tileWX(t.x, t.y));
+      ws.push({ X, Y, tile, pts: null, wait: Math.random() * 3, sp: 0.32 + Math.random() * 0.18, face: 1,
+        lx: (Math.random() - 0.5) * LANE, ly: (Math.random() - 0.5) * LANE * 0.4,
         c: CLOTHES[Math.floor(Math.random() * CLOTHES.length)], carry: Math.random() < 0.3, ph: Math.random() * 6, moving: false });
     }
     if (ws.length > want) ws.length = want;
     for (const w of ws) {
       w.moving = false;
       if (w.wait > 0) { w.wait -= dt * pace; continue; }
-      if (!w.path) { planWalk(w, tiles); if (w.l1 + w.l2 < 0.05) { w.path = null; w.wait = 1; continue; } }
+      if (!w.pts) { planWalk(w, tiles, t); if (w.len < 0.05) { w.pts = null; w.wait = 1; continue; } }
       w.d += dt * w.sp * pace;
-      const [p0, p1, p2] = w.path;
-      let nx, ny;
-      if (w.d < w.l1) { const k = w.d / w.l1; nx = p0[0] + (p1[0] - p0[0]) * k; ny = p0[1] + (p1[1] - p0[1]) * k; }
-      else if (w.d < w.l1 + w.l2) { const k = (w.d - w.l1) / w.l2; nx = p1[0] + (p2[0] - p1[0]) * k; ny = p1[1] + (p2[1] - p1[1]) * k; }
-      else { nx = p2[0]; ny = p2[1]; w.path = null; w.wait = 0.8 + Math.random() * 3; } // arrived: linger a moment
+      while (w.k < w.seg.length - 1 && w.d > w.seg[w.k]) { w.d -= w.seg[w.k]; w.k++; }
+      const a = w.pts[w.k], b = w.pts[w.k + 1], f = Math.min(1, w.seg[w.k] ? w.d / w.seg[w.k] : 1);
+      const nx = a[0] + (b[0] - a[0]) * f, ny = a[1] + (b[1] - a[1]) * f;
+      if (w.k >= w.seg.length - 1 && f >= 1) { w.pts = null; w.tile = w.dest; w.wait = 0.8 + Math.random() * 3; } // arrived: linger a moment
       if (Math.abs(nx - w.X) > 1e-4) w.face = nx > w.X ? 1 : -1;
-      w.X = nx; w.Y = ny; w.moving = !!w.path;
+      w.X = nx; w.Y = ny; w.moving = !!w.pts;
       if (w.moving) w.ph += dt * 9 * pace;
     }
   }
@@ -184,19 +209,32 @@ export let hoverTile = null;
 export const setHover = (t) => { hoverTile = t; dirty = true; };
 
 // --- main draw ---
-let lastT = performance.now(), animTime = 0;
+let lastT = performance.now(), animTime = 0, ambientT = 0, lastDraw = 0;
+const lights = []; // window glows collected while drawing, lit up at night
+export const getAnimTime = () => animTime;
 export function frame(now) {
   const dt = Math.min(0.1, (now - lastT) / 1000); lastT = now; animTime += dt;
   stepFlight(dt);
   const tileMode = cam.tw >= TILE_MODE_TW;
   const visTowns = tileMode && cam.tw >= 30 ? S.towns.filter((t) => Math.abs(sx(tileWX(t.x, t.y)) - cw / 2) < cw / 2 + t.radius * cam.tw && Math.abs(sy(tileWY(t.y)) - ch / 2) < ch / 2 + t.radius * cam.tw) : [];
   if (visTowns.length) { updateWalkers(dt, visTowns); dirty = true; }
+  L.updateWeather(dt);
+  L.updateRoads();
+  // Clouds, animals and water move gently all the time; redraw for them at up to 30 fps.
+  ambientT += dt;
+  if (ambientT >= 1 / 30) { ambientT = 0; dirty = true; }
   if (!dirty || !world.ready) return;
+  const fdt = now - lastDraw > 200 ? 0 : (now - lastDraw) / 1000; lastDraw = now;
   dirty = false;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.fillStyle = OCEAN; ctx.fillRect(0, 0, cw, ch);
+  lights.length = 0;
   if (tileMode) drawTiles(); else drawOverview();
   if (visTowns.length) drawWalkers(visTowns);
+  L.drawClouds(ctx, animTime, cam, cw, ch, sx, sy, tileMode);
+  L.drawBirds(ctx, animTime, cam, cw, ch, sx, sy);
+  if (tileMode) L.drawFalling(ctx, fdt, cw, ch, L.fallingSnow(Math.max(0, Math.min(H - 1, Math.round(cam.y / 0.25)))));
+  L.drawNight(ctx, cw, ch, lights, cam.tw);
   drawLabels(tileMode);
 }
 
@@ -211,7 +249,7 @@ function drawOverview() {
     ctx.drawImage(world.overview, dx, top, W * tw, 1000 * tw);
   }
   ctx.imageSmoothingEnabled = true;
-  // polar fade
+  L.drawOverviewSeasons(ctx, left, top, tw, cw);
   // territories
   for (const t of S.towns) {
     const x = sx(tileWX(t.x, t.y)), y = sy(tileWY(t.y));
@@ -251,6 +289,7 @@ function drawOverview() {
   for (const t of S.towns) {
     const x = sx(tileWX(t.x, t.y)), y = sy(tileWY(t.y));
     const spr = t.capital ? SPR.build.castle[S.tier] : SPR.build.townhall[0];
+    lights.push([x, y - 4, Math.min(1.6, 0.5 + t.pop / 200)]);
     const s = Math.max(0.35, Math.min(0.7, tw / 20));
     drawSprite(spr, x, y, s);
   }
@@ -285,19 +324,23 @@ function drawTiles() {
   };
 
   // Pass 1: ground
-  const tint = new Path2D(), border = new Path2D(), valid = new Path2D(), invalid = new Path2D();
+  const tint = new Path2D(), border = new Path2D(), valid = new Path2D(), invalid = new Path2D(), roadPath = new Path2D();
+  let anyRoad = false;
   let anyOwn = false;
   for (let y = yA; y <= yB; y++) {
     const off = (y & 1) * 0.5, cy = sy(tileWY(y));
     const xa = Math.floor(X0 - off - 0.5), xb = Math.ceil(X1 - off);
     const rowBase = y * W;
+    const rs = L.rowSeason(y);
     for (let x = xa; x <= xb; x++) {
       const wx = ((x % W) + W) % W;
       const b = world.biome[rowBase + wx];
       const cx = sx(x + 0.5 + off);
       if (b !== B.OCEAN) {
-        const arr = SPR.ground[b];
+        const arr = L.tileSnowy(wx, y, b, rs) && SPR.groundSnow[b] ? SPR.groundSnow[b] : SPR.ground[b];
         drawSprite(arr[(hash2(wx, y, 1) * 4) | 0], cx, cy, s);
+        const rm = b > 2 ? L.roads.get(rowBase + wx) : 0;
+        if (rm) { L.addRoad(roadPath, rm, cx, cy, hw, hh); anyRoad = true; }
       }
       if (showOwn && nearTowns.length && b > 2) {
         const o = own(wx, y);
@@ -318,6 +361,7 @@ function drawTiles() {
       }
     }
   }
+  if (anyRoad) L.strokeRoads(ctx, roadPath, tw);
   if (anyOwn) {
     ctx.fillStyle = 'rgba(255,226,150,0.10)'; ctx.fill(tint);
     if (placing) { ctx.fillStyle = 'rgba(140,255,140,0.22)'; ctx.fill(valid); }
@@ -359,12 +403,28 @@ function drawTiles() {
     const off = (y & 1) * 0.5, cy = sy(tileWY(y));
     const xa = Math.floor(X0 - off - 0.5), xb = Math.ceil(X1 - off);
     const rowBase = y * W;
+    const rs = L.rowSeason(y);
     for (let x = xa; x <= xb; x++) {
       const wx = ((x % W) + W) % W, i = rowBase + wx;
       const cx = sx(x + 0.5 + off);
       const bld = S.buildings.get(i);
       if (bld) {
+        const bt = world.biome[i];
+        if (bld.t === 'farm' && bld.p >= 1) {
+          const snowy = L.tileSnowy(wx, y, bt, rs);
+          drawSprite(snowy ? SPR.build.farmSnow[(hash2(wx, y, 3) * 2) | 0] : buildingSprite(bld, wx, y), cx, cy, s);
+          const rm = L.roads.get(i);
+          if (rm) { const p = new Path2D(); L.addRoad(p, rm, cx, cy, hw, hh); L.strokeRoads(ctx, p, tw); }
+          if (!snowy && tw >= 30) L.drawFarmAnimals(ctx, cx, cy, s, wx, y, animTime);
+          continue;
+        }
         drawSprite(buildingSprite(bld, wx, y), cx, cy, s);
+        if (bld.p >= 1 && LIT.has(bld.t)) lights.push([cx, cy - tw * 0.18, bld.t === 'lighthouse' ? 2.4 : bld.t === 'house' ? 0.8 : 1.1]);
+        if (bld.t === 'dock' && bld.p >= 1 && tw >= 24) {
+          const spot = L.dockBoatSpot(i);
+          if (spot) { const ph = hash2(wx, y, 33) * 6.28, [ox, oy, face] = L.wander(animTime * 1.5, ph, 0.3);
+            L.drawBoat(ctx, sx(tileWX(spot[0], spot[1]) + ox), sy(tileWY(spot[1]) + oy), s, animTime, ph, false, face); }
+        }
         if (bld.p < 1) {
           const bw = tw * 0.5, bh = Math.max(3, tw / 16);
           ctx.fillStyle = 'rgba(40,30,20,0.6)'; ctx.fillRect(cx - bw / 2, cy - tw * 0.42, bw, bh);
@@ -375,6 +435,7 @@ function drawTiles() {
       const nb = S.nbIndex.get(i);
       if (nb) {
         drawSprite(SPR.build.village[nb.id % 3], cx, cy, s);
+        lights.push([cx, cy - tw * 0.15, 0.9]);
         // banner in their colour
         const fx = cx + 12 * s, fy = cy - 4 * s;
         ctx.strokeStyle = '#5a4030'; ctx.lineWidth = Math.max(1, s); ctx.beginPath(); ctx.moveTo(fx, fy); ctx.lineTo(fx, fy - 22 * s); ctx.stroke();
@@ -382,12 +443,23 @@ function drawTiles() {
         continue;
       }
       const b = world.biome[i];
+      if (b <= 1) { // open water: the odd sailing ship
+        if (tw >= 24 && L.shipAt(b, wx, y)) { const ph = hash2(wx, y, 32) * 6.28, [ox, oy, face] = L.wander(animTime * 0.6, ph, 0.7);
+          L.drawBoat(ctx, sx(x + 0.5 + off + ox), cy + oy * tw, s, animTime, ph, true, face); }
+        continue;
+      }
+      if (S.zones.has(i)) continue;
       const dens = DECOR_DENSITY[b];
       if (dens && hash2(wx, y, 7) < dens) {
-        if (S.zones.has(i)) continue;
         let arr = SPR.decor[b];
         if (b === B.MOUNTAIN && hash2(wx, y, 8) < 0.3) arr = SPR.misc.snowpeak;
+        else { const sd = L.seasonalDecor(b, wx, y, rs, L.tileSnowy(wx, y, b, rs)); if (sd) arr = sd; }
         drawSprite(arr[(hash2(wx, y, 2) * arr.length) | 0], cx, cy, s);
+      }
+      if (tw >= 30) {
+        const wk = L.wildAt(b, wx, y);
+        if (wk) { const ph = hash2(wx, y, 24) * 6.28, [ox, oy, face] = L.wander(animTime * (wk === 'rabbit' ? 1.6 : 0.8), ph, 0.3);
+          L.drawAnimal(ctx, wk, cx + ox * tw, cy + oy * tw + tw * 0.06, s * (wk === 'camel' ? 1.15 : 1), face, animTime, ph); }
       }
     }
   }

@@ -1,6 +1,7 @@
 // Game state, rules and simulation.
 import { W, H, B, BIOMES, world, idxOf, wrapX, tileWX, tileWY, neighbors, biomeAt, isWater, tileLat } from './world.js';
 import { mulberry32, hash2 } from './noise.js';
+import { farmSeason, seasonIndex } from './seasons.js';
 
 export const RES = ['food', 'wood', 'stone', 'gold', 'iron'];
 export const RES_NAMES = { food: 'Food', wood: 'Wood', stone: 'Stone', gold: 'Gold', iron: 'Iron' };
@@ -392,11 +393,13 @@ function step(dd) {
   let jobs = 0; for (const t of S.towns) jobs += t.jobs;
   const eff = jobs ? Math.min(1, pop / jobs) : 1;
   const before = { ...S.res };
-  for (const b of S.buildings.values()) {
+  for (const [i, b] of S.buildings) {
     if (b.p < 1) continue;
     const d = DEFS[b.t]; if (!d.prod) continue;
+    // Fields rest in winter and give a harvest boost in late summer and autumn (stronger far from the equator).
+    const season = b.t === 'farm' ? farmSeason(S.day, tileLat(Math.floor(i / W))) : 1;
     for (const [r, v] of Object.entries(d.prod)) {
-      let amt = v * dd * PACE.prod * (b.t === 'townhall' ? 1 : eff) * (b.m || 1) * lib;
+      let amt = v * dd * PACE.prod * (b.t === 'townhall' ? 1 : eff) * (b.m || 1) * lib * season;
       if (r === 'food') amt *= gardens * (b.t === 'dock' ? lh : 1);
       if (r === 'gold') amt *= gcGold;
       S.res[r] += amt;
@@ -426,6 +429,12 @@ function step(dd) {
     if (!S.questsDone.has(q.id) && q.check()) { S.questsDone.add(q.id); gain(q.reward); emit('quest', q); }
   }
   S.day += dd;
+  const cap = S.towns.find((t) => t.capital) || S.towns[0];
+  if (cap) {
+    const si = seasonIndex(S.day, tileLat(cap.y));
+    if (S.lastSeason !== undefined && si !== S.lastSeason) emit('season', { index: si, lat: tileLat(cap.y) });
+    S.lastSeason = si;
+  }
 }
 
 // ---------------- new game / save / load ----------------

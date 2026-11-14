@@ -82,8 +82,8 @@ function crenels(g, u0, v0, u1, v1, h, col) {
 }
 
 // ---------------- ground tiles ----------------
-function groundTile(b, variant) {
-  const col = BIOMES[b].color, rnd = mulberry32(b * 101 + variant * 7 + 3);
+function groundTile(b, variant, snowy = false) {
+  const col = snowy ? [236, 241, 246] : BIOMES[b].color, under = BIOMES[b].color, rnd = mulberry32(b * 101 + variant * 7 + 3);
   return make(66, 34, 33, 17, (g) => {
     diamond(g, 32.6, 16.4);
     const k = 0.97 + variant * 0.02;
@@ -95,10 +95,10 @@ function groundTile(b, variant) {
     const dots = b === B.SNOW || b === B.SEAICE ? 10 : 22;
     for (let i = 0; i < dots; i++) {
       const x = (rnd() - 0.5) * 56, y = (rnd() - 0.5) * 26;
-      g.fillStyle = rgb(col, rnd() < 0.5 ? 0.88 : 1.1, 0.7);
+      g.fillStyle = snowy && rnd() < 0.45 ? rgb(under, 0.95, 0.75) : rgb(col, rnd() < 0.5 ? 0.88 : 1.1, 0.7);
       g.fillRect(x, y, 1.5 + rnd() * 1.5, 1 + rnd());
     }
-    if (b === B.GRASS || b === B.STEPPE || b === B.SAVANNA) {
+    if (!snowy && (b === B.GRASS || b === B.STEPPE || b === B.SAVANNA)) {
       g.strokeStyle = rgb(col, 0.8, 0.8); g.lineWidth = 0.8;
       for (let i = 0; i < 6; i++) {
         const x = (rnd() - 0.5) * 44, y = (rnd() - 0.5) * 18;
@@ -108,7 +108,7 @@ function groundTile(b, variant) {
         for (let i = 0; i < 3; i++) { g.fillStyle = ['#f4e9a8', '#f2b6c6', '#ffffff'][i]; g.fillRect((rnd() - 0.5) * 40, (rnd() - 0.5) * 16, 1.6, 1.6); }
       }
     }
-    if (b === B.DESERT) {
+    if (!snowy && b === B.DESERT) {
       g.strokeStyle = rgb(col, 0.86); g.lineWidth = 1;
       for (let i = 0; i < 3; i++) { const y = -8 + i * 7 + rnd() * 3, x = (rnd() - 0.5) * 20; g.beginPath(); g.moveTo(x - 14, y + 2); g.quadraticCurveTo(x, y - 3, x + 14, y + 2); g.stroke(); }
     }
@@ -169,9 +169,30 @@ function tree(g, x, y, s, kind, rnd) {
     g.moveTo(x, y - 5 * s); g.lineTo(x + 3 * s, y - 6 * s); g.lineTo(x + 3 * s, y - 8 * s); g.stroke();
     return;
   }
-  // round deciduous tree
+  if (kind === 'bare' || kind === 'baresnow') {
+    // winter tree: trunk and branches, with snow resting on top when snowy
+    g.strokeStyle = '#6b4a32'; g.lineWidth = 1.5 * s;
+    g.beginPath(); g.moveTo(x, y); g.lineTo(x, y - 9 * s);
+    g.moveTo(x, y - 5 * s); g.lineTo(x - 4 * s, y - 10 * s); g.moveTo(x, y - 6 * s); g.lineTo(x + 4.5 * s, y - 11 * s);
+    g.moveTo(x, y - 9 * s); g.lineTo(x - 1.5 * s, y - 13 * s); g.moveTo(x, y - 8 * s); g.lineTo(x + 2 * s, y - 13.5 * s); g.stroke();
+    g.lineWidth = 0.7 * s; g.strokeStyle = '#7d5a40';
+    g.beginPath(); g.moveTo(x - 3 * s, y - 8.5 * s); g.lineTo(x - 5.5 * s, y - 9 * s); g.moveTo(x + 3.5 * s, y - 9.5 * s); g.lineTo(x + 6 * s, y - 9.5 * s); g.stroke();
+    if (kind === 'baresnow') {
+      g.fillStyle = '#f4f7fa';
+      for (const [dx, dy, r] of [[-4, -10.4, 1.6], [4.5, -11.4, 1.7], [-1.5, -13.4, 1.3], [2, -13.9, 1.3], [0, -9.4, 1.2]]) {
+        g.beginPath(); g.ellipse(x + dx * s, y + dy * s, r * s, r * 0.55 * s, 0, Math.PI, 0); g.fill();
+      }
+    }
+    return;
+  }
+  // round deciduous tree (summer green, autumn colours or spring blossom)
   g.fillStyle = '#6b4a32'; g.fillRect(x - 0.9 * s, y - 4 * s, 1.8 * s, 4 * s);
-  const base = [[96, 148, 72], [84, 136, 64], [110, 156, 76], [168, 150, 70]][Math.floor(rnd() * (rnd() < 0.08 ? 4 : 3))];
+  const PAL = {
+    autumn: [[214, 128, 52], [196, 84, 48], [226, 172, 62], [176, 112, 52]],
+    blossom: [[242, 196, 214], [250, 226, 234], [234, 172, 198], [246, 210, 222]],
+  };
+  const base = PAL[kind] ? PAL[kind][Math.floor(rnd() * 4)]
+    : [[96, 148, 72], [84, 136, 64], [110, 156, 76], [168, 150, 70]][Math.floor(rnd() * (rnd() < 0.08 ? 4 : 3))];
   g.fillStyle = rgb(base, 0.85); g.beginPath(); g.arc(x, y - 8 * s, 5.6 * s, 0, Math.PI * 2); g.fill();
   g.fillStyle = rgb(base, 1); g.beginPath(); g.arc(x - 1.2 * s, y - 9 * s, 4.4 * s, 0, Math.PI * 2); g.fill();
   g.fillStyle = rgb(base, 1.18); g.beginPath(); g.arc(x - 2 * s, y - 10.5 * s, 2 * s, 0, Math.PI * 2); g.fill();
@@ -201,16 +222,16 @@ function mountain(variant, snowy) {
     }
   });
 }
-function hills(variant) {
+function hills(variant, snowy = false) {
   const rnd = mulberry32(variant * 17 + 5);
   return make(70, 50, 35, 34, (g) => {
     const hs = [[-10 + rnd() * 6, -2, 13], [9 + rnd() * 4, 3, 11]];
     for (const [x, y, r] of hs) {
-      const gr = g.createLinearGradient(x - r, 0, x + r, 0); gr.addColorStop(0, '#b0ad74'); gr.addColorStop(1, '#7f7c52');
+      const gr = g.createLinearGradient(x - r, 0, x + r, 0); gr.addColorStop(0, snowy ? '#f2f5f8' : '#b0ad74'); gr.addColorStop(1, snowy ? '#c4ccd6' : '#7f7c52');
       g.fillStyle = gr; g.beginPath(); g.ellipse(x, y, r, r * 0.75, 0, Math.PI, 0); g.closePath(); g.fill();
       g.fillStyle = 'rgba(255,255,255,0.12)'; g.beginPath(); g.ellipse(x - r * 0.3, y - r * 0.45, r * 0.35, r * 0.18, 0, 0, Math.PI * 2); g.fill();
     }
-    if (rnd() < 0.5) tree(g, 2, 9, 0.7, 'round', rnd);
+    if (rnd() < 0.5) tree(g, 2, 9, 0.7, snowy ? 'baresnow' : 'round', rnd);
   });
 }
 function rocks(variant, snowy) {
@@ -237,7 +258,14 @@ function cottage(g, du, dv, s, roof, rnd) {
   gable(g, u0, v0, u1, v1, 8, 7, roof);
   if (rnd() < 0.6) { const [cx, cy] = P(u0 + s * 0.25, (v0 + v1) / 2, 13); g.fillStyle = '#8c6e5a'; g.fillRect(cx - 1.2, cy - 4, 2.4, 4); }
 }
-function field(g, rnd) {
+function field(g, rnd, snowy = false) {
+  if (snowy) {
+    g.save(); diamond(g, 29, 14.5); g.clip();
+    g.fillStyle = '#eef2f6'; g.fillRect(-32, -16, 64, 32);
+    for (let k = -8; k < 8; k++) { g.strokeStyle = 'rgba(150,130,110,0.35)'; g.lineWidth = 1.2; const [ax, ay] = P(0, k / 8 + 0.5 / 8), [bx, by] = P(1, k / 8 + 0.5 / 8); g.beginPath(); g.moveTo(ax, ay); g.lineTo(bx, by); g.stroke(); }
+    g.restore(); diamond(g, 29, 14.5); g.strokeStyle = 'rgba(110,80,50,0.45)'; g.lineWidth = 1; g.stroke();
+    return;
+  }
   g.save(); diamond(g, 29, 14.5); g.clip();
   const crops = [['#d9b44a', '#c79a36'], ['#9bbd5a', '#7fa046'], ['#c8c060', '#a8a048']][Math.floor(rnd() * 3)];
   g.fillStyle = '#8a6a44'; g.fillRect(-32, -16, 64, 32);
@@ -258,6 +286,7 @@ function buildingSprites() {
     if (v % 2) { cottage(g, -0.17, -0.12, 0.36, ROOFS[v], rnd); cottage(g, 0.16, 0.2, 0.34, ROOFS[(v + 2) % 5], rnd); }
     else { cottage(g, 0, 0, 0.5, ROOFS[v], rnd); g.fillStyle = '#7aa04a'; g.beginPath(); g.arc(18, 4, 3, 0, 7); g.fill(); }
   }));
+  S.farmSnow = [0, 1].map((v) => frame((g) => field(g, mulberry32(v + 3), true)));
   S.farm = [0, 1, 2].map((v) => frame((g) => {
     const rnd = mulberry32(v * 5 + 11);
     field(g, rnd);
@@ -460,6 +489,35 @@ export function buildSprites() {
   D[B.MOUNTAIN] = [0, 1, 2, 3].map((v) => mountain(v, false));
   SPR.misc.snowpeak = [0, 1, 2].map((v) => mountain(v, true));
   buildingSprites();
+  // ---- seasonal variants ----
+  SPR.groundSnow = [];
+  for (const b of [B.GRASS, B.STEPPE, B.FOREST, B.TAIGA, B.HILLS, B.TUNDRA, B.DESERT, B.SAVANNA, B.JUNGLE]) SPR.groundSnow[b] = [0, 1, 2, 3].map((v) => groundTile(b, v, true));
+  const seasonal = (kind, base, nFor) => [0, 1, 2, 3, 4, 5].map((v) => treeCluster(kind, v + base, nFor(v)));
+  SPR.season = {
+    forest: { autumn: seasonal('autumn', 0, (v) => 4 + (v % 3)), blossom: seasonal('blossom', 0, (v) => 4 + (v % 3)), bare: seasonal('bare', 0, (v) => 4 + (v % 3)), snow: seasonal('baresnow', 0, (v) => 4 + (v % 3)) },
+    grass: { autumn: seasonal('autumn', 10, (v) => 1 + (v % 2)), blossom: seasonal('blossom', 10, (v) => 1 + (v % 2)), bare: seasonal('bare', 10, (v) => 1 + (v % 2)), snow: seasonal('baresnow', 10, (v) => 1 + (v % 2)) },
+    taigaSnow: [0, 1, 2, 3].map((v) => treeCluster('snowpine', v + 20, 4 + (v % 3))),
+    hillsSnow: [0, 1, 2, 3].map((v) => hills(v, true)),
+    rocksSnow: [0, 1].map((v) => rocks(v, true)),
+  };
+  // soft clouds and a warm lamplight glow
+  SPR.clouds = [0, 1, 2, 3].map((v) => {
+    const rnd = mulberry32(v * 13 + 7), c = document.createElement('canvas'); c.width = 256; c.height = 128;
+    const g = c.getContext('2d');
+    for (let i = 0; i < 9; i++) {
+      const x = 50 + rnd() * 156, y = 50 + rnd() * 34, r = 26 + rnd() * 26;
+      const gr = g.createRadialGradient(x, y, 2, x, y, r);
+      gr.addColorStop(0, 'rgba(255,255,255,0.95)'); gr.addColorStop(0.6, 'rgba(255,255,255,0.7)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+      g.fillStyle = gr; g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
+    }
+    return c;
+  });
+  SPR.glow = (() => {
+    const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d');
+    const gr = g.createRadialGradient(32, 32, 1, 32, 32, 32);
+    gr.addColorStop(0, 'rgba(255,214,140,0.9)'); gr.addColorStop(0.25, 'rgba(255,184,96,0.35)'); gr.addColorStop(1, 'rgba(255,160,60,0)');
+    g.fillStyle = gr; g.fillRect(0, 0, 64, 64); return c;
+  })();
   SPR.misc.zone = {};
   SPR.misc.zone.housing = zoneMarker('#e8a25a');
   SPR.misc.zone.farmland = zoneMarker('#d6c75a');

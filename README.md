@@ -20,6 +20,9 @@ there are no timers, and you can pause whenever you like.
 - **Pip the messenger bird** guides your first few steps: zoning fields and homes, then building a Lumber Camp. You can skip the guide at any time.
 - **Three save slots**, so you can keep realms in different places on Earth. Each autosaves on the device.
 - Goals are tucked into a 📜 scroll button that shows a badge when you finish one.
+- **A living world**: a gentle day and night cycle about every 5 minutes of play, with window glow in town at night. Seasons follow each hemisphere. Snow spreads and melts tile by tile, woods turn gold in autumn, and blossom opens in spring. Fields rest in winter and give a harvest boost in late summer and autumn.
+- **Wildlife and weather**: sheep, cows and chickens on the farms. Deer, reindeer, rabbits, gazelles and camels in the wild. Flocks of birds, fishing boats and sailing ships. Drifting clouds with shadows, showers with soft rain sound, snowfall in winter, and crickets at night.
+- **Roads** form by themselves from each building to its town hall, and villagers walk along them.
 - Works in portrait and landscape.
 
 ## Tuned for the Galaxy S26 Ultra
@@ -56,6 +59,9 @@ cd android && ./gradlew assembleDebug
 | `web/js/render.js` | Isometric tile renderer plus atlas overview at far zoom, borders, villagers |
 | `web/js/sprites.js` | All art, drawn in code |
 | `web/js/ui.js` | HUD, menus, modes and the start flow |
+| `web/js/seasons.js` | Seasons per hemisphere, day and night |
+| `web/js/life.js` | Weather, clouds, birds, animals, boats, roads, night lighting |
+| `web/js/tutorial.js` | Pip the messenger bird's first-time guide |
 | `web/js/audio.js` | Generative music, nature sounds, sound effects, haptics |
 | `android-overrides/MainActivity.java` | Full screen and Back gesture handling, copied into the Android project at build time |
 

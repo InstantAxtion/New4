@@ -6,7 +6,8 @@ import { initRender, frame, cam, clampCam, markDirty } from './render.js';
 import { initInput } from './input.js';
 import { initUI, showTitle, setMode } from './ui.js';
 import { initTutorial, updateTutorial } from './tutorial.js';
-import { sfx } from './audio.js';
+import { sfx, setAmbience } from './audio.js';
+import { buildSnowMasks, daylight, weather } from './life.js';
 
 const $ = (s) => document.querySelector(s);
 const progress = (p, msg) => { $('#loadfill').style.width = `${Math.round(p * 100)}%`; if (msg) $('#loadmsg').textContent = msg; };
@@ -19,6 +20,7 @@ async function boot() {
   await new Promise((r) => setTimeout(r, 30));
   buildSprites();
   await generateWorld(progress);
+  buildSnowMasks();
   const canvas = $('#map');
   initRender(canvas);
   const keyPan = initInput(canvas);
@@ -34,6 +36,7 @@ async function boot() {
     update(dt);
     frame(now);
     updateTutorial();
+    if (S.started) setAmbience(daylight().n, weather.rain);
     requestAnimationFrame(loop);
   };
   requestAnimationFrame(loop);
