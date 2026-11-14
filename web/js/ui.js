@@ -170,6 +170,7 @@ export function updateHUD() {
   const ps = pe.querySelector('small'); ps.textContent = '/' + totalCap(); ps.className = S.fed ? 'flat' : 'down';
   const y = Math.floor(S.day / 48) + 1, season = ['Spring', 'Summer', 'Autumn', 'Winter'][Math.floor((S.day % 48) / 12)];
   $('#date').textContent = `Year ${y} · ${season} ${Math.floor(S.day % 12) + 1}`;
+  $('#date2').textContent = $('#date').textContent;
   document.querySelectorAll('#speed button').forEach((b) => b.classList.toggle('on', +b.dataset.speed === S.speed));
   renderQuests();
 }
@@ -480,6 +481,7 @@ function beginRealm() {
 export function enterGame(fresh) {
   $('#title').classList.add('hidden');
   $('#hud').classList.remove('hidden');
+  requestAnimationFrame(() => window.measureHUD && window.measureHUD());
   questSig = '';
   updateHUD();
   const c = S.towns.find((t) => t.capital) || S.towns[0];
@@ -491,6 +493,15 @@ export function enterGame(fresh) {
 // ---------------- wiring ----------------
 export function initUI() {
   buildHUD();
+  // Keep goals and notifications just below the top bar, however tall it gets
+  // (system font size and display zoom on Samsung phones can make it wrap taller).
+  const measure = () => {
+    const r = $('#topbar').getBoundingClientRect();
+    if (r.height) document.documentElement.style.setProperty('--hud-bottom', `${Math.round(r.bottom)}px`);
+  };
+  if (window.ResizeObserver) new ResizeObserver(measure).observe($('#topbar'));
+  window.addEventListener('resize', measure);
+  window.measureHUD = measure;
   for (const el of [$('#sheet'), $('#modebar')]) {
     el.addEventListener('pointerdown', () => { touchingUI = true; });
     const release = () => { setTimeout(() => { touchingUI = false; }, 60); };

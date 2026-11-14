@@ -67,15 +67,21 @@ input.text { width: 100%; padding: 12px 14px; border-radius: 12px; border: 2px s
 #speed button { min-width: 34px; height: 30px; border-radius: 8px; font-weight: 700; font-size: 13px; color: var(--ink-soft); }
 #speed button.on { background: var(--accent); color: #fff; }
 
+#date2 { display: none; font-size: 11px; color: var(--ink-soft); font-weight: 600; white-space: nowrap; }
+@media (max-width: 720px) and (orientation: portrait) {
+  #date { display: none; }
+  #date2 { display: block; }
+  #realm { flex: 1 1 0; }
+  #timebox { flex: none; }
+}
 @media (max-width: 720px) {
   #realm { flex: 1 1 auto; }
   #resbar { order: 3; flex-basis: 100%; }
   #realmname { max-width: 46vw; }
 }
 
-#quests { position: absolute; left: calc(8px + var(--sal)); top: calc(118px + var(--sat)); width: min(280px, 64vw);
+#quests { position: absolute; left: calc(8px + var(--sal)); top: calc(var(--hud-bottom, calc(118px + var(--sat))) + 8px); width: min(280px, 64vw);
   background: var(--paper); border-radius: 14px; box-shadow: var(--shadow); padding: 7px 10px; font-size: 13px; cursor: pointer; }
-@media (min-width: 721px) { #quests { top: calc(70px + var(--sat)); } }
 #quests h3 { font-size: 14px; display: flex; gap: 6px; align-items: center; }
 #quests .qic { font-size: 15px; }
 #quests .qtop { display: none; flex: 1; min-width: 0; font-family: system-ui, sans-serif; font-weight: 600; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -171,8 +177,7 @@ body.moding #bottombar, body.moding #quests, body.moding #zoomctl { display: non
 .chips button.on { background: var(--accent); color: #fff; }
 
 /* ---------- toasts ---------- */
-#toasts { position: fixed; z-index: 40; top: calc(64px + var(--sat)); left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 6px; align-items: center; pointer-events: none; width: min(440px, 92vw); }
-@media (max-width: 720px) { #toasts { top: calc(112px + var(--sat)); } }
+#toasts { position: fixed; z-index: 40; top: calc(var(--hud-bottom, calc(112px + var(--sat))) + 8px); left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 6px; align-items: center; pointer-events: none; width: min(440px, 92vw); }
 .toast { background: rgba(61, 50, 41, 0.92); color: #fff6e4; padding: 9px 16px; border-radius: 14px; font-weight: 600; font-size: 14px; box-shadow: var(--shadow); animation: tin 0.3s ease-out, tout 0.5s ease-in 3.2s forwards; text-align: center; }
 .toast.big { background: linear-gradient(135deg, #c0603e, #d9a440); font-size: 16px; padding: 12px 20px; }
 @keyframes tin { from { transform: translateY(-10px); opacity: 0; } }
@@ -202,7 +207,7 @@ body.moding #bottombar, body.moding #quests, body.moding #zoomctl { display: non
   .mlabel { flex-direction: column; font-size: 11px; white-space: normal; text-align: center; max-width: 70px; }
   #zoomctl { right: calc(6px + var(--sar)); top: calc(50% + 18px); gap: 5px; }
   #zoomctl button { width: 36px; height: 36px; font-size: 19px; border-radius: 11px; }
-  #toasts { top: calc(44px + var(--sat)); }
+  #toasts { top: calc(var(--hud-bottom, calc(44px + var(--sat))) + 6px); }
   .toast { font-size: 13px; padding: 6px 12px; }
   .toast.big { font-size: 14px; padding: 8px 14px; }
   #startbar { width: min(460px, calc(100% - 16px)); padding: 8px; gap: 4px; }
