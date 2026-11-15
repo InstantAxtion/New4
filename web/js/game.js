@@ -23,6 +23,10 @@ export const DEFS = {
   house: { name: 'Cottages', zone: 'housing', cost: { wood: 8 }, cap: 6, time: 2, tier: 0 },
   farm: { name: 'Farm Fields', zone: 'farmland', cost: { wood: 6 }, prod: { food: 1.4 }, jobs: 2, time: 1.5, tier: 0 },
   workshop: { name: 'Workshop', zone: 'workshop', cost: { wood: 12, stone: 6 }, prod: { gold: 0.8 }, jobs: 3, time: 3, tier: 1 },
+  pasture: { name: 'Pasture', zone: 'pasture', cost: { wood: 5 }, prod: { food: 0.7, cloth: 0.06 }, jobs: 1, time: 1.2, tier: 0 },
+  woodlot: { name: 'Woodlot', zone: 'woodlot', cost: { food: 4 }, prod: { wood: 0.55 }, jobs: 1, time: 1.5, tier: 0 },
+  park: { name: 'Park', zone: 'park', cost: { wood: 6, stone: 4 }, time: 1.2, tier: 0, mood: 1 },
+  shops: { name: 'Shops', zone: 'shops', cost: { wood: 14, stone: 8 }, prod: { gold: 0.7 }, jobs: 2, time: 3, tier: 2 },
   lumber: { name: 'Lumber Camp', cost: { wood: 10 }, prod: { wood: 1.5 }, jobs: 2, time: 2, tier: 0, desc: 'Build on or beside woodland, taiga or jungle.' },
   dock: { name: 'Fishing Dock', cost: { wood: 12 }, prod: { food: 1.6 }, jobs: 2, time: 2, tier: 0, desc: 'Build on land touching the water.' },
   quarry: { name: 'Quarry', cost: { wood: 15 }, prod: { stone: 1 }, jobs: 3, time: 3, tier: 0, desc: 'Works anywhere; full output near hills, mountains or rocky ground, half elsewhere.' },
@@ -83,10 +87,10 @@ export const SPECS = {
   learning: { name: 'Learning', icon: '📖', desc: 'Villagers learn twice as fast, and the town is happier.' },
 };
 const SPEC_OF = {
-  farm: 'farming', dock: 'farming', apiary: 'farming', riceterrace: 'farming', icehut: 'farming', oasis: 'farming', orchard: 'farming', vineyard: 'farming',
-  workshop: 'crafts', bakery: 'crafts', brewery: 'crafts', weaver: 'crafts', smithy: 'crafts',
+  farm: 'farming', pasture: 'farming', dock: 'farming', apiary: 'farming', riceterrace: 'farming', icehut: 'farming', oasis: 'farming', orchard: 'farming', vineyard: 'farming',
+  workshop: 'crafts', shops: 'trade', bakery: 'crafts', brewery: 'crafts', weaver: 'crafts', smithy: 'crafts',
   market: 'trade', harbour: 'trade', townhall: 'trade', cacao: 'trade',
-  lumber: 'industry', quarry: 'industry', mine: 'industry',
+  lumber: 'industry', woodlot: 'industry', quarry: 'industry', mine: 'industry',
 };
 export const SPEC_TIER = 1, SPEC_CHANGE_COST = { gold: 100 };
 export function specMult(t, type) {
@@ -157,7 +161,7 @@ export function openRoute(a, b) {
 export const MOODS = [{ name: 'Content', face: '🙂' }, { name: 'Happy', face: '😊' }, { name: 'Joyful', face: '😄' }];
 const MOOD_SOURCES = [
   ['well', 'A well', 1], ['apiary', 'Honey from the apiary', 1], ['windmill', 'The windmill', 1], ['chapel', 'A chapel', 2],
-  ['tavern', 'A tavern', 1], ['school', 'A school', 1],
+  ['tavern', 'A tavern', 1], ['school', 'A school', 1], ['park', 'A park', 1],
   ['vineyard', 'Their vineyard', 1], ['oasis', 'The oasis garden', 1], ['cacao', 'The cacao grove', 1], ['orchard', 'The orchard', 1],
 ];
 export function moodOf(t) {
@@ -228,7 +232,11 @@ export const ALL_WONDERS = [...WONDERS, 'monastery', 'bridge', 'observatory', 'd
 export const ZONES = {
   housing: { name: 'Housing', builds: 'house', color: '#f07a48' },
   farmland: { name: 'Farmland', builds: 'farm', color: '#e6cf3a' },
+  pasture: { name: 'Pasture', builds: 'pasture', color: '#7cc464' },
+  woodlot: { name: 'Woodlot', builds: 'woodlot', color: '#2f8a5a' },
+  park: { name: 'Park', builds: 'park', color: '#e88ac0' },
   workshop: { name: 'Workshops', builds: 'workshop', color: '#8a7ef0' },
+  shops: { name: 'Shops', builds: 'shops', color: '#40a8d8' },
 };
 
 const BUILDABLE = new Set([B.GRASS, B.FOREST, B.JUNGLE, B.DESERT, B.SAVANNA, B.TUNDRA, B.TAIGA, B.HILLS, B.STEPPE]);

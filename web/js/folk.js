@@ -20,7 +20,7 @@ const NAMES = {
     l: ['Chen', 'Sato', 'Kim', 'Wang', 'Tanaka', 'Li', 'Park', 'Zhang', 'Suzuki', 'Liu', 'Choi', 'Mori'] },
 };
 export const JOBS = {
-  farm: 'Farmer', lumber: 'Woodcutter', quarry: 'Stonecutter', mine: 'Miner', dock: 'Fisher', workshop: 'Craftsperson', market: 'Merchant',
+  farm: 'Farmer', pasture: 'Shepherd', woodlot: 'Forester', shops: 'Shopkeeper', lumber: 'Woodcutter', quarry: 'Stonecutter', mine: 'Miner', dock: 'Fisher', workshop: 'Craftsperson', market: 'Merchant',
   harbour: 'Sailor', tower: 'Lookout', bakery: 'Baker', brewery: 'Brewer', weaver: 'Weaver', smithy: 'Smith', tavern: 'Innkeeper',
   chapel: 'Chapel keeper', school: 'Teacher', apiary: 'Beekeeper', windmill: 'Miller', vineyard: 'Vintner', riceterrace: 'Rice grower',
   icehut: 'Ice fisher', stable: 'Stablehand', yard: 'Builder', oasis: 'Gardener', cacao: 'Cacao grower', orchard: 'Orchard keeper',

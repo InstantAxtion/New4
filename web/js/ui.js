@@ -13,6 +13,7 @@ import { tutorialActive, hint } from './tutorial.js';
 import { ageOf, fullName, personById, JOBS, thought, petOf } from './folk.js';
 import { walkerAt, clearTransient } from './render.js';
 import { scatterBirds } from './alive.js';
+import { stepTile } from './life.js';
 import * as XP from './explore.js';
 import * as ST from './stories.js';
 import * as RC from './records.js';
@@ -117,6 +118,7 @@ export function setMode(mode, background = false) {
     html = `<div class="mlabel"><span>Pick land for settlers</span></div><div class="cost">${costChips(FOUND_COST)}</div>`;
   }
   html += `<button class="tool done" data-act="cancelmode"><span class="ic">✓</span>Done</button>`;
+  bar.classList.toggle('zones', mode.kind === 'zone');
   if (!(background && touchingUI)) setHTML(bar, html); // a background refresh never redraws under a finger
   bar.classList.remove('hidden');
   markDirty(); highlightBottom();
@@ -377,7 +379,7 @@ function showMenu() {
   openSheet('menu', () => head('Menu', 'Hearthlands')
     + settingsHTML('data-act="set" data-arg')
     + `<div class="section"><h3>How to play</h3><div class="note">
-      • <b>Zones</b>: paint Housing for homes, Farmland for food and Workshops for gold. Villagers build them over time. <b>Road</b> paints free roads, and <b>Erase</b> clears zones and roads.<br>
+      • <b>Zones</b>: paint Housing for homes, Farmland and Pastures for food, Woodlots for timber, Parks for happier towns, and Workshops and Shops for gold. Villagers build them over time. <b>Road</b> paints free roads, and <b>Erase</b> clears zones and roads.<br>
       • <b>Build</b>: place Lumber Camps by woods, Quarries and Mines by hills, Docks on the shore.<br>
       • Your border grows as your town grows. Watchtowers push it further.<br>
       • Trade with nearby villages and send gifts. Close friends may join your kingdom.<br>
@@ -623,12 +625,20 @@ export function handleTap(px, py) {
     if (tx > free - 30) panBy(tx - free / 2, 0);
   }
 }
-let lastPaint = null;
+let lastPaint = null, lastRoad = null;
 export function paintAt(tile, erase = false) {
   if (!M.mode || M.mode.kind !== 'zone' || !tile) return;
   const zone = erase ? 'erase' : M.mode.zone;
   const key = tile.x + ',' + tile.y + zone; if (key === lastPaint) return; lastPaint = key;
-  if (setZone(zone, tile.x, tile.y)) { sfx(zone === 'erase' ? 'tap' : 'place'); haptic(); }
+  // Roads: tiles that only touch at a corner get a joining tile, so a painted road is always one connected line.
+  if (zone === 'road' && lastRoad && !(lastRoad.x === tile.x && lastRoad.y === tile.y)) {
+    const nb = (t) => [0, 1, 2, 3].map((d) => stepTile(t.x, t.y, d)).map(([x, y]) => ((x % W) + W) % W + ',' + y);
+    const a = nb(lastRoad), b = new Set(nb(tile)), me = tile.x + ',' + tile.y;
+    if (!a.includes(me)) { const j = a.find((k) => b.has(k)); if (j) { const [jx, jy] = j.split(',').map(Number); setZone('road', jx, jy); } }
+  }
+  const ok = setZone(zone, tile.x, tile.y);
+  if (zone === 'road') lastRoad = ok || S.proads.has(idxOf(tile.x, tile.y)) ? { x: tile.x, y: tile.y } : null;
+  if (ok) { sfx(zone === 'erase' ? 'tap' : 'place'); haptic(); }
 }
 // Android back gesture: close whatever is open; returns false when nothing was.
 window.hlBack = () => {
@@ -636,7 +646,7 @@ window.hlBack = () => {
   if (sheetKind) { closeSheet(); return true; }
   return false;
 };
-export const endPaint = () => { lastPaint = null; };
+export const endPaint = () => { lastPaint = null; lastRoad = null; };
 
 // ---------------- title & start ----------------
 const tierNames = ['Hamlet', 'Village', 'Town', 'City', 'Kingdom'];
@@ -690,7 +700,7 @@ function menuPage(page) {
   } else if (page === 'help') {
     html = mhead('How to Play') + `<div class="helptext">
       <p>Pick any spot on Earth and grow a hamlet into a kingdom. There is no way to lose, so take your time.</p>
-      <h3>🌾 Zones</h3>Paint <b>Housing</b>, <b>Farmland</b> and <b>Workshops</b>. Your builders put them up one by one. A Builder's Yard adds more crews. The <b>Road</b> tool lays roads for free wherever you like.
+      <h3>🌾 Zones</h3>Paint <b>Housing</b>, <b>Farmland</b>, <b>Pasture</b>, <b>Woodlot</b>, <b>Park</b>, <b>Workshops</b> and <b>Shops</b>. Your builders put them up one by one. A Builder's Yard adds more crews. The <b>Road</b> tool lays roads for free wherever you like.
       <h3>🔨 Build</h3>Place key buildings yourself: lumber camps by woods, quarries and mines by hills, docks on shores and rivers. Everyday buildings like wells, taverns and schools make towns happier.
       <h3>😊 Mood</h3>Happy towns attract families faster. Tap a town hall to see what would help.
       <h3>🏡 Folk</h3>Everyone has a name, a family, a trade and sometimes a pet. Tap anyone walking about to meet them.

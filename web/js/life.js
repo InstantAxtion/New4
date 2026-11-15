@@ -122,7 +122,7 @@ function rollWeather() {
   weather.rainTarget = weather.kind === 'rain' ? 1 : 0;
 }
 export function updateWeather(dt) {
-  if (S.settings.noweather) { weather.kind = 'clear'; weather.coverTarget = 0.22; weather.rainTarget = 0; weather.until = 0; }
+  if (S.settings.noweather) { weather.kind = 'clear'; weather.coverTarget = 0.22; weather.rainTarget = 0; weather.rain = 0; weather.until = 0; }
   else if (S.day >= weather.until || weather.until - S.day > 10) rollWeather();
   const k = Math.min(1, dt * 0.25);
   weather.cover += (weather.coverTarget - weather.cover) * k;
@@ -302,11 +302,11 @@ export function wander(t, ph, range = 0.22) {
   const ox = Math.sin(t * 0.11 + ph) * range, oy = Math.cos(t * 0.083 + ph * 1.7) * range * 0.35;
   return [ox, oy, Math.cos(t * 0.11 + ph) >= 0 ? 1 : -1];
 }
-export function drawFarmAnimals(ctx, x, y, s, wx, wy, t) {
+export function drawFarmAnimals(ctx, x, y, s, wx, wy, t, pasture = false) {
   const h = hash2(wx, wy, 21);
-  if (h > 0.6) return;
-  const kind = h < 0.22 ? 'sheep' : h < 0.36 ? 'cow' : h < 0.46 ? 'horse' : 'chicken';
-  const n = kind === 'chicken' ? 4 : kind === 'sheep' ? 3 : 2;
+  if (h > 0.6 && !pasture) return;
+  const kind = pasture ? (h < 0.65 ? 'sheep' : 'cow') : h < 0.22 ? 'sheep' : h < 0.36 ? 'cow' : h < 0.46 ? 'horse' : 'chicken';
+  const n = kind === 'chicken' ? 4 : kind === 'sheep' ? (pasture ? 4 : 3) : 2;
   for (let i = 0; i < n; i++) {
     const ph = hash2(wx + i, wy, 22) * 6.28;
     const [ox, oy, face] = wander(t * (kind === 'chicken' ? 2 : 1), ph, 0.16);
@@ -398,8 +398,22 @@ export function updateRoads() {
     const hall = idxOf(t.x, t.y), R = (t.radius + 2) ** 2;
     // Cheapest paths outward from the hall: existing streets are cheapest, then open ground,
     // then zoned-but-unbuilt tiles (streets may claim those). Buildings are never crossed.
-    const cost = (i) => (prevRoads.has(i) || S.proads.has(i) ? 1 : S.zones.has(i) ? 5 : 2);
     const passable = (i, x, y) => i === hall || (!S.buildings.has(i) && world.biome[i] > 2 && !nbExtraHas(i) && groundD2(x, y, t.x, t.y) <= R);
+    // Main streets: a short straight street out of each side of the hall, kept free from the start,
+    // so a town always has a tidy square and its hall is never walled in.
+    const spine = new Set(), mainLen = Math.min(4, 2 + Math.floor(t.radius / 3));
+    for (let d = 0; d < 4; d++) {
+      let x = t.x, y = t.y, prev = hall;
+      for (let k = 0; k < mainLen; k++) {
+        const [nx, ny] = stepTile(x, y, d); if (ny < 1 || ny >= H - 1) break;
+        const ni = idxOf(nx, ny);
+        if (!passable(ni, nx, ny) || world.river[ni]) break;
+        spine.add(ni); if (S.zones.has(ni)) S.zones.delete(ni);
+        mark(prev, d, t.id); mark(ni, OPP[d], t.id);
+        x = nx; y = ny; prev = ni;
+      }
+    }
+    const cost = (i) => (spine.has(i) || prevRoads.has(i) || S.proads.has(i) ? 1 : S.zones.has(i) ? 5 : 2);
     const dist = new Map([[hall, 0]]), parent = new Map([[hall, -1]]), pdir = new Map();
     const buckets = [[hall]];
     for (let c = 0; c < buckets.length; c++) {
@@ -411,7 +425,7 @@ export function updateRoads() {
           const [nx, ny] = stepTile(x, y, d); if (ny < 1 || ny >= H - 1) continue;
           const ni = idxOf(nx, ny);
           if (!passable(ni, nx, ny)) continue;
-          const nd = c + cost(ni);
+          const nd = c + cost(ni) + (pdir.has(i) && pdir.get(i) !== d ? 1 : 0); // turns cost a little, so streets run straight
           if (dist.has(ni) && dist.get(ni) <= nd) continue;
           dist.set(ni, nd); parent.set(ni, i); pdir.set(ni, d);
           (buckets[nd] ||= []).push(ni);
@@ -468,21 +482,40 @@ export function setExtraLookup(f) { nbExtraHas = f; }
 
 // Edge midpoints for each direction, as fractions of (half width, half height).
 const EDGE = [[0.5, 0.5], [-0.5, -0.5], [-0.5, 0.5], [0.5, -0.5]];
+// One tile of road: straight runs and crossings go through the centre, bends curve smoothly from edge to edge.
 export function addRoad(path, mask, cx, cy, hw, hh) {
-  for (let d = 0; d < 4; d++) if (mask & (1 << d)) { path.moveTo(cx, cy); path.lineTo(cx + EDGE[d][0] * hw, cy + EDGE[d][1] * hh); }
-  if (mask === 16) { path.moveTo(cx - hw * 0.15, cy); path.lineTo(cx + hw * 0.15, cy); } // a lone painted road tile
-}
-export function strokeRoads(ctx, path, tw, paved = false) {
-  ctx.lineCap = 'round';
-  if (paved) {
-    ctx.strokeStyle = 'rgba(90,86,80,0.6)'; ctx.lineWidth = tw * 0.19; ctx.stroke(path);
-    ctx.strokeStyle = 'rgba(196,190,178,0.98)'; ctx.lineWidth = tw * 0.14; ctx.stroke(path);
-    ctx.setLineDash([tw * 0.03, tw * 0.045]); ctx.strokeStyle = 'rgba(140,134,124,0.55)'; ctx.lineWidth = tw * 0.1; ctx.stroke(path); ctx.setLineDash([]);
-  } else {
-    ctx.strokeStyle = 'rgba(120,92,60,0.55)'; ctx.lineWidth = tw * 0.17; ctx.stroke(path);
-    ctx.strokeStyle = 'rgba(206,176,128,0.95)'; ctx.lineWidth = tw * 0.12; ctx.stroke(path);
+  if (mask === 16) { path.moveTo(cx - hw * 0.12, cy); path.lineTo(cx + hw * 0.12, cy); return; } // a lone painted road tile
+  const m = mask & 15;
+  // exactly two directions that are not opposite (0/1 and 2/3 are opposites): a bend
+  if (m === 5 || m === 6 || m === 9 || m === 10) {
+    const a = m & 3 ? (m & 1 ? 0 : 1) : 0, b = m & 4 ? 2 : 3;
+    path.moveTo(cx + EDGE[a][0] * hw, cy + EDGE[a][1] * hh);
+    path.quadraticCurveTo(cx, cy, cx + EDGE[b][0] * hw, cy + EDGE[b][1] * hh);
+    return;
   }
-  ctx.lineCap = 'butt';
+  for (let d = 0; d < 4; d++) if (m & (1 << d)) { path.moveTo(cx, cy); path.lineTo(cx + EDGE[d][0] * hw, cy + EDGE[d][1] * hh); }
+}
+// Layered strokes: a soft grassy verge, a worn edge, the road bed and a little texture on top.
+export function strokeRoads(ctx, path, tw, paved = false) {
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  const fine = tw >= 22;
+  if (fine) { ctx.strokeStyle = 'rgba(60,80,36,0.16)'; ctx.lineWidth = tw * 0.25; ctx.stroke(path); }
+  if (paved) {
+    ctx.strokeStyle = 'rgba(112,106,96,0.85)'; ctx.lineWidth = tw * 0.19; ctx.stroke(path);
+    ctx.strokeStyle = '#d3ccbe'; ctx.lineWidth = tw * 0.155; ctx.stroke(path);
+    if (fine) {
+      ctx.setLineDash([tw * 0.028, tw * 0.022]); ctx.strokeStyle = 'rgba(150,142,128,0.6)'; ctx.lineWidth = tw * 0.12; ctx.stroke(path);
+      ctx.setLineDash([tw * 0.018, tw * 0.032]); ctx.strokeStyle = 'rgba(236,232,222,0.7)'; ctx.lineWidth = tw * 0.06; ctx.stroke(path); ctx.setLineDash([]);
+    }
+  } else {
+    ctx.strokeStyle = 'rgba(124,94,60,0.62)'; ctx.lineWidth = tw * 0.165; ctx.stroke(path);
+    ctx.strokeStyle = '#d4b688'; ctx.lineWidth = tw * 0.13; ctx.stroke(path);
+    if (fine) {
+      ctx.strokeStyle = 'rgba(238,220,180,0.75)'; ctx.lineWidth = tw * 0.04; ctx.stroke(path); // worn middle
+      ctx.setLineDash([tw * 0.012, tw * 0.06]); ctx.strokeStyle = 'rgba(140,108,72,0.55)'; ctx.lineWidth = tw * 0.1; ctx.stroke(path); ctx.setLineDash([]); // pebbles
+    }
+  }
+  ctx.lineCap = 'butt'; ctx.lineJoin = 'miter';
 }
 // A little iron lantern post (drawn at some road tiles in towns with street lanterns).
 export function drawLantern(ctx, x, y, s, lit) {

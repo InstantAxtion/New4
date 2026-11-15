@@ -4,7 +4,7 @@ import { M, S } from './game.js';
 import { handleTap, paintAt, endPaint } from './ui.js';
 
 const pointers = new Map();
-let dragging = false, downPos = null, pinch = null, painting = false, erasing = false;
+let dragging = false, downPos = null, pinch = null, painting = false, erasing = false; let lastPt = null;
 // Once an S Pen (or any stylus) is used, the pen draws and fingers only move the map.
 let penSeen = false;
 const penErase = (e) => (e.buttons & 2) !== 0 || (e.buttons & 32) !== 0 || e.button === 2 || e.button === 5;
@@ -31,7 +31,7 @@ export function initInput(canvas) {
       const zoneMode = M.mode && M.mode.kind === 'zone';
       erasing = pen && penErase(e);
       painting = zoneMode && (pen || e.pointerType === 'mouse' || !penSeen) && (e.button !== 2 || pen);
-      if (painting) paintAt(pickTile(e.clientX, e.clientY), erasing);
+      if (painting) { paintAt(pickTile(e.clientX, e.clientY), erasing); lastPt = { x: e.clientX, y: e.clientY }; }
     } else if (pointers.size === 2) {
       const [a, b] = [...pointers.values()];
       pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2 };
@@ -59,7 +59,12 @@ export function initInput(canvas) {
       const t = pickTile(e.clientX, e.clientY);
       if (e.pointerType !== 'touch') setHover(t);
       if (e.pointerType === 'pen') erasing = erasing || penErase(e);
-      paintAt(t, erasing);
+      // fill in every tile under a fast stroke, not just where the move events land
+      if (lastPt) {
+        const dist = Math.hypot(e.clientX - lastPt.x, e.clientY - lastPt.y), n = Math.min(60, Math.ceil(dist / Math.max(4, cam.tw * 0.18)));
+        for (let k = 1; k < n; k++) paintAt(pickTile(lastPt.x + (e.clientX - lastPt.x) * k / n, lastPt.y + (e.clientY - lastPt.y) * k / n), erasing);
+      }
+      paintAt(t, erasing); lastPt = { x: e.clientX, y: e.clientY };
       return;
     }
     if (dragging) {
@@ -73,7 +78,7 @@ export function initInput(canvas) {
     if (pointers.size < 2) pinch = null;
     if (pointers.size === 0) {
       if (!dragging && downPos && !painting && e.type === 'pointerup') handleTap(e.clientX, e.clientY);
-      dragging = false; downPos = null; painting = false; erasing = false; endPaint();
+      dragging = false; downPos = null; painting = false; erasing = false; lastPt = null; endPaint();
       if (e.pointerType === 'touch') setHover(null);
     }
   };

@@ -8,7 +8,7 @@ there are no timers, and you can pause whenever you like.
 - **Real Earth**: continents and coastlines come from Natural Earth country shapes. Mountains, deserts,
   rainforests, taiga, tundra and ice follow their real locations. Every tile knows which country it's in.
 - **Pick any homeland**: the start screen rates the woodland, stone, farmland and coast around the spot you choose.
-- **Mixed building**: paint Housing, Farmland and Workshop zones, and villagers build them over time.
+- **Mixed building**: paint Housing, Farmland, Pasture (sheep and cows, food and a little wool), Woodlot (planted timber), Park (a happier town), Workshop and Shops zones, and villagers build them over time.
   Place key buildings yourself: Lumber Camp, Quarry, Iron Mine, Fishing Dock, Watchtower and Market.
 - **Expansion**: your border grows with your town, and Watchtowers push it further. Found new settlements anywhere on Earth.
 - **Peaceful neighbours**: about 600 villages around the world. Trade with them and send gifts,
@@ -49,7 +49,7 @@ there are no timers, and you can pause whenever you like.
 - **Gentle challenge**: bigger buildings have a small daily **upkeep**. If it can't be paid they simply rest (💤) and wake up again when it can, so nothing ever breaks. From Village tier each town can master one **speciality** (🌾 Farming, ⚒ Crafts, 💰 Trade, ⛏ Industry or 📖 Learning): +30% to that trade and −10% to the town's other work, so you plan which town does what.
 - **Regional wonders**: Cliff Monastery, Great Bridge, Observatory and Botanical Dome.
 - **The late game**: build a **Harbour** to send settlers to other continents. Chart **sea routes** between harbour towns on different continents (ships sail them, each adds gold and room for another settlement). Make towns lovelier with **civic improvements**: town green, paved streets, fountain square, street lanterns and window boxes. Long-term goals include settling six continents.
-- **Roads** form by themselves from each building to its town hall, and villagers walk along them. The **Road** tool in Zones lets you lay extra roads for free.
+- **Roads** form by themselves from each building to its town hall, and villagers walk along them. The **Road** tool in Zones lets you lay extra roads for free. Roads curve smoothly round bends, with grassy verges and worn tracks, and turn to cobbles in cities.
 - **Sound settings**: separate volume sliders for master, music, nature and town sounds, rain and storms, and sound effects.
 - Works in portrait and landscape.
 

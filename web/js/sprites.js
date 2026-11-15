@@ -478,6 +478,76 @@ function buildingSprites() {
     const [x, y] = P(0.85, 0.85, 0); g.fillStyle = '#5a5a62'; g.fillRect(x - 3, y - 3, 6, 3); g.fillRect(x - 1, y - 5, 2, 2);
     g.fillStyle = '#9a7a56'; g.fillRect(x - 10, y - 4, 4, 4);
   })];
+  // Pasture: a fenced meadow with a water trough (the sheep themselves wander about live)
+  S.pasture = [0, 1].map((v) => frame((g) => {
+    const rnd = mulberry32(v * 13 + 5);
+    diamond(g, 29, 14.5); g.fillStyle = v ? '#94c46c' : '#8cbc66'; g.fill();
+    g.save(); diamond(g, 29, 14.5); g.clip();
+    for (let k = 0; k < 40; k++) { const [x, y] = P(rnd(), rnd()); g.fillStyle = rnd() < 0.15 ? '#f4f0d0' : 'rgba(70,120,50,0.45)'; g.fillRect(x, y, 1.2, rnd() < 0.15 ? 1.2 : 2); }
+    g.restore();
+    const post = (u, w) => { const [x, y] = P(u, w); g.fillStyle = '#7a5634'; g.fillRect(x - 0.6, y - 5, 1.2, 5); };
+    g.strokeStyle = '#9a7048'; g.lineWidth = 0.9;
+    for (const h of [2.2, 4.2]) {
+      g.beginPath(); g.moveTo(...P(0.04, 0.96, h)); g.lineTo(...P(0.96, 0.96, h)); g.lineTo(...P(0.96, 0.04, h)); g.stroke();
+      g.beginPath(); g.moveTo(...P(0.04, 0.96, h)); g.lineTo(...P(0.04, 0.04, h)); g.lineTo(...P(0.96, 0.04, h)); g.stroke();
+    }
+    for (let k = 0; k <= 4; k++) { post(0.04 + k * 0.23, 0.96); post(0.96, 0.04 + k * 0.23); post(0.04, 0.04 + k * 0.23); post(0.04 + k * 0.23, 0.04); }
+    box(g, 0.66, 0.2, 0.86, 0.3, 2.4, '#8a6040', 0, '#7ab0d0');
+  }));
+  // Woodlot: neat rows of young trees, a few stumps and a log pile
+  S.woodlot = [0, 1].map((v) => frame((g) => {
+    const rnd = mulberry32(v * 31 + 7);
+    diamond(g, 29, 14.5); g.fillStyle = '#6f8f4c'; g.fill();
+    g.save(); diamond(g, 29, 14.5); g.clip();
+    for (let k = 0; k < 30; k++) { const [x, y] = P(rnd(), rnd()); g.fillStyle = 'rgba(90,64,40,0.35)'; g.fillRect(x, y, 2, 1); }
+    g.restore();
+    const spots = [];
+    for (let a = 0; a < 3; a++) for (let b = 0; b < 3; b++) spots.push([0.2 + a * 0.3, 0.2 + b * 0.3]);
+    spots.sort((p, q) => (p[0] + p[1]) - (q[0] + q[1]));
+    for (const [u, w] of spots) {
+      const [x, y] = P(u, w);
+      if (rnd() < 0.18) { g.fillStyle = '#9a7048'; g.beginPath(); g.ellipse(x, y, 2.2, 1.1, 0, 0, 7); g.fill(); g.fillStyle = '#d8b07a'; g.beginPath(); g.ellipse(x, y - 0.4, 1.4, 0.7, 0, 0, 7); g.fill(); continue; }
+      tree(g, x, y, 0.62 + rnd() * 0.22, v ? 'pine' : 'round', rnd);
+    }
+  }));
+  // Park: lawn, a winding path, a pond, a bench and flower beds
+  S.park = [0, 1].map((v) => frame((g) => {
+    const rnd = mulberry32(v * 17 + 3);
+    diamond(g, 29, 14.5); g.fillStyle = '#92c870'; g.fill();
+    g.strokeStyle = '#e8dcc0'; g.lineWidth = 2; g.lineCap = 'round';
+    g.beginPath(); g.moveTo(...P(0.02, 0.5)); g.bezierCurveTo(...P(0.4, 0.2), ...P(0.55, 0.85), ...P(0.98, 0.5)); g.stroke();
+    const [px, py] = P(v ? 0.3 : 0.7, v ? 0.72 : 0.28);
+    g.fillStyle = '#6aa8d0'; g.beginPath(); g.ellipse(px, py, 6, 3, 0, 0, 7); g.fill();
+    g.fillStyle = 'rgba(255,255,255,0.5)'; g.beginPath(); g.ellipse(px - 1.5, py - 0.8, 2.5, 0.8, 0, 0, 7); g.fill();
+    g.fillStyle = '#f4f4f0'; g.beginPath(); g.ellipse(px + 2, py - 0.5, 1.2, 0.8, 0, 0, 7); g.fill(); g.fillRect(px + 2.6, py - 2.2, 0.6, 1.8);
+    for (const [u, w] of [[0.2, 0.25], [0.8, 0.75], [0.62, 0.15]]) {
+      const [x, y] = P(u, w); g.fillStyle = '#6a9a4a'; g.beginPath(); g.ellipse(x, y, 4, 2, 0, 0, 7); g.fill();
+      for (let k = 0; k < 5; k++) { g.fillStyle = ['#f2b6c6', '#f4e9a8', '#e8705a', '#ffffff', '#b8a0e0'][(k + v) % 5]; g.fillRect(x - 3 + rnd() * 6, y - 1.2 + rnd() * 2.4, 1.4, 1.4); }
+    }
+    const [bx, by] = P(0.5, 0.42); g.fillStyle = '#8a5a3c'; g.fillRect(bx - 3.5, by - 2.2, 7, 1.3); g.fillRect(bx - 3.5, by - 4.2, 7, 0.9); g.fillRect(bx - 3, by - 1, 0.8, 1.6); g.fillRect(bx + 2.2, by - 1, 0.8, 1.6);
+    const [lx, ly] = P(0.28, 0.42); g.fillStyle = '#3c3a40'; g.fillRect(lx - 0.4, ly - 9, 0.8, 9); g.fillStyle = '#f5d78a'; g.fillRect(lx - 1.2, ly - 10.5, 2.4, 2);
+    tree(g, ...P(0.85, 0.3), 0.8, 'round', rnd); tree(g, ...P(0.2, 0.85), 0.75, 'round', rnd);
+  }));
+  // Shops: two little shopfronts with striped awnings and a stall
+  S.shops = [0, 1, 2].map((v) => frame((g) => {
+    const aw = [['#c0503e', '#f4ead8'], ['#3f7fb0', '#f4ead8'], ['#4f8f4a', '#f4ead8']][v];
+    shadow(g, 22, 10);
+    box(g, 0.12, 0.2, 0.47, 0.62, 11, ['#e2cfa8', '#d8c0a0', '#e8dcc4'][v]);
+    gable(g, 0.12, 0.2, 0.47, 0.62, 11, 6, ['#8a4a3a', '#5f6f80', '#7a5a3a'][v]);
+    box(g, 0.53, 0.2, 0.88, 0.62, 9, ['#d4c4a8', '#e6d6b6', '#cdb894'][v]);
+    gable(g, 0.53, 0.2, 0.88, 0.62, 9, 5, ['#6d7b8a', '#9a5a40', '#5a6a50'][v]);
+    for (const [u0, u1, h] of [[0.12, 0.47, 6], [0.53, 0.88, 5]]) {
+      windows(g, u0 + 0.04, u1 - 0.04, 0.62, 1.5, 2, '#f5d78a');
+      const n = 6;
+      for (let k = 0; k < n; k++) {
+        const a = u0 + (k / n) * (u1 - u0), b = u0 + ((k + 1) / n) * (u1 - u0);
+        poly(g, [P(a, 0.62, h), P(b, 0.62, h), P(b, 0.74, h - 2.5), P(a, 0.74, h - 2.5)], aw[k & 1], null);
+      }
+    }
+    const [x, y] = P(0.72, 0.9); g.fillStyle = '#8a5a3c'; g.fillRect(x - 4, y - 3, 8, 3);
+    for (let k = 0; k < 4; k++) { g.fillStyle = ['#e8705a', '#f0c040', '#7ab04a', '#c06a9a'][(k + v) % 4]; g.beginPath(); g.arc(x - 3 + k * 2, y - 3.4, 0.9, 0, 7); g.fill(); }
+    const [sx, sy] = P(0.3, 0.88); g.fillStyle = '#8a5f3c'; g.beginPath(); g.ellipse(sx, sy - 1.6, 1.6, 2, 0, 0, 7); g.fill();
+  }));
   S.lumber = [frame((g) => {
     shadow(g, 20, 9);
     box(g, 0.2, 0.2, 0.55, 0.5, 8, '#b08a62');
@@ -886,6 +956,17 @@ function zoneMarker(color, icon) {
     } else if (icon === 'wheat') {
       g.beginPath(); g.moveTo(0, 3); g.lineTo(0, -2.8); g.stroke();
       for (const [dx, dy] of [[-1, -1.6], [1, -1.6], [-1, 0.2], [1, 0.2]]) { g.beginPath(); g.ellipse(dx, dy, 0.8, 1.3, dx * 0.5, 0, Math.PI * 2); g.fill(); }
+    } else if (icon === 'sheep') {
+      g.fillStyle = '#3c2e24'; g.beginPath(); g.ellipse(-0.6, 0, 2.8, 1.9, 0, 0, 7); g.fill(); g.beginPath(); g.ellipse(2.4, -0.8, 1.2, 1, 0, 0, 7); g.fill();
+      g.fillRect(-2, 1.4, 0.7, 1.4); g.fillRect(0.6, 1.4, 0.7, 1.4);
+    } else if (icon === 'tree') {
+      g.beginPath(); g.moveTo(0, -3.2); g.lineTo(2.6, 1); g.lineTo(-2.6, 1); g.closePath(); g.fill(); g.fillRect(-0.5, 1, 1, 2);
+    } else if (icon === 'flower') {
+      for (let k = 0; k < 5; k++) { const a = k * 1.2566; g.beginPath(); g.arc(Math.cos(a) * 1.6, Math.sin(a) * 1.6 - 0.3, 1.1, 0, 7); g.fill(); }
+      g.fillStyle = '#fff6e0'; g.beginPath(); g.arc(0, -0.3, 0.8, 0, 7); g.fill();
+    } else if (icon === 'coin') {
+      g.beginPath(); g.moveTo(-3, -1); g.lineTo(3, -1); g.lineTo(2.2, -2.6); g.lineTo(-2.2, -2.6); g.closePath(); g.fill(); g.fillRect(-2.4, -1, 4.8, 3.4);
+      g.fillStyle = '#fff6e0'; g.fillRect(-0.8, 0.4, 1.6, 2);
     } else if (icon === 'hammer') {
       g.save(); g.rotate(-0.6); g.fillRect(-0.5, -1, 1, 4.4); g.fillRect(-2.4, -2.6, 4.8, 1.8); g.restore();
     }
@@ -942,6 +1023,10 @@ export function buildSprites() {
   SPR.misc.zone.housing = zoneMarker('#f07a48', 'house');
   SPR.misc.zone.farmland = zoneMarker('#e6cf3a', 'wheat');
   SPR.misc.zone.workshop = zoneMarker('#8a7ef0', 'hammer');
+  SPR.misc.zone.pasture = zoneMarker('#7cc464', 'sheep');
+  SPR.misc.zone.woodlot = zoneMarker('#2f8a5a', 'tree');
+  SPR.misc.zone.park = zoneMarker('#e88ac0', 'flower');
+  SPR.misc.zone.shops = zoneMarker('#40a8d8', 'coin');
 }
 // How often each biome shows decoration (0..1)
 export const DECOR_DENSITY = { [B.FOREST]: 0.92, [B.TAIGA]: 0.9, [B.JUNGLE]: 0.97, [B.SAVANNA]: 0.22, [B.GRASS]: 0.1, [B.STEPPE]: 0.08, [B.DESERT]: 0.04, [B.TUNDRA]: 0.15, [B.SNOW]: 0.06, [B.HILLS]: 0.85, [B.MOUNTAIN]: 1 };

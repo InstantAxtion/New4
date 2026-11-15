@@ -163,6 +163,8 @@ body.moding #bottombar, body.moding #quests, body.moding #zoomctl { display: non
 #modebar { bottom: calc(10px + var(--sab)); padding: 5px; gap: 4px; flex-wrap: nowrap; border-radius: 18px; }
 .tool { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; padding: 6px 8px; border-radius: 13px; font-size: 12px; font-weight: 700; color: var(--ink-soft); min-width: 60px; }
 .tool .sw { width: 26px; height: 14px; clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); }
+#modebar.zones { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); width: min(440px, calc(100% - 16px)); }
+#modebar.zones .tool { min-width: 0; padding: 5px 2px; }
 .tool .sw.road { background: linear-gradient(135deg, transparent 38%, #cdb080 38% 62%, transparent 62%), #9fbf73; }
 .slider { display: block; padding: 10px 2px; border-bottom: 1px dashed var(--line); font-weight: 600; }
 .slider span { display: flex; justify-content: space-between; } .slider b { font-weight: 700; color: var(--ink-soft); }
@@ -207,6 +209,8 @@ body.moding #bottombar, body.moding #quests, body.moding #zoomctl { display: non
   #bottombar button { min-width: 58px; padding: 4px 4px; font-size: 10.5px; }
   #bottombar button .ic { font-size: 18px; }
   .tool { min-width: 58px; padding: 4px 4px; font-size: 10.5px; }
+  #modebar.zones { grid-template-columns: repeat(2, minmax(0, 1fr)); width: auto; }
+  #modebar.zones .tool { min-width: 56px; padding: 3px 2px; }
   #modebar .cost { flex-direction: column; align-items: center; }
   .mlabel { flex-direction: column; font-size: 11px; white-space: normal; text-align: center; max-width: 70px; }
   #zoomctl { right: calc(6px + var(--sar)); top: calc(50% + 18px); gap: 5px; }

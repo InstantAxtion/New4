@@ -16,9 +16,9 @@ const MOOD_FACES = ['🙂', '😊', '😄'];
 
 export const TILE_MODE_TW = 20;
 const A_GENTLE = () => !!S.settings.gentle;
-const A_FLAT = new Set(['farm', 'green', 'fountain', 'riceterrace', 'vineyard', 'orchard', 'oasis', 'cacao', 'apiary', 'quarry', 'dock']);
+const A_FLAT = new Set(['pasture', 'park', 'woodlot', 'farm', 'green', 'fountain', 'riceterrace', 'vineyard', 'orchard', 'oasis', 'cacao', 'apiary', 'quarry', 'dock']);
 const SMOKY = new Set(['house', 'townhall', 'tavern', 'bakery', 'smithy', 'brewery', 'workshop']);
-const LIT = new Set(['stable', 'house', 'townhall', 'workshop', 'market', 'tower', 'dock', 'library', 'cathedral', 'greatcastle', 'lighthouse', 'lumber', 'harbour', 'fountain',
+const LIT = new Set(['shops', 'stable', 'house', 'townhall', 'workshop', 'market', 'tower', 'dock', 'library', 'cathedral', 'greatcastle', 'lighthouse', 'lumber', 'harbour', 'fountain',
   'chapel', 'tavern', 'school', 'bakery', 'brewery', 'weaver', 'smithy', 'windmill', 'monastery', 'bridge', 'observatory', 'dome', 'icehut', 'well']);
 export const MAX_TW = 160;
 const OCEAN = '#2e628c';
@@ -716,6 +716,7 @@ function drawTiles() {
         if (bld.p >= 1 && !A_FLAT.has(bld.t) && tw >= 26) A.longShadow(ctx, cx, cy, s, tw);
         drawSprite(buildingSprite(bld, wx, y), cx, cy, s);
         if (bld.t === 'shipyard' && bld.p >= 1) X.drawFleet(ctx, i, view);
+        if (bld.t === 'pasture' && bld.p >= 1 && tw >= 30 && !L.tileSnowy(wx, y, bt, rs)) L.drawFarmAnimals(ctx, cx, cy, s, wx, y, animTime, true);
         if (bld.t === 'mine' || bld.t === 'quarry') X.drawSparkle(ctx, i, cx, cy, s, animTime);
         if (bld.t === 'townhall') { const ft = townById(bld.town); if (ft && ft.fest && S.day < ft.fest.until) festive(ctx, cx, cy, s, tw, ft); }
         if (bld.p >= 1 && tw >= 30) {
