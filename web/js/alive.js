@@ -86,11 +86,20 @@ export function drawRowLife(ctx, y, v) {
     }
     if (sc.k === 'kids') { // children playing tag (or sledding and building snowmen in winter)
       if (night > 0.4) continue;
+      // they play for a while, then wander off home for a bit
+      const cyc = (t + sc.ph * 13) % 70; if (cyc > 45) continue;
+      const kidPos = (k, tt) => { // a wandering, irregular run with little stops
+        const p1 = sc.ph * 3 + k * 1.7, sp = 0.5 + k * 0.13;
+        const u = tt * sp + Math.sin(tt * 0.37 + p1) * 1.4; // speeds up and slows down
+        return [Math.sin(u + p1) * 0.6 + Math.sin(u * 1.9 + p1 * 2) * 0.35, Math.cos(u * 0.8 + p1) * 0.6 + Math.sin(u * 1.3 + p1) * 0.3];
+      };
       for (let k = 0; k < 3; k++) {
-        const a = t * 1.6 + k * 2.1 + sc.ph, rx = v.tw * 0.2, ry = v.tw * 0.08;
-        const kx = cx + Math.cos(a) * rx, ky = cy + Math.sin(a) * ry + v.tw * 0.05;
-        const hop = Math.abs(Math.sin(t * 9 + k)) * 1.2 * s;
-        person(ctx, kx, ky, s * 0.72, COLS[(k + (sc.ph | 0)) % 6], Math.cos(a + 1.57) > 0 ? 1 : -1, hop, si === 3 ? '#c0503e' : null);
+        // the child who is "it" chases the one ahead, a moment behind
+        const [ux, uy] = k === 0 ? kidPos(1, t - 0.6) : kidPos(k, t), [px, py] = k === 0 ? kidPos(1, t - 0.7) : kidPos(k, t - 0.1);
+        const kx = cx + ux * v.tw * 0.24, ky = cy + uy * v.tw * 0.09 + v.tw * 0.05;
+        const moving = Math.hypot(ux - px, uy - py) > 0.01;
+        const hop = moving ? Math.abs(Math.sin(t * 9 + k)) * 1.2 * s : 0;
+        person(ctx, kx, ky, s * 0.72, COLS[(k + (sc.ph | 0)) % 6], ux >= px ? 1 : -1, hop, si === 3 ? '#c0503e' : null);
       }
       if ((t + sc.ph) % 16 < 3) bubble(ctx, cx, cy - v.tw * 0.32, s, '😆');
       continue;

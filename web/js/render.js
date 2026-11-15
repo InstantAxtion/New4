@@ -1002,7 +1002,7 @@ function drawTiles() {
         continue;
       }
       if (S.canals.has(i)) { // now and then a little boat drifts along the canal
-        if (tw >= 24 && hash2(wx, y, 91) < 0.2) { const ph = hash2(wx, y, 92) * 6.28; L.drawBoat(ctx, cx + Math.sin(animTime * 0.3 + ph) * tw * 0.12, cy + Math.cos(animTime * 0.3 + ph) * tw * 0.04, s * 0.8, animTime, ph, false, Math.cos(animTime * 0.3 + ph) > 0 ? 1 : -1); }
+        if (tw >= 24 && hash2(wx, y, 91) < 0.2) { const ph = hash2(wx, y, 92) * 6.28; const u = Math.sin(animTime * 0.18 + ph); L.drawBoat(ctx, cx + u * tw * 0.14, cy + u * tw * 0.07, s * 0.8, animTime, ph, false, Math.cos(animTime * 0.18 + ph) > 0 ? 1 : -1); }
         continue;
       }
       if (S.zones.has(i) || world.river[i]) continue;
