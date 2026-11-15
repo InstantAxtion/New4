@@ -7,7 +7,7 @@ import { idxOf } from './world.js';
 import * as L from './life.js';
 import { petOf, personById } from './folk.js';
 import { styleAt } from './regions.js';
-import { nbExtra } from './game.js';
+import { nbExtra, SPECS } from './game.js';
 const MOOD_FACES = ['🙂', '😊', '😄'];
 
 export const TILE_MODE_TW = 20;
@@ -612,6 +612,13 @@ function drawTiles() {
           continue;
         }
         drawSprite(buildingSprite(bld, wx, y), cx, cy, s);
+        if (bld.idle && tw >= 26) { // resting: upkeep could not be paid
+          const bx = cx, by = cy - tw * 0.55, r = Math.max(7, tw * 0.13);
+          ctx.fillStyle = 'rgba(255,250,238,0.95)'; ctx.strokeStyle = 'rgba(60,46,36,0.6)'; ctx.lineWidth = 1;
+          ctx.beginPath(); ctx.arc(bx, by, r, 0, 6.3); ctx.fill(); ctx.stroke();
+          ctx.fillStyle = '#5a6a8a'; ctx.font = `700 ${Math.round(r * 1.1)}px system-ui, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          ctx.fillText('z', bx - r * 0.2, by + r * 0.1); ctx.font = `700 ${Math.round(r * 0.75)}px system-ui, sans-serif`; ctx.fillText('z', bx + r * 0.4, by - r * 0.35);
+        }
         if (bld.t === 'house' && bld.p >= 1 && tw >= 40 && hash2(wx, y, 51) < 0.2) { // a cat on the doorstep
           const kx = cx + tw * 0.13, ky = cy + tw * 0.2, col = ['#e0a050', '#3c3430', '#9a9a9a', '#f4efe6'][(hash2(wx, y, 52) * 4) | 0], k = s * 1.1;
           const wag = Math.sin(animTime * 2 + wx) * 1.4 * k;
@@ -723,7 +730,7 @@ function drawLabels(tileMode) {
   for (const t of S.towns) {
     const x = sx(tileWX(t.x, t.y)), y = sy(tileWY(t.y));
     if (x < -100 || x > cw + 100 || y < -60 || y > ch + 100) continue;
-    const face = t.mood ? MOOD_FACES[t.mood.level] : '';
+    const face = (t.mood ? MOOD_FACES[t.mood.level] : '') + (t.spec ? ' ' + SPECS[t.spec].icon : '');
     if (tileMode) label(`${t.name} ${face}`, x, y - tw * 0.9, 13, `${Math.floor(t.pop)} folk`);
     else label(`${t.name} ${face}`, x, y - 20, 12);
   }

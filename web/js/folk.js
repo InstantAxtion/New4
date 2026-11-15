@@ -105,13 +105,13 @@ function assignJobs(t, bmap) {
 }
 
 function lifeDay(t) {
-  const folk = t.folk, school = !!t.hasSchool, obs = hasWonder('observatory');
+  const folk = t.folk, school = !!t.hasSchool, obs = hasWonder('observatory'), learn = t.spec === 'learning';
   // learning, coming of age, retirement
   for (const p of folk) {
     const age = ageOf(p);
     if (p.j) {
       const before = p.k;
-      p.k = Math.min(100, p.k + (2.5 / YEAR) * (school ? 1.5 : 1) * (obs ? 1.5 : 1) * (0.6 + Math.random() * 0.8));
+      p.k = Math.min(100, p.k + (2.5 / YEAR) * (school ? 1.5 : 1) * (obs ? 1.5 : 1) * (learn ? 2 : 1) * (0.6 + Math.random() * 0.8));
       if (before < 80 && p.k >= 80) { chron(t, `${fullName(p)} has become a master ${JOBS[p.j].toLowerCase()}!`, true); S.stats.masters = (S.stats.masters || 0) + 1; }
     }
     if (p.lastAge !== age) {
@@ -190,7 +190,7 @@ on('stepped', (dd) => {
     }
     if (jobs) {
       const bs = byTown.get(t.id) || [];
-      t.hasSchool = bs.some((b) => b.t === 'school');
+      t.hasSchool = bs.some((b) => b.t === 'school' && !b.idle);
       assignJobs(t, bs);
       const workers = t.folk.filter((p) => p.j);
       t.skillMult = workers.length ? 1 + (workers.reduce((s, p) => s + p.k, 0) / workers.length / 100) * 0.15 : 1;

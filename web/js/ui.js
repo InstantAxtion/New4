@@ -4,7 +4,7 @@ import {
   S, M, RES, RES_NAMES, TIERS, DEFS, MANUAL, WONDERS, ZONES, FOUND_COST, GIFT_AMOUNT, CONTACT_RANGE,
   on, emit, totalPop, totalCap, townById, hasWonder, wonderStarted, count, ownerOf, canPlace, placeBuilding, setZone,
   demolish, canFound, foundTown, inContact, tradeOffers, doTrade, gift, canInvite, invite, activeQuests, QUESTS,
-  newGame, PACE, GOODS, EVERYDAY, GOODS_BUILDINGS, SPECIALTIES, ALL_WONDERS, MOODS, moodOf, townStyleOf, TRAITS, IMPROVEMENTS, IMPROVE_TIER, charm, improve, continentAt, realmContinents, harbourTowns, routeOptions, openRoute, ROUTE_COST, ROUTE_DAYS, routesDone, maxTowns, fulfil, nbExtra, HOUSE_LEVELS, HOUSE_CAP_MULT, save, hasSave, load, resetSave, slotInfo, setSlot, deleteSlot, SLOT_COUNT, saveSettings, surveyStart, canStart, affordable, groundDist2, DAY_SECONDS,
+  newGame, PACE, UPKEEP, SPECS, SPEC_TIER, SPEC_CHANGE_COST, setSpec, GOODS, EVERYDAY, GOODS_BUILDINGS, SPECIALTIES, ALL_WONDERS, MOODS, moodOf, townStyleOf, TRAITS, IMPROVEMENTS, IMPROVE_TIER, charm, improve, continentAt, realmContinents, harbourTowns, routeOptions, openRoute, ROUTE_COST, ROUTE_DAYS, routesDone, maxTowns, fulfil, nbExtra, HOUSE_LEVELS, HOUSE_CAP_MULT, save, hasSave, load, resetSave, slotInfo, setSlot, deleteSlot, SLOT_COUNT, saveSettings, surveyStart, canStart, affordable, groundDist2, DAY_SECONDS,
 } from './game.js';
 import { SPR, spriteIcon } from './sprites.js';
 import { panBy, cam, markDirty, flyTo, centerOn, clampCam, screenSize, TILE_MODE_TW, sx, sy, pickTile, setHover } from './render.js';
@@ -215,7 +215,7 @@ function showBuild() {
         ${d.style ? '<span class="spec">Specialty</span>' : ''}
         ${locked ? `<span class="lock">${TIERS[d.tier].name}</span>` : built ? '<span class="lock">Built</span>' : ''}
         <img src="${bIcon(t)}" alt=""><b>${d.name}</b><div class="cost">${costChips(d.cost)}</div>
-        <p>${d.desc || ''}${d.use ? ` Uses ${Object.entries(d.use).map(([k, v]) => `${v}/day ${RES_NAMES[k].toLowerCase()}`).join(', ')}.` : ''}${d.prod ? ` Makes ${Object.entries(d.prod).map(([k, v]) => `${v}/day ${RES_NAMES[k].toLowerCase()}`).join(', ')}.` : ''}${d.mood ? ` Mood +${d.mood}.` : ''}${d.jobs ? ` Needs ${d.jobs} worker${d.jobs > 1 ? 's' : ''}.` : ''}</p></button>`;
+        <p>${d.desc || ''}${d.use ? ` Uses ${Object.entries(d.use).map(([k, v]) => `${v}/day ${RES_NAMES[k].toLowerCase()}`).join(', ')}.` : ''}${d.prod ? ` Makes ${Object.entries(d.prod).map(([k, v]) => `${v}/day ${RES_NAMES[k].toLowerCase()}`).join(', ')}.` : ''}${d.mood ? ` Mood +${d.mood}.` : ''}${UPKEEP[t] ? ` Upkeep ${Object.entries(UPKEEP[t]).map(([k, v]) => `${v}/day ${RES_NAMES[k].toLowerCase()}`).join(', ')}.` : ''}${d.jobs ? ` Needs ${d.jobs} worker${d.jobs > 1 ? 's' : ''}.` : ''}</p></button>`;
     }).join('');
     const tab = (k, l) => `<button data-act="btab" data-arg="${k}" class="${buildTab === k ? 'on' : ''}">${l}</button>`;
     return head('Build', buildTab === 'everyday' ? 'Everyday buildings make a town happier, and happy towns grow faster.' : 'Key buildings you place yourself. Homes, fields and workshops are painted with Zones.')
@@ -324,6 +324,11 @@ export function showInfo(x, y) {
       if (d.radius) body += `<span>Border</span><span>+${d.radius}</span>`;
       if (d.wonder) body += `<span>Wonder</span><span>${d.desc}</span>`;
       body += '</div>';
+      if (UPKEEP[b.t]) {
+        const up = Object.entries(UPKEEP[b.t]).map(([k, v]) => `${v} ${RES_NAMES[k].toLowerCase()}`).join(', ');
+        body += b.idle ? `<div class="warn">💤 Resting: it needs ${up} a day to run. It wakes by itself once your stores can cover it.</div>`
+          : `<div class="note">Upkeep: ${up} a day.</div>`;
+      }
       if (d.civic) body += `<div class="note">A civic improvement of ${t ? esc(t.name) : 'your town'}, loved by everyone who lives there.</div>`;
       else body += `<div class="row"><button class="btn small" data-act="demolish">${b.p < 1 ? 'Cancel construction' : 'Demolish'}</button></div>`;
       if (b.t === 'house' && t) {
@@ -348,6 +353,14 @@ export function showInfo(x, y) {
       + `<div class="note">${town ? `Inside the borders of <b>${esc(town.name)}</b>.` : 'Wild land beyond your borders.'} ${tips[bm] || ''}</div>`
       + (town && !BIOMES[bm].water ? `<div class="row"><button class="btn small primary" data-act="openbuild">Build here…</button><button class="btn small" data-act="quickzone" data-arg="housing">Zone housing</button><button class="btn small" data-act="quickzone" data-arg="farmland">Zone farmland</button></div>` : '');
   });
+}
+function specSection(t) {
+  if (S.tier < SPEC_TIER) return `<div class="section"><h3>Speciality</h3><div class="note">From Village tier, each town can master one trade.</div></div>`;
+  const cur = t.spec ? SPECS[t.spec] : null;
+  return `<div class="section"><h3>Speciality</h3>
+    <div class="note">${cur ? `${esc(t.name)} masters <b>${cur.icon} ${cur.name}</b>: +30% to it, -10% to its other work.` : `Choose one trade for ${esc(t.name)} to master: +30% to it, -10% to the town's other work.`}${t.spec ? ` Changing costs ${SPEC_CHANGE_COST.gold} gold.` : ' The first choice is free.'}</div>
+    <div class="list">${Object.entries(SPECS).map(([k, sp]) => `<button class="item ${t.spec === k ? '' : (t.spec && !affordable(SPEC_CHANGE_COST) ? 'disabled' : '')}" data-act="spec" data-arg="${t.id}:${k}" ${t.spec === k ? 'style="border-color:var(--leaf);background:#eef5e2"' : ''}>
+      <div><b>${sp.icon} ${sp.name}</b><div class="meta">${sp.desc}</div></div><span>${t.spec === k ? '✓' : ''}</span></button>`).join('')}</div></div>`;
 }
 function moodSection(t) {
   const m = moodOf(t), M2 = MOODS[m.level];
@@ -379,7 +392,7 @@ function townInfo(t, sub) {
       <div class="note">${t.pop >= t.cap - 0.5 ? 'Every home is full. Zone more housing to grow.' : S.fed ? 'Families are moving in.' : 'Growth has paused until there is more food.'}</div>
       ${t.capital && next ? `<div class="note">The keep grows grander as your realm reaches ${next.name}.</div>` : ''}
       <div class="kv"><span>Continent</span><span>${continentAt(t.x, t.y)}</span><span>Harbour</span><span>${harbourTowns().includes(t) ? 'Yes ⚓' : 'None yet'}</span><span>Charm</span><span>${'✿'.repeat(charm(t)) || '—'} ${charm(t)}/5</span></div>
-      ${moodSection(t)}${folkSection(t)}
+      ${specSection(t)}${moodSection(t)}${folkSection(t)}
       <div class="section"><h3>Make ${esc(t.name)} lovelier</h3>${S.tier < IMPROVE_TIER ? `<div class="note">Civic improvements unlock when your realm becomes a ${TIERS[IMPROVE_TIER].name}.</div>` : `<div class="note">Each improvement changes how the town looks and makes room for 4% more villagers.</div>
         <div class="list">${Object.entries(IMPROVEMENTS).map(([k, d]) => {
           const done = t.imp && t.imp[k];
@@ -448,6 +461,7 @@ function act(name, arg, el) {
     case 'gift': { const n = sel && nbAt(sel); if (n && gift(n, arg)) { sfx('coin'); haptic(); toast(`${n.name} is delighted by your gift!`); refreshSheet(); } break; }
     case 'improve': { const [tid, key] = arg.split(':'); const t = townById(+tid); if (t && improve(t, key)) { sfx('built'); haptic('medium'); toast(`${IMPROVEMENTS[key].name} added to ${t.name}.`); refreshSheet(); } else sfx('error'); break; }
     case 'route': { const o = routeOptions()[+arg]; if (o && openRoute(o[0], o[1])) { sfx('quest'); haptic('medium'); refreshSheet(); } else sfx('error'); break; }
+    case 'spec': { const [tid, key] = arg.split(':'); const t = townById(+tid); if (t && setSpec(t, key)) { sfx('quest'); haptic('medium'); refreshSheet(); } else sfx('error'); break; }
     case 'person': { const [tid, pid] = arg.split(':'); showPerson(+tid, +pid); break; }
     case 'fulfil': { const n = nbAt(sel); if (n && fulfil(n)) { sfx('quest'); haptic('medium'); refreshSheet(); } else sfx('error'); break; }
     case 'invite': { const n = sel && nbAt(sel); if (n && invite(n)) { closeSheet(); } break; }
@@ -667,6 +681,7 @@ export function initUI() {
   on('marketday', ({ t, visitors }) => { if (visitors.length) toast(`🛒 Market day in ${t.name}! Wagons from ${visitors.map((n) => n.name).join(', ')}.`); });
   on('tier', (t) => {
     if (t === 1) {
+      hint('spec', 'Towns can now choose a <b>speciality</b>: Farming, Crafts, Trade, Industry or Learning. Open a town hall to pick one. Bigger buildings also have a little <b>upkeep</b>; if it can\'t be paid they simply rest (💤) until it can.', null);
       hint('everyday', 'Your realm is a Village! New <b>Everyday</b> buildings (well, chapel, tavern…) make towns happier, and happy towns grow faster. You can now make <b>goods</b> too, and build your region\'s <b>specialty</b>.', '#bottombar [data-tab=build]');
     }
     if (t === 3) hint('wonders2', 'Four new regional wonders await: a Cliff Monastery, a Great Bridge, an Observatory and a Botanical Dome. Look under Build → Wonders.', '#bottombar [data-tab=build]');

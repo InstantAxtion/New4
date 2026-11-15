@@ -63,6 +63,41 @@ export const DEFS = {
   observatory: { name: 'Observatory', wonder: true, cost: { stone: 300, gold: 300, tools: 30 }, time: 40, tier: 3, desc: 'On desert, steppe or hills. Villagers learn faster; +5% to everything.' },
   dome: { name: 'Botanical Dome', wonder: true, cost: { stone: 300, gold: 250, cloth: 40 }, time: 40, tier: 3, desc: 'On green land. +1 mood everywhere and +10% food.' },
 };
+// Daily upkeep for bigger buildings. If it can't be paid the building idles (never breaks).
+export const UPKEEP = {
+  tower: { wood: 0.05 }, harbour: { wood: 0.15, gold: 0.1 }, market: { wood: 0.08 },
+  chapel: { gold: 0.05 }, tavern: { food: 0.1 }, school: { gold: 0.1 }, stable: { food: 0.15 }, windmill: { wood: 0.03 },
+  bakery: { wood: 0.04 }, brewery: { wood: 0.04 }, weaver: { wood: 0.03 }, smithy: { stone: 0.04 },
+  library: { gold: 0.3 }, gardens: { food: 0.3 }, lighthouse: { wood: 0.2 }, greatcastle: { stone: 0.3 }, cathedral: { gold: 0.3 },
+  monastery: { food: 0.2 }, bridge: { stone: 0.2 }, observatory: { gold: 0.3 }, dome: { wood: 0.2 },
+};
+// Each town may master one trade: +30% for it, -10% for its other work.
+export const SPECS = {
+  farming: { name: 'Farming', icon: '🌾', desc: 'Fields, fishing, orchards and the like.' },
+  crafts: { name: 'Crafts', icon: '⚒', desc: 'Workshops, bakeries, breweries, weavers and smiths.' },
+  trade: { name: 'Trade', icon: '💰', desc: 'Markets, harbours and taxes; better deals with neighbours.' },
+  industry: { name: 'Industry', icon: '⛏', desc: 'Lumber camps, quarries and mines.' },
+  learning: { name: 'Learning', icon: '📖', desc: 'Villagers learn twice as fast, and the town is happier.' },
+};
+const SPEC_OF = {
+  farm: 'farming', dock: 'farming', apiary: 'farming', riceterrace: 'farming', icehut: 'farming', oasis: 'farming', orchard: 'farming', vineyard: 'farming',
+  workshop: 'crafts', bakery: 'crafts', brewery: 'crafts', weaver: 'crafts', smithy: 'crafts',
+  market: 'trade', harbour: 'trade', townhall: 'trade', cacao: 'trade',
+  lumber: 'industry', quarry: 'industry', mine: 'industry',
+};
+export const SPEC_TIER = 1, SPEC_CHANGE_COST = { gold: 100 };
+export function specMult(t, type) {
+  if (!t || !t.spec) return 1;
+  const c = SPEC_OF[type];
+  if (t.spec === 'learning') return 0.95;
+  return c === t.spec ? 1.3 : c ? 0.9 : 1;
+}
+export function setSpec(t, key) {
+  if (!SPECS[key] || S.tier < SPEC_TIER || t.spec === key) return false;
+  if (t.spec) { if (!affordable(SPEC_CHANGE_COST)) return false; pay(SPEC_CHANGE_COST); }
+  t.spec = key; emit('toast', `${t.name} now specialises in ${SPECS[key].name} ${SPECS[key].icon}.`); emit('change');
+  return true;
+}
 export const EVERYDAY = ['well', 'apiary', 'windmill', 'chapel', 'tavern', 'school', 'stable'];
 export const hasStables = () => count('stable') >= 1;
 export const GOODS_BUILDINGS = ['bakery', 'brewery', 'weaver', 'smithy'];
@@ -119,7 +154,7 @@ const MOOD_SOURCES = [
 ];
 export function moodOf(t) {
   const have = new Set();
-  for (const b of S.buildings.values()) if (b.town === t.id && b.p >= 1) have.add(b.t);
+  for (const b of S.buildings.values()) if (b.town === t.id && b.p >= 1 && !b.idle) have.add(b.t);
   const parts = [], missing = [];
   let score = 0;
   for (const [type, label, v] of MOOD_SOURCES) {
@@ -131,6 +166,7 @@ export function moodOf(t) {
   if (S.res.bread > 0.5) { parts.push(['Fresh bread', 1]); score += 1; }
   if (S.res.cloth > 0.5) { parts.push(['Fine clothes', 1]); score += 1; }
   const c = charm(t); if (c) { parts.push(['Civic charm', c * 0.5]); score += c * 0.5; }
+  if (t.spec === 'learning') { parts.push(['A town of learning', 1]); score += 1; }
   if (hasWonder('monastery')) { parts.push(['The Cliff Monastery', 1]); score += 1; }
   if (hasWonder('dome')) { parts.push(['The Botanical Dome', 1]); score += 1; }
   const level = score >= 6 ? 2 : score >= 2.5 ? 1 : 0;
@@ -493,7 +529,7 @@ function indexNeighbors() {
 export const CONTACT_RANGE = 45;
 export function inContact(n) { return S.towns.some((t) => groundDist2(n.x, n.y, t.x, t.y) <= CONTACT_RANGE ** 2); }
 export function tradeOffers(n) {
-  const bonus = Math.floor(n.friend * 0.1) + (count('market') ? 5 : 0) + (hasWonder('lighthouse') ? 4 : 0) + (n.trait === 'generous' ? 3 : 0) + (hasStables() ? 3 : 0);
+  const bonus = Math.floor(n.friend * 0.1) + (count('market') ? 5 : 0) + (hasWonder('lighthouse') ? 4 : 0) + (n.trait === 'generous' ? 3 : 0) + (hasStables() ? 3 : 0) + Math.min(6, 2 * S.towns.filter((t) => t.spec === 'trade').length);
   const offers = [{ give: { [n.want]: 20 }, get: { [n.surplus]: 14 + bonus } }];
   if (n.surplus !== 'gold') offers.push({ give: { gold: 15 }, get: { [n.surplus]: 16 + bonus } });
   else offers.push({ give: { food: 25 }, get: { gold: 10 + Math.floor(bonus / 2) } });
@@ -559,6 +595,7 @@ export const QUESTS = [
   Q('bread', 'Bake your first bread', () => count('bakery') >= 1 && S.res.bread > 0, { food: 60 }),
   Q('specialty', "Build your region's specialty", () => SPECIALTIES.some((k) => count(k) >= 1), { gold: 60 }),
   Q('stable', 'Build Stables and bring horses to town', () => count('stable') >= 1, { food: 40, wood: 30 }),
+  Q('spec', 'Choose a speciality for a town', () => S.towns.some((t) => t.spec), { gold: 40 }),
   Q('wedding', 'Celebrate a wedding in your realm', () => (S.stats.weddings || 0) >= 1, { food: 40, gold: 20 }),
   Q('tower', 'Raise a Watchtower', () => count('tower') >= 1, { stone: 30 }),
   Q('found', 'Found a second settlement', () => S.towns.length >= 2, { food: 50, wood: 50 }),
@@ -655,13 +692,21 @@ function step(dd) {
   let jobs = 0; for (const t of S.towns) jobs += t.jobs;
   const eff = jobs ? Math.min(1, pop / jobs) : 1;
   const before = { ...S.res };
-  const mills = new Set(); let producers = 0;
-  for (const b of S.buildings.values()) if (b.t === 'windmill' && b.p >= 1) mills.add(b.town);
+  const mills = new Set(); let producers = 0, changedIdle = false;
+  for (const b of S.buildings.values()) if (b.t === 'windmill' && b.p >= 1 && !b.idle) mills.add(b.town);
   for (const t of S.towns) t.served = false;
   for (const [i, b] of S.buildings) {
     if (b.p < 1) continue;
     const d = DEFS[b.t];
     const t = townById(b.town);
+    // Upkeep: pay a little each day, or idle until it can be paid (nothing ever breaks).
+    const up = UPKEEP[b.t];
+    if (up) {
+      let ok = true;
+      for (const [r, v] of Object.entries(up)) if (S.res[r] < v * dd) { ok = false; break; }
+      if (ok) { for (const [r, v] of Object.entries(up)) S.res[r] -= v * dd; if (b.idle) { b.idle = false; changedIdle = true; } }
+      else { if (!b.idle) { b.idle = true; changedIdle = true; } continue; }
+    }
     // Workshops need their inputs; they slow down gracefully when stores run low.
     let f = 1;
     if (d.use) {
@@ -676,12 +721,13 @@ function step(dd) {
     const season = seasonal ? farmSeason(S.day, tileLat(Math.floor(i / W))) : 1;
     const skill = (t && t.skillMult) || 1;
     for (const [r, v] of Object.entries(d.prod)) {
-      let amt = v * dd * PACE.prod * f * (b.t === 'townhall' ? 1 : eff) * (b.m || 1) * lib * season * skill * obs * (hasTools ? 1.08 : 1);
+      let amt = v * dd * PACE.prod * f * (b.t === 'townhall' ? 1 : eff) * (b.m || 1) * lib * season * skill * obs * (hasTools ? 1.08 : 1) * specMult(t, b.t);
       if (r === 'food') amt *= gardens * dome * (b.t === 'dock' ? lh : 1) * (b.t === 'farm' && mills.has(b.town) ? 1.15 : 1);
       if (r === 'gold') amt *= gcGold * bridge;
       S.res[r] += amt;
     }
   }
+  if (changedIdle) { recomputeTowns(); emit('change'); }
   // Tools wear out slowly; cloth is worn; bread is eaten in place of some food.
   if (S.res.tools > 0) S.res.tools = Math.max(0, S.res.tools - 0.003 * producers * dd);
   S.res.gold += pop * 0.02 * PACE.prod * dd * gcGold;
