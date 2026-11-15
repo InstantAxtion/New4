@@ -1,7 +1,7 @@
 // Isometric renderer with an overview (atlas) mode for far zoom levels.
 import { BIOMES, W, H, B, world, wrapX, tileWX, tileWY, biomeAt, isWater } from './world.js';
 import { SPR, TB, DECOR_DENSITY, homeArt } from './sprites.js';
-import { S, M, DEFS, ZONES, townById, canPlace, canZone, canFound, canStart, ownerOf, groundDist2, CONTACT_RANGE, inContact } from './game.js';
+import { S, M, DEFS, ZONES, townById, canPlace, canZone, canRoad, canFound, canStart, ownerOf, groundDist2, CONTACT_RANGE, inContact } from './game.js';
 import { hash2 } from './noise.js';
 import { idxOf } from './world.js';
 import * as L from './life.js';
@@ -628,7 +628,7 @@ function drawTiles() {
           if (own(wx + o1, y + 1) !== o) { border.moveTo(cx + hw, cy); border.lineTo(cx, cy + hh); }
           if (own(wx - 1 + o1, y + 1) !== o) { border.moveTo(cx, cy + hh); border.lineTo(cx - hw, cy); }
           if (placing && y <= yB - 6) {
-            const ok = mode.kind === 'zone' ? (mode.zone === 'erase' ? S.zones.has(rowBase + wx) : canZone(wx, y)) : canPlace(mode.type, wx, y).ok;
+            const ok = mode.kind === 'zone' ? (mode.zone === 'erase' ? S.zones.has(rowBase + wx) || S.proads.has(rowBase + wx) : mode.zone === 'road' ? canRoad(wx, y) : canZone(wx, y)) : canPlace(mode.type, wx, y).ok;
             if (ok) { valid.moveTo(cx + Math.max(1.8, tw * 0.042), cy); valid.arc(cx, cy, Math.max(1.8, tw * 0.042), 0, 6.283); }
           }
         }
@@ -681,7 +681,7 @@ function drawTiles() {
   if (hoverTile && mode) {
     let ok = true;
     if (mode.kind === 'build') ok = canPlace(mode.type, hoverTile.x, hoverTile.y).ok;
-    else if (mode.kind === 'zone') ok = mode.zone === 'erase' || canZone(hoverTile.x, hoverTile.y);
+    else if (mode.kind === 'zone') ok = mode.zone === 'erase' || (mode.zone === 'road' ? canRoad(hoverTile.x, hoverTile.y) : canZone(hoverTile.x, hoverTile.y));
     else if (mode.kind === 'found') ok = canFound(hoverTile.x, hoverTile.y).ok;
     else if (mode.kind === 'start') ok = canStart(hoverTile.x, hoverTile.y).ok;
     outline(hoverTile, ok ? '#b8ffb0' : '#ff9a8a', 2.5);

@@ -8,7 +8,7 @@ import {
 } from './game.js';
 import { SPR, spriteIcon } from './sprites.js';
 import { panBy, cam, markDirty, flyTo, centerOn, clampCam, screenSize, TILE_MODE_TW, sx, sy, pickTile, setHover } from './render.js';
-import { initAudio, sfx, haptic, applySettings, resumeAudio } from './audio.js';
+import { initAudio, sfx, haptic, applySettings, resumeAudio, VOLUMES, vol } from './audio.js';
 import { tutorialActive, hint } from './tutorial.js';
 import { ageOf, fullName, personById, JOBS, thought, petOf } from './folk.js';
 import { walkerAt, clearTransient } from './render.js';
@@ -110,6 +110,7 @@ export function setMode(mode, background = false) {
   } else if (mode.kind === 'zone') {
     html = Object.entries(ZONES).map(([k, z]) =>
       `<button class="tool ${mode.zone === k ? 'on' : ''} ${DEFS[z.builds].tier > S.tier ? 'disabled' : ''}" data-act="zone" data-arg="${k}"><span class="sw" style="background:${z.color}"></span>${z.name}</button>`).join('')
+      + `<button class="tool ${mode.zone === 'road' ? 'on' : ''}" data-act="zone" data-arg="road"><span class="sw road"></span>Road</button>`
       + `<button class="tool ${mode.zone === 'erase' ? 'on' : ''}" data-act="zone" data-arg="erase"><span class="sw erase"></span>Erase</button>`;
     if (!S.settings.zoneHint && !tutorialActive()) { S.settings.zoneHint = true; saveSettings(); toast('Paint with your finger or S Pen. Two fingers move the map (with the S Pen, one finger does).'); }
   } else if (mode.kind === 'found') {
@@ -353,12 +354,29 @@ function showBackup() {
     <textarea id="bkout" class="text hidden" rows="4" readonly style="font-size:11px"></textarea>`);
 }
 
+// ---------------- settings (shared by the in-game menu and the main menu) ----------------
+function settingsHTML(attr) {
+  return VOLUMES.map(([k, label]) => `<label class="slider"><span>${label}<b data-volv="${k}">${Math.round(vol(k) * 100)}%</b></span><input type="range" min="0" max="100" step="5" value="${Math.round(vol(k) * 100)}" data-vol="${k}"></label>`).join('')
+    + [['haptics', 'Vibration'], ['gentle', 'Gentle visuals (fewer effects, saves battery)']].map(([k, label]) => `<div class="toggle"><span>${label}</span><button class="switch ${S.settings[k] ? 'on' : ''}" ${attr}="${k}" aria-label="${label}" aria-pressed="${!!S.settings[k]}"></button></div>`).join('');
+}
+// Volume sliders update live without redrawing the panel (so the thumb never jumps out from under the finger).
+document.addEventListener('input', (e) => {
+  const k = e.target && e.target.dataset && e.target.dataset.vol; if (!k) return;
+  const v = +e.target.value / 100;
+  S.settings.vol = { ...(S.settings.vol || {}), [k]: v };
+  const out = document.querySelector(`[data-volv="${k}"]`); if (out) out.textContent = Math.round(v * 100) + '%';
+  initAudio(); applySettings();
+});
+document.addEventListener('change', (e) => { if (e.target && e.target.dataset && e.target.dataset.vol) { saveSettings(); if (e.target.dataset.vol === 'sfx') sfx('tap'); } });
+// Flip a switch on screen straight away, whatever else is redrawing.
+function flipSwitch(btn, on) { if (btn) { btn.classList.toggle('on', on); btn.setAttribute('aria-pressed', on); } }
+
 // ---------------- menu ----------------
 function showMenu() {
   openSheet('menu', () => head('Menu', 'Hearthlands')
-    + ['music', 'sfx', 'haptics', 'gentle'].map((k) => `<div class="toggle"><span>${{ music: 'Music & nature sounds', sfx: 'Sound effects', haptics: 'Vibration', gentle: 'Gentle visuals (fewer effects, saves battery)' }[k]}</span><button class="switch ${S.settings[k] ? 'on' : ''}" data-act="set" data-arg="${k}" aria-label="${k}"></button></div>`).join('')
+    + settingsHTML('data-act="set" data-arg')
     + `<div class="section"><h3>How to play</h3><div class="note">
-      • <b>Zones</b>: paint Housing for homes, Farmland for food and Workshops for gold. Villagers build them over time.<br>
+      • <b>Zones</b>: paint Housing for homes, Farmland for food and Workshops for gold. Villagers build them over time. <b>Road</b> paints free roads, and <b>Erase</b> clears zones and roads.<br>
       • <b>Build</b>: place Lumber Camps by woods, Quarries and Mines by hills, Docks on the shore.<br>
       • Your border grows as your town grows. Watchtowers push it further.<br>
       • Trade with nearby villages and send gifts. Close friends may join your kingdom.<br>
@@ -517,7 +535,7 @@ function act(name, arg, el) {
     case 'goto': { const t = townById(+arg); if (t) { closeSheet(); flyTo(t.x, t.y, 56); } break; }
     case 'gonb': { const n = S.neighbors[+arg] && S.neighbors.find((q) => q.id === +arg); if (n) { flyAbove(n.x, n.y, 48); showInfo(n.x, n.y); } break; }
     case 'found': closeSheet(); setMode({ kind: 'found' }); toast('Pick open land anywhere for your settlers.'); if (cam.tw > 30) flyTo(null, null, 10, 0.8, true); break;
-    case 'set': S.settings[arg] = !S.settings[arg]; saveSettings(); applySettings(); refreshSheet(); if (arg === 'haptics' && S.settings.haptics) haptic(); break;
+    case 'set': S.settings[arg] = !S.settings[arg]; flipSwitch(el, S.settings[arg]); saveSettings(); applySettings(); touchingUI = false; refreshSheet(); if (arg === 'haptics' && S.settings.haptics) haptic(); break;
     case 'savenow': save(); toast('Your realm is saved.'); break;
     case 'fullscreen': if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen().catch(() => {}); break;
     case 'mainmenu': backToMenu(); break;
@@ -666,11 +684,11 @@ function menuPage(page) {
       <button class="mbtn primary" id="tgo"><span class="mi">🧭</span><div>Choose your homeland<small>Saved in slot ${freeSlot} of ${SLOT_COUNT}</small></div></button>`
       : `<div class="note">All ${SLOT_COUNT} save slots are in use. Open <b>Load Realm</b> and delete one to make room.</div><button class="mbtn" data-m="load"><span class="mi">📜</span><div>Load Realm</div></button>`);
   } else if (page === 'settings') {
-    html = mhead('Settings') + ['music', 'sfx', 'haptics', 'gentle'].map((k) => `<div class="toggle"><span>${{ music: 'Music & nature sounds', sfx: 'Sound effects', haptics: 'Vibration', gentle: 'Gentle visuals (fewer effects, saves battery)' }[k]}</span><button class="switch ${S.settings[k] ? 'on' : ''}" data-set="${k}" aria-label="${k}"></button></div>`).join('');
+    html = mhead('Settings') + settingsHTML('data-set');
   } else if (page === 'help') {
     html = mhead('How to Play') + `<div class="helptext">
       <p>Pick any spot on Earth and grow a hamlet into a kingdom. There is no way to lose, so take your time.</p>
-      <h3>🌾 Zones</h3>Paint <b>Housing</b>, <b>Farmland</b> and <b>Workshops</b>. Your builders put them up one by one. A Builder's Yard adds more crews.
+      <h3>🌾 Zones</h3>Paint <b>Housing</b>, <b>Farmland</b> and <b>Workshops</b>. Your builders put them up one by one. A Builder's Yard adds more crews. The <b>Road</b> tool lays roads for free wherever you like.
       <h3>🔨 Build</h3>Place key buildings yourself: lumber camps by woods, quarries and mines by hills, docks on shores and rivers. Everyday buildings like wells, taverns and schools make towns happier.
       <h3>😊 Mood</h3>Happy towns attract families faster. Tap a town hall to see what would help.
       <h3>🏡 Folk</h3>Everyone has a name, a family, a trade and sometimes a pet. Tap anyone walking about to meet them.
@@ -706,7 +724,7 @@ function menuPage(page) {
     if (m) { sfx('tap'); if (m.dataset.m === 'continue') { if (load(latest.slot)) enterGame(); } else menuPage(m.dataset.m); return; }
     if (play) { sfx('tap'); if (load(+play.dataset.slot)) enterGame(); return; }
     if (nw) { sfx('tap'); menuPage('new'); return; }
-    if (set) { const k = set.dataset.set; S.settings[k] = !S.settings[k]; saveSettings(); applySettings(); sfx('tap'); if (k === 'haptics' && S.settings.haptics) haptic(); menuPage('settings'); return; }
+    if (set) { const k = set.dataset.set; S.settings[k] = !S.settings[k]; flipSwitch(set, S.settings[k]); saveSettings(); applySettings(); sfx('tap'); if (k === 'haptics' && S.settings.haptics) haptic(); return; }
     if (del) {
       sfx('tap');
       if (!del.dataset.confirm) { del.dataset.confirm = 1; del.textContent = 'Sure?'; del.style.width = 'auto'; del.style.padding = '0 10px'; del.style.borderRadius = '16px'; return; }
@@ -721,7 +739,7 @@ export function backToMenu() {
   $('#hud').classList.add('hidden');
   S.started = false;
   // clear the realm from the map behind the menu (it is safely saved)
-  S.towns = []; S.buildings = new Map(); S.zones = new Map(); S.neighbors = []; S.nbIndex.clear(); S.routes = [];
+  S.towns = []; S.buildings = new Map(); S.zones = new Map(); S.proads = new Set(); S.neighbors = []; S.nbIndex.clear(); S.routes = [];
   $('#toasts').innerHTML = '';
   clearTransient();
   emit('change');

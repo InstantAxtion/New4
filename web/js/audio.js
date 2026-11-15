@@ -1,6 +1,7 @@
 // Gentle generative music, nature ambience and soft UI sounds via WebAudio.
 import { S } from './game.js';
 
+let weatherBus = null;
 let ac = null, master, musicBus, sfxBus, natureBus, reverb, started = false;
 const PENTA = [0, 2, 4, 7, 9];
 const CHORDS = [[0, 4, 7, 11], [5, 9, 12, 16], [-3, 0, 4, 7], [2, 5, 9, 12], [7, 11, 14, 17], [-5, -1, 2, 7]];
@@ -25,6 +26,7 @@ export function initAudio() {
   reverb = makeReverb(); const rv = ac.createGain(); rv.gain.value = 0.55; reverb.connect(rv); rv.connect(master);
   musicBus = ac.createGain(); musicBus.connect(master); musicBus.connect(reverb);
   natureBus = ac.createGain(); natureBus.connect(master);
+  weatherBus = ac.createGain(); weatherBus.connect(master);
   sfxBus = ac.createGain(); sfxBus.connect(master); sfxBus.connect(reverb);
   applySettings();
   scheduleMusic();
@@ -34,12 +36,21 @@ export function initAudio() {
   });
 }
 export function resumeAudio() { if (ac && ac.state === 'suspended') ac.resume(); }
+// Volume channels (0..1 each), adjustable with sliders in Settings.
+export const VOLUMES = [['master', 'Master volume'], ['music', 'Music'], ['nature', 'Nature & town sounds'], ['rain', 'Rain & storms'], ['sfx', 'Sound effects']];
+export function vol(k) {
+  const v = S.settings.vol || {};
+  if (v[k] !== undefined) return v[k];
+  return { master: 0.8, music: S.settings.music === false ? 0 : 0.8, nature: S.settings.music === false ? 0 : 0.8, rain: 0.4, sfx: S.settings.sfx === false ? 0 : 0.8 }[k];
+}
 export function applySettings() {
   if (!ac) return;
   const t = ac.currentTime;
-  musicBus.gain.setTargetAtTime(S.settings.music ? 0.22 : 0, t, 0.5);
-  natureBus.gain.setTargetAtTime(S.settings.music ? 0.5 : 0, t, 0.5);
-  sfxBus.gain.setTargetAtTime(S.settings.sfx ? 0.5 : 0, t, 0.05);
+  master.gain.setTargetAtTime(vol('master'), t, 0.1);
+  musicBus.gain.setTargetAtTime(0.28 * vol('music'), t, 0.3);
+  natureBus.gain.setTargetAtTime(0.62 * vol('nature'), t, 0.3);
+  weatherBus.gain.setTargetAtTime(vol('rain'), t, 0.3);
+  sfxBus.gain.setTargetAtTime(0.62 * vol('sfx'), t, 0.05);
 }
 
 function pad(freq, t, dur, vol = 0.08) {
@@ -112,7 +123,7 @@ function startNature() {
   const rsrc = ac.createBufferSource(); rsrc.buffer = rbuf; rsrc.loop = true;
   const rf = ac.createBiquadFilter(); rf.type = 'bandpass'; rf.frequency.value = 1400; rf.Q.value = 0.4;
   rainGain = ac.createGain(); rainGain.gain.value = 0;
-  rsrc.connect(rf); rf.connect(rainGain); rainGain.connect(natureBus); rsrc.start();
+  rsrc.connect(rf); rf.connect(rainGain); rainGain.connect(weatherBus); rsrc.start();
 }
 const amb = { night: 0, rain: 0, forest: 0 };
 // ---- soundscape that follows what is on screen ----
@@ -133,7 +144,7 @@ function buildScene() {
 }
 export function setScene(sea, river, town, forest) {
   if (!ac) return; buildScene();
-  const t = ac.currentTime, on = S.settings.music ? 1 : 0;
+  const t = ac.currentTime, on = 1;
   scene.sea.g.gain.setTargetAtTime(sea * 0.22 * on, t, 1.2);
   scene.river.g.gain.setTargetAtTime(river * 0.06 * on, t, 1.2);
   scene.town.g.gain.setTargetAtTime(town * 0.18 * on * (1 - amb.night * 0.7), t, 1.2);
@@ -155,9 +166,9 @@ function owl() {
   });
 }
 export function thunder() {
-  if (!ac || !S.settings.music) return;
+  if (!ac || vol('rain') <= 0) return;
   const src = loopNoise(3, 'brown'), f = ac.createBiquadFilter(), g = ac.createGain(), t = ac.currentTime;
-  f.type = 'lowpass'; f.frequency.value = 160; src.connect(f); f.connect(g); g.connect(natureBus);
+  f.type = 'lowpass'; f.frequency.value = 160; src.connect(f); f.connect(g); g.connect(weatherBus);
   g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.9, t + 0.15); g.gain.exponentialRampToValueAtTime(0.001, t + 2.8);
   src.start(t); src.stop(t + 3);
 }
@@ -194,7 +205,7 @@ function chirp() {
 
 // ---- sound effects ----
 export function sfx(kind) {
-  if (!ac || !S.settings.sfx) return;
+  if (!ac || vol('sfx') <= 0) return;
   resumeAudio();
   const t = ac.currentTime + 0.01;
   if (kind === 'tap') { pluck(mtof(BASE + 24 + 7), t, 0.05, sfxBus); }

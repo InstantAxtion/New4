@@ -163,6 +163,10 @@ body.moding #bottombar, body.moding #quests, body.moding #zoomctl { display: non
 #modebar { bottom: calc(10px + var(--sab)); padding: 5px; gap: 4px; flex-wrap: nowrap; border-radius: 18px; }
 .tool { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; padding: 6px 8px; border-radius: 13px; font-size: 12px; font-weight: 700; color: var(--ink-soft); min-width: 60px; }
 .tool .sw { width: 26px; height: 14px; clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); }
+.tool .sw.road { background: linear-gradient(135deg, transparent 38%, #cdb080 38% 62%, transparent 62%), #9fbf73; }
+.slider { display: block; padding: 10px 2px; border-bottom: 1px dashed var(--line); font-weight: 600; }
+.slider span { display: flex; justify-content: space-between; } .slider b { font-weight: 700; color: var(--ink-soft); }
+.slider input { width: 100%; margin-top: 8px; accent-color: var(--leaf); height: 28px; }
 .tool .sw.erase { background: repeating-linear-gradient(45deg, #b8a890 0 3px, #efe3c8 3px 6px); }
 .tool .ic { font-size: 16px; line-height: 14px; }
 .tool.on { background: rgba(192, 96, 62, 0.16); color: var(--accent-dark); box-shadow: inset 0 0 0 2px rgba(192, 96, 62, 0.5); }

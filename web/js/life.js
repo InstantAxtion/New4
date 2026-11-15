@@ -397,7 +397,7 @@ export function updateRoads() {
     const hall = idxOf(t.x, t.y), R = (t.radius + 2) ** 2;
     // Cheapest paths outward from the hall: existing streets are cheapest, then open ground,
     // then zoned-but-unbuilt tiles (streets may claim those). Buildings are never crossed.
-    const cost = (i) => (prevRoads.has(i) ? 1 : S.zones.has(i) ? 5 : 2);
+    const cost = (i) => (prevRoads.has(i) || S.proads.has(i) ? 1 : S.zones.has(i) ? 5 : 2);
     const passable = (i, x, y) => i === hall || (!S.buildings.has(i) && world.biome[i] > 2 && !nbExtraHas(i) && groundD2(x, y, t.x, t.y) <= R);
     const dist = new Map([[hall, 0]]), parent = new Map([[hall, -1]]), pdir = new Map();
     const buckets = [[hall]];
@@ -438,6 +438,17 @@ export function updateRoads() {
     net.set(t.id, { parent, conn, hall });
   }
   extraRoads((i, d) => { roads.set(i, (roads.get(i) || 0) | (1 << d)); if (!roadTown.has(i)) roadTown.set(i, -1); });
+  // Roads painted by the player: join each to any road beside it (a lone tile still shows as a little square).
+  for (const i of S.proads) {
+    if (S.buildings.has(i)) { S.proads.delete(i); continue; }
+    const x = i % W, y = Math.floor(i / W);
+    let m = roads.get(i) || 0;
+    for (let d = 0; d < 4; d++) {
+      const [nx, ny] = stepTile(x, y, d), ni = idxOf(nx, ny);
+      if (S.proads.has(ni) || (roads.has(ni) && !S.buildings.has(ni))) { m |= 1 << d; roads.set(ni, (roads.get(ni) || 0) | (1 << OPP[d])); if (!roadTown.has(ni)) roadTown.set(ni, -1); }
+    }
+    roads.set(i, m || 16); if (!roadTown.has(i)) roadTown.set(i, -1);
+  }
 }
 let extraRoads = () => {};
 export function setExtraRoads(f) { extraRoads = f; roadsDirty = true; }
@@ -458,6 +469,7 @@ export function setExtraLookup(f) { nbExtraHas = f; }
 const EDGE = [[0.5, 0.5], [-0.5, -0.5], [-0.5, 0.5], [0.5, -0.5]];
 export function addRoad(path, mask, cx, cy, hw, hh) {
   for (let d = 0; d < 4; d++) if (mask & (1 << d)) { path.moveTo(cx, cy); path.lineTo(cx + EDGE[d][0] * hw, cy + EDGE[d][1] * hh); }
+  if (mask === 16) { path.moveTo(cx - hw * 0.15, cy); path.lineTo(cx + hw * 0.15, cy); } // a lone painted road tile
 }
 export function strokeRoads(ctx, path, tw, paved = false) {
   ctx.lineCap = 'round';

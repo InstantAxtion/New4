@@ -245,7 +245,7 @@ export const S = {
   started: false, name: 'Hearthlands', day: 0, speed: 1, tier: 0,
   res: { food: 0, wood: 0, stone: 0, gold: 0, iron: 0, bread: 0, tools: 0, cloth: 0, ale: 0 },
   rates: { food: 0, wood: 0, stone: 0, gold: 0, iron: 0, bread: 0, tools: 0, cloth: 0, ale: 0 },
-  towns: [], buildings: new Map(), zones: new Map(),
+  towns: [], buildings: new Map(), zones: new Map(), proads: new Set(),
   neighbors: [], nbIndex: new Map(),
   questsDone: new Set(), stats: { trades: 0, gifts: 0, joins: 0 }, tutorial: 99,
   settings: { music: true, sfx: true, haptics: true },
@@ -374,10 +374,19 @@ export function canZone(x, y) {
   if (!ownerOf(x, y) || nearNeighbor(x, y)) return false;
   return true;
 }
+// Roads you paint yourself are free; they can't cross buildings, water or rivers, and stay inside your borders.
+export function canRoad(x, y) {
+  x = wrapX(x);
+  if (y < 1 || y >= H - 1) return false;
+  const i = idxOf(x, y);
+  if (S.proads.has(i) || S.buildings.has(i) || !BUILDABLE.has(world.biome[i]) || riverAt(x, y)) return false;
+  return !!ownerOf(x, y) && !nearNeighbor(x, y);
+}
 export function setZone(zone, x, y) {
   x = wrapX(x);
   const i = idxOf(x, y);
-  if (zone === 'erase') { if (S.zones.delete(i)) { emit('change'); return true; } return false; }
+  if (zone === 'erase') { const a = S.zones.delete(i), r = S.proads.delete(i); if (a || r) { emit('change'); return true; } return false; }
+  if (zone === 'road') { if (!canRoad(x, y)) return false; S.zones.delete(i); S.proads.add(i); emit('change'); return true; }
   if (ZONES[zone] && DEFS[ZONES[zone].builds].tier > S.tier) return false;
   if (!canZone(x, y) || S.zones.get(i) === zone) return false;
   S.zones.set(i, zone); emit('change');
@@ -838,7 +847,7 @@ export function newGame(name, x, y) {
   S.res = { food: 60, wood: 50, stone: 20, gold: 30, iron: 0, bread: 0, tools: 0, cloth: 0, ale: 0 };
   S.hints = [];
   S.expeditions = []; S.explored = []; S.journal = []; S.treasures = {}; S.festsHeld = {}; S.requests = []; S.nextReq = 0; S.royal = null; S.hist = []; S.miles = [];
-  S.towns = []; S.buildings = new Map(); S.zones = new Map(); S.nextTownId = 1;
+  S.towns = []; S.buildings = new Map(); S.zones = new Map(); S.proads = new Set(); S.nextTownId = 1;
   S.questsDone = new Set(); S.stats = { trades: 0, gifts: 0, joins: 0 }; S.routes = [];
   S.tutorial = 0;
   S.neighbors = generateNeighbors();
@@ -870,7 +879,7 @@ export function save() {
   const data = {
     v: 1, name: S.name, day: S.day, speed: S.speed, tier: S.tier, res: S.res, towns: S.towns,
     buildings: [...S.buildings].map(([i, b]) => [i, b.t, +b.p.toFixed(3), b.town, +(b.m || 1).toFixed(2), b.z ? 1 : 0, b.lv || 1]),
-    zones: [...S.zones], nb: S.neighbors.filter((n) => n.friend || n.joined || n.req || (n.log && n.log.length) || n.pop > 70).map((n) => [n.id, n.friend, n.joined ? 1 : 0, +n.pop.toFixed(1), n.req || null, n.log || []]),
+    zones: [...S.zones], proads: [...S.proads], nb: S.neighbors.filter((n) => n.friend || n.joined || n.req || (n.log && n.log.length) || n.pop > 70).map((n) => [n.id, n.friend, n.joined ? 1 : 0, +n.pop.toFixed(1), n.req || null, n.log || []]),
     quests: [...S.questsDone], stats: S.stats, routes: S.routes || [], hints: S.hints || [],
     expeditions: S.expeditions || [], explored: S.explored || [], journal: S.journal || [], treasures: S.treasures || {}, festsHeld: S.festsHeld || {},
     requests: S.requests || [], nextReq: S.nextReq || 0, royal: S.royal || null, hist: S.hist || [], miles: S.miles || [], nextFolk: S.nextFolk || 1, cam: S.cam, nextTownId: S.nextTownId, tutorial: S.tutorial,
@@ -910,7 +919,7 @@ export function load(n = currentSlot) {
   S.expeditions = d.expeditions || []; S.explored = d.explored || []; S.journal = d.journal || []; S.treasures = d.treasures || {}; S.festsHeld = d.festsHeld || {};
   S.requests = d.requests || []; S.nextReq = d.nextReq || 0; S.royal = d.royal || null; S.hist = d.hist || []; S.miles = d.miles || []; if (d.nextFolk) S.nextFolk = d.nextFolk;
   S.buildings = new Map(d.buildings.map(([i, t, p, town, m, z, lv]) => [i, { t, p, town, m, z, lv: lv || 1 }]));
-  S.zones = new Map(d.zones);
+  S.zones = new Map(d.zones); S.proads = new Set(d.proads || []);
   S.neighbors = generateNeighbors();
   const cap = S.towns.find((t) => t.capital) || S.towns[0];
   if (cap) S.neighbors = S.neighbors.filter((n2) => groundDist2(n2.x, n2.y, cap.x, cap.y) > 144 || d.nb.some((e) => e[0] === n2.id));
