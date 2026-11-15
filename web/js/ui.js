@@ -4,7 +4,7 @@ import {
   S, M, RES, RES_NAMES, TIERS, DEFS, MANUAL, WONDERS, ZONES, FOUND_COST, GIFT_AMOUNT, CONTACT_RANGE,
   on, emit, totalPop, totalCap, townById, hasWonder, wonderStarted, count, ownerOf, canPlace, placeBuilding, setZone,
   demolish, canFound, foundTown, inContact, tradeOffers, doTrade, gift, canInvite, invite, activeQuests, QUESTS,
-  newGame, PACE, UPKEEP, SPECS, SPEC_TIER, SPEC_CHANGE_COST, setSpec, GOODS, EVERYDAY, GOODS_BUILDINGS, SPECIALTIES, ALL_WONDERS, MOODS, moodOf, townStyleOf, TRAITS, IMPROVEMENTS, IMPROVE_TIER, charm, improve, continentAt, realmContinents, harbourTowns, routeOptions, openRoute, ROUTE_COST, ROUTE_DAYS, routesDone, maxTowns, fulfil, nbExtra, HOUSE_LEVELS, HOUSE_CAP_MULT, save, hasSave, load, resetSave, slotInfo, setSlot, deleteSlot, SLOT_COUNT, saveSettings, surveyStart, canStart, affordable, groundDist2, DAY_SECONDS,
+  newGame, PACE, crewsOf, crewsBusy, zonesWaiting, yardsIn, UPKEEP, SPECS, SPEC_TIER, SPEC_CHANGE_COST, setSpec, GOODS, EVERYDAY, GOODS_BUILDINGS, SPECIALTIES, ALL_WONDERS, MOODS, moodOf, townStyleOf, TRAITS, IMPROVEMENTS, IMPROVE_TIER, charm, improve, continentAt, realmContinents, harbourTowns, routeOptions, openRoute, ROUTE_COST, ROUTE_DAYS, routesDone, maxTowns, fulfil, nbExtra, HOUSE_LEVELS, HOUSE_CAP_MULT, save, hasSave, load, resetSave, slotInfo, setSlot, deleteSlot, SLOT_COUNT, saveSettings, surveyStart, canStart, affordable, groundDist2, DAY_SECONDS,
 } from './game.js';
 import { SPR, spriteIcon } from './sprites.js';
 import { panBy, cam, markDirty, flyTo, centerOn, clampCam, screenSize, TILE_MODE_TW, sx, sy, pickTile, setHover } from './render.js';
@@ -388,6 +388,7 @@ function townInfo(t, sub) {
   const next = TIERS[S.tier + 1];
   return head(`${esc(t.name)}${t.capital ? ' 👑' : ''}`, sub)
     + `<div class="kv"><span>Villagers</span><span>${Math.floor(t.pop)} / ${t.cap}</span><span>Buildings</span><span>${t.n}</span>
+      <span>Builders</span><span>${crewsBusy(t)} of ${crewsOf(t)} crews at work${zonesWaiting(t) ? ` · ${zonesWaiting(t)} zoned tiles waiting` : ''}${yardsIn(t) ? '' : ' (a Builder\'s Yard adds 2)'}</span>
       <span>Border</span><span>${t.radius.toFixed(1)} tiles</span><span>Founded</span><span>Year ${Math.floor(t.founded / 48) + 1}</span></div>
       <div class="note">${t.pop >= t.cap - 0.5 ? 'Every home is full. Zone more housing to grow.' : S.fed ? 'Families are moving in.' : 'Growth has paused until there is more food.'}</div>
       ${t.capital && next ? `<div class="note">The keep grows grander as your realm reaches ${next.name}.</div>` : ''}

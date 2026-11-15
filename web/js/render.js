@@ -653,6 +653,22 @@ function drawTiles() {
           if (spot) { const ph = hash2(wx, y, 33) * 6.28, [ox, oy, face] = L.wander(animTime * 1.5, ph, 0.3);
             L.drawBoat(ctx, sx(tileWX(spot[0], spot[1]) + ox), sy(tileWY(spot[1]) + oy), s, animTime, ph, false, face); }
         }
+        if (bld.p < 1 && tw >= 30) { // builders at work, hammers swinging
+          const bt2 = townById(bld.town), n = bt2 && (bt2._yards || 0) > 0 ? 2 : 1;
+          for (let k = 0; k < n; k++) {
+            const bx = cx + (k ? -0.22 : 0.24) * tw, by = cy + (k ? 0.1 : 0.06) * tw, face = k ? 1 : -1, ph = hash2(wx, y, 60 + k) * 6;
+            const swing = Math.sin(animTime * 6 + ph), ss = s;
+            ctx.fillStyle = 'rgba(30,40,20,0.25)'; ctx.beginPath(); ctx.ellipse(bx, by, 2.4 * ss, 1.1 * ss, 0, 0, 6.3); ctx.fill();
+            ctx.strokeStyle = '#4a3a2c'; ctx.lineWidth = Math.max(0.8, 0.9 * ss);
+            ctx.beginPath(); ctx.moveTo(bx - 0.6 * ss, by - 1.6 * ss); ctx.lineTo(bx - 0.8 * ss, by); ctx.moveTo(bx + 0.6 * ss, by - 1.6 * ss); ctx.lineTo(bx + 0.8 * ss, by); ctx.stroke();
+            ctx.fillStyle = k ? '#c0703e' : '#4a78a8'; ctx.fillRect(bx - 1.6 * ss, by - 6 * ss, 3.2 * ss, 4.6 * ss);
+            ctx.fillStyle = '#f0c8a0'; ctx.beginPath(); ctx.arc(bx, by - 7.6 * ss, 1.6 * ss, 0, 6.3); ctx.fill();
+            ctx.fillStyle = '#e8c040'; ctx.beginPath(); ctx.arc(bx, by - 8.2 * ss, 1.7 * ss, Math.PI, 0); ctx.fill(); // a work cap
+            const ang = -0.4 + swing * 0.9, hx = bx + face * Math.cos(ang) * 4 * ss, hy = by - 5 * ss + Math.sin(ang) * 4 * ss;
+            ctx.strokeStyle = '#7a5634'; ctx.lineWidth = Math.max(0.8, 0.8 * ss); ctx.beginPath(); ctx.moveTo(bx + face * 1.2 * ss, by - 5 * ss); ctx.lineTo(hx, hy); ctx.stroke();
+            ctx.fillStyle = '#5a5a62'; ctx.fillRect(hx - 1 * ss, hy - 0.8 * ss, 2 * ss, 1.6 * ss);
+          }
+        }
         if (bld.p < 1) {
           const bw = tw * 0.5, bh = Math.max(3, tw / 16);
           ctx.fillStyle = 'rgba(40,30,20,0.6)'; ctx.fillRect(cx - bw / 2, cy - tw * 0.42, bw, bh);

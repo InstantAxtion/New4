@@ -654,6 +654,27 @@ function lifeSprites() {
     box(g, 0.47, 0.44, 0.55, 0.52, 5, '#d8c49a', 17); cone(g, 0.51, 0.48, 22, 3.5, 5, '#4a6a8a');
     g.strokeStyle = '#8a6a44'; g.lineWidth = 0.8; g.beginPath(); for (let k = 0; k <= 6; k++) { const [x, y] = P(0.1 + k * 0.13, 0.92, 0); g.moveTo(x, y); g.lineTo(x, y - 3); } g.moveTo(...P(0.1, 0.92, 2)); g.lineTo(...P(0.88, 0.92, 2)); g.stroke();
   })];
+  S.yard = [frame((g) => {
+    shadow(g, 22, 10);
+    ground(g, '#c9b08a', 27);
+    // open shed
+    g.strokeStyle = '#6a4a2a'; g.lineWidth = 1.4;
+    for (const [u, v] of [[0.12, 0.62], [0.5, 0.62], [0.5, 0.18]]) { g.beginPath(); g.moveTo(...P(u, v, 0)); g.lineTo(...P(u, v, 11)); g.stroke(); }
+    hip(g, 0.12, 0.18, 0.5, 0.62, 11, 4, '#8a6a4a');
+    // planks and beams
+    for (let k = 0; k < 4; k++) box(g, 0.58, 0.2 + k * 0.03, 0.95, 0.24 + k * 0.03, 1.6, k % 2 ? '#d8b07a' : '#c89a64', k * 1.6);
+    for (let k = 0; k < 3; k++) { const [x, y] = P(0.62 + k * 0.1, 0.62, 0); g.fillStyle = '#8a5f3c'; g.beginPath(); g.arc(x, y - 2, 2.2, 0, 7); g.fill(); g.fillStyle = '#e3c08a'; g.beginPath(); g.arc(x, y - 2, 1.3, 0, 7); g.fill(); }
+    // stone blocks
+    for (const [u, v] of [[0.6, 0.85], [0.74, 0.88], [0.67, 0.78]]) box(g, u, v - 0.07, u + 0.08, v, 3.5, '#b4aca0');
+    // sawhorse with a plank
+    const [sx2, sy2] = P(0.3, 0.86, 0); g.strokeStyle = '#6a4a2a'; g.lineWidth = 1;
+    g.beginPath(); g.moveTo(sx2 - 5, sy2); g.lineTo(sx2 - 3, sy2 - 5); g.lineTo(sx2 - 1, sy2); g.moveTo(sx2 + 2, sy2); g.lineTo(sx2 + 4, sy2 - 5); g.lineTo(sx2 + 6, sy2); g.stroke();
+    g.fillStyle = '#d8b07a'; g.fillRect(sx2 - 7, sy2 - 6.5, 15, 1.6);
+    // ladder against the shed
+    const [lx2, ly2] = P(0.5, 0.4, 0); g.strokeStyle = '#8a6a44'; g.lineWidth = 0.8;
+    g.beginPath(); g.moveTo(lx2 + 2, ly2); g.lineTo(lx2 + 5, ly2 - 14); g.moveTo(lx2 + 5, ly2); g.lineTo(lx2 + 8, ly2 - 14);
+    for (let k = 1; k < 5; k++) { g.moveTo(lx2 + 2 + k * 0.6, ly2 - k * 2.8); g.lineTo(lx2 + 5 + k * 0.6, ly2 - k * 2.8); } g.stroke();
+  })];
   S.stable = [frame((g) => {
     shadow(g, 22, 10);
     // paddock fence

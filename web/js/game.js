@@ -38,6 +38,7 @@ export const DEFS = {
   windmill: { name: 'Windmill', cost: { wood: 30, stone: 10 }, jobs: 1, time: 3, tier: 1, mood: 1, cat: 'everyday', desc: "Grinds grain: +15% food from this town's farms." },
   chapel: { name: 'Chapel', cost: { wood: 30, stone: 30 }, jobs: 1, time: 4, tier: 1, mood: 2, cat: 'everyday', desc: 'A quiet place for the whole town.' },
   tavern: { name: 'Tavern', cost: { wood: 40, stone: 10 }, use: { ale: 0.2 }, jobs: 2, time: 4, tier: 1, mood: 1, cat: 'everyday', desc: 'Warm and lively. Even merrier when it can serve ale or wine.' },
+  yard: { name: "Builder's Yard", cost: { wood: 40, stone: 20 }, jobs: 2, time: 3, tier: 0, cat: 'everyday', desc: '+2 builder crews for this town, so more zoned tiles go up at once, and building here is 25% faster (up to two yards).' },
   stable: { name: 'Stables', cost: { wood: 40, stone: 15, food: 30 }, jobs: 2, time: 4, tier: 1, cat: 'everyday', desc: 'Horses! Riders and carts speed about town, settlers set out faster, traders bring more, and horses help plough the fields.' },
   school: { name: 'School', cost: { wood: 40, stone: 30, gold: 20 }, jobs: 2, time: 5, tier: 2, mood: 1, cat: 'everyday', desc: 'Villagers learn their trades faster.' },
   // ---- goods workshops ----
@@ -98,7 +99,12 @@ export function setSpec(t, key) {
   t.spec = key; emit('toast', `${t.name} now specialises in ${SPECS[key].name} ${SPECS[key].icon}.`); emit('change');
   return true;
 }
-export const EVERYDAY = ['well', 'apiary', 'windmill', 'chapel', 'tavern', 'school', 'stable'];
+export const EVERYDAY = ['yard', 'well', 'apiary', 'windmill', 'chapel', 'tavern', 'school', 'stable'];
+// Builder crews per town: one to start, one more per 150 folk, and two per Builder's Yard.
+export const yardsIn = (t) => { let n = 0; for (const b of S.buildings.values()) if (b.t === 'yard' && b.town === t.id && b.p >= 1 && !b.idle) n++; return n; };
+export const crewsOf = (t) => 1 + Math.floor(t.pop / PACE.builders) + 2 * yardsIn(t);
+export function crewsBusy(t) { let n = 0; for (const b of S.buildings.values()) if (b.town === t.id && b.p < 1 && b.z) n++; return n; }
+export function zonesWaiting(t) { let n = 0; for (const i of S.zones.keys()) if (ownerOf(i % W, Math.floor(i / W)) === t) n++; return n; }
 export const hasStables = () => count('stable') >= 1;
 export const GOODS_BUILDINGS = ['bakery', 'brewery', 'weaver', 'smithy'];
 export const SPECIALTIES = ['orchard', 'icehut', 'vineyard', 'oasis', 'cacao', 'riceterrace'];
@@ -594,6 +600,7 @@ export const QUESTS = [
   Q('happy', 'Make a town Happy 😊', () => S.towns.some((t) => t.mood && t.mood.level >= 1), { gold: 40 }),
   Q('bread', 'Bake your first bread', () => count('bakery') >= 1 && S.res.bread > 0, { food: 60 }),
   Q('specialty', "Build your region's specialty", () => SPECIALTIES.some((k) => count(k) >= 1), { gold: 60 }),
+  Q('yard', "Open a Builder's Yard for more builders", () => count('yard') >= 1, { wood: 30 }),
   Q('stable', 'Build Stables and bring horses to town', () => count('stable') >= 1, { food: 40, wood: 30 }),
   Q('spec', 'Choose a speciality for a town', () => S.towns.some((t) => t.spec), { gold: 40 }),
   Q('wedding', 'Celebrate a wedding in your realm', () => (S.stats.weddings || 0) >= 1, { food: 40, gold: 20 }),
@@ -655,10 +662,11 @@ function step(dd) {
   let changed = false;
 
   // Construction
+  for (const t of S.towns) t._yards = yardsIn(t);
   for (const [i, b] of S.buildings) {
     if (b.p >= 1) continue;
     const t = townById(b.town);
-    b.p += (dd / (DEFS[b.t].time * PACE.build)) * (t && t.pop >= 2 ? 1 : 0.5) * (hasTools ? 1.25 : 1);
+    b.p += (dd / (DEFS[b.t].time * PACE.build)) * (t && t.pop >= 2 ? 1 : 0.5) * (hasTools ? 1.25 : 1) * (t ? 1 + 0.25 * Math.min(2, t._yards || 0) : 1);
     if (b.p >= 1) {
       b.p = 1; changed = true;
       emit('built', { b, i, x: i % W, y: Math.floor(i / W) });
@@ -670,20 +678,27 @@ function step(dd) {
   if (S.zones.size) {
     const busy = new Map();
     for (const b of S.buildings.values()) if (b.p < 1 && b.z) busy.set(b.town, (busy.get(b.town) || 0) + 1);
-    const best = new Map();
+    // every free builder crew in a town picks up the nearest zoned tile
+    const cands = new Map();
     for (const [i, z] of S.zones) {
       const x = i % W, y = Math.floor(i / W), t = ownerOf(x, y);
-      if (!t) continue;
-      if ((busy.get(t.id) || 0) >= 1 + Math.floor(t.pop / PACE.builders)) continue;
-      const d = groundDist2(x, y, t.x, t.y), cur = best.get(t.id);
-      if (!cur || d < cur.d) best.set(t.id, { i, x, y, z, d, t });
+      if (!t || (busy.get(t.id) || 0) >= crewsOf(t)) continue;
+      if (!cands.has(t.id)) cands.set(t.id, []);
+      cands.get(t.id).push({ i, x, y, z, d: groundDist2(x, y, t.x, t.y), t });
     }
-    for (const c of best.values()) {
-      const type = ZONES[c.z].builds, def = DEFS[type];
-      if (!affordable(def.cost)) continue;
-      pay(def.cost); S.zones.delete(c.i);
-      S.buildings.set(c.i, { t: type, p: 0, town: c.t.id, m: yieldMult(type, c.x, c.y), z: 1 });
-      emit('change');
+    for (const list of cands.values()) {
+      const t = list[0].t;
+      let free = crewsOf(t) - (busy.get(t.id) || 0);
+      list.sort((a, b) => a.d - b.d);
+      for (const c of list) {
+        if (free <= 0) break;
+        const type = ZONES[c.z].builds, def = DEFS[type];
+        if (!affordable(def.cost)) continue;
+        pay(def.cost); S.zones.delete(c.i);
+        S.buildings.set(c.i, { t: type, p: 0, town: t.id, m: yieldMult(type, c.x, c.y), z: 1 });
+        free--;
+        emit('change');
+      }
     }
   }
 

@@ -23,7 +23,7 @@ export const JOBS = {
   farm: 'Farmer', lumber: 'Woodcutter', quarry: 'Stonecutter', mine: 'Miner', dock: 'Fisher', workshop: 'Craftsperson', market: 'Merchant',
   harbour: 'Sailor', tower: 'Lookout', bakery: 'Baker', brewery: 'Brewer', weaver: 'Weaver', smithy: 'Smith', tavern: 'Innkeeper',
   chapel: 'Chapel keeper', school: 'Teacher', apiary: 'Beekeeper', windmill: 'Miller', vineyard: 'Vintner', riceterrace: 'Rice grower',
-  icehut: 'Ice fisher', stable: 'Stablehand', oasis: 'Gardener', cacao: 'Cacao grower', orchard: 'Orchard keeper',
+  icehut: 'Ice fisher', stable: 'Stablehand', yard: 'Builder', oasis: 'Gardener', cacao: 'Cacao grower', orchard: 'Orchard keeper',
 };
 const PET_NAMES = ['Biscuit', 'Pepper', 'Maple', 'Bramble', 'Clover', 'Juniper', 'Bean', 'Hazel', 'Sage', 'Tansy', 'Rusty', 'Willow',
   'Pudding', 'Socks', 'Mittens', 'Barley', 'Fennel', 'Nutmeg', 'Poppy', 'Toffee', 'Pebble', 'Acorn', 'Thistle', 'Sooty'];
