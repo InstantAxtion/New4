@@ -121,7 +121,7 @@ function planHighways(mark) {
     for (let k = 1; k < path.length; k++) {
       const [x, y, d] = path[k], [px, py] = path[k - 1], pi = idxOf(px, py), ci = idxOf(x, y);
       tiles.push(ci);
-      if (S.buildings.has(pi) || S.buildings.has(ci) || world.biome[pi] <= 1 || world.biome[ci] <= 1) continue;
+      if (S.occupied.has(pi) || S.occupied.has(ci) || S.buildings.has(pi) || S.buildings.has(ci) || world.biome[pi] <= 1 || world.biome[ci] <= 1) continue;
       mark(pi, d); mark(ci, [1, 0, 3, 2][d]);
     }
     highways.push({ a: a.id, b: b.id, path });
@@ -145,7 +145,7 @@ function landRoute(a, b) {
       const [nx, ny] = L.stepTile(x, y, d); if (ny < 1 || ny >= H - 1) continue;
       const ni = idxOf(nx, ny);
       if (parent.has(ni) || !inBox(nx, ny)) continue;
-      if (ni !== goal && (world.biome[ni] <= 1 || S.buildings.has(ni))) continue;
+      if (ni !== goal && (world.biome[ni] <= 1 || S.buildings.has(ni) || S.occupied.has(ni))) continue;
       parent.set(ni, i); pdir.set(ni, d); q.push(ni);
       if (ni === goal) { found = true; break; }
     }
@@ -182,6 +182,27 @@ export function drawHighwayTraffic(ctx, v) {
   }
 }
 
+// Caravans: covered wagons with outriders on your chosen routes.
+export function drawCaravans(ctx, v) {
+  const t = v.time;
+  for (const [ai, bi] of S.caravans || []) {
+    const a = S.towns.find((q) => q.id === ai), b = S.towns.find((q) => q.id === bi); if (!a || !b) continue;
+    const path = landRoute(a, b); if (!path || path.length < 3) continue;
+    const n = path.length, u0 = (t * 0.55 / n + ai * 0.21) % 2, u = u0 > 1 ? 2 - u0 : u0, f = u * (n - 1), k = Math.floor(f), r = f - k;
+    const [x0, y0] = path[k], [x1, y1] = path[Math.min(n - 1, k + 1)];
+    let X0 = tileWX(x0, y0), X1 = tileWX(x1, y1); if (X1 - X0 > W / 2) X1 -= W; else if (X0 - X1 > W / 2) X1 += W;
+    const x = v.sx(X0 + (X1 - X0) * r), y = v.sy(tileWY(y0) + (tileWY(y1) - tileWY(y0)) * r + 0.04);
+    if (x < -40 || x > v.cw + 40 || y < -40 || y > v.ch + 40) continue;
+    const face = (X1 - X0) * (u0 > 1 ? -1 : 1) >= 0 ? 1 : -1, s = v.s;
+    if (v.tw < 14) { if (v.tw >= 3) { ctx.fillStyle = '#f4ead8'; ctx.fillRect(x - 2, y - 2, 4, 4); } continue; }
+    L.drawAnimal(ctx, 'horse', x + face * 9 * s, y, s * 1.1, face, t * 1.5, ai);
+    ctx.fillStyle = '#8a5a3c'; ctx.fillRect(x - 5 * s, y - 5 * s, 10 * s, 3 * s);
+    ctx.fillStyle = '#f4ead8'; ctx.beginPath(); ctx.moveTo(x - 5 * s, y - 5 * s); ctx.quadraticCurveTo(x, y - 13 * s, x + 5 * s, y - 5 * s); ctx.fill();
+    ctx.strokeStyle = 'rgba(120,100,70,0.6)'; ctx.lineWidth = 0.6 * s; ctx.beginPath(); ctx.moveTo(x - 2 * s, y - 5 * s); ctx.lineTo(x - 1.5 * s, y - 9.5 * s); ctx.moveTo(x + 2 * s, y - 5 * s); ctx.lineTo(x + 1.5 * s, y - 9.5 * s); ctx.stroke();
+    ctx.fillStyle = '#4a3a2c'; ctx.beginPath(); ctx.arc(x - 3 * s, y - 1.6 * s, 1.8 * s, 0, 6.3); ctx.arc(x + 3 * s, y - 1.6 * s, 1.8 * s, 0, 6.3); ctx.fill();
+    L.drawAnimal(ctx, 'horse', x - face * 8 * s, y + 2 * s, s, face, t * 1.5, ai + 3); // an outrider behind
+  }
+}
 // ---------------- shipyard: fishing fleet and ferries ----------------
 export const FERRY_RANGE = 40;
 export function shipyards() { const out = []; for (const [i, b] of S.buildings) if (b.t === 'shipyard' && b.p >= 1 && !b.idle) out.push(i); return out; }

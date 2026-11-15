@@ -1,6 +1,6 @@
 // The living world: seasons on the map, day and night, weather, animals, boats and roads.
 import { W, H, B, world, tileLat, tileWX, tileWY, idxOf } from './world.js';
-import { S, on, setStreetCheck } from './game.js';
+import { S, on, setStreetCheck, taken, crossing } from './game.js';
 import { hash2 } from './noise.js';
 import { SPR } from './sprites.js';
 import * as SE from './seasons.js';
@@ -88,8 +88,13 @@ export function drawOverviewSeasons(ctx, left, top, tw, cw) {
 
 // ---------------- day and night ----------------
 export const daylight = () => SE.nightAt(S.day);
-export function drawNight(ctx, cw, ch, lights, tw) {
-  const { n, w } = daylight();
+// The moon: one phase step each night, waxing and waning over eight nights.
+export const moonPhase = () => (Math.floor(S.day / SE.CYCLE) % 8) / 8; // 0 new, 0.5 full
+export const MOON_ICONS = ['🌑', '🌒', '🌓', '🌔', '🌕', '🌖', '🌗', '🌘'];
+export const moonIcon = () => MOON_ICONS[Math.floor(S.day / SE.CYCLE) % 8];
+const STARS = Array.from({ length: 140 }, (_, k) => [((k * 7919) % 1000) / 1000, ((k * 104729) % 997) / 997, 0.4 + ((k * 31) % 10) / 16, (k * 13) % 7]);
+export function drawNight(ctx, cw, ch, lights, tw, waterAt) {
+  const raw = daylight(), full = 1 - Math.abs(moonPhase() - 0.5) * 2, n = raw.n * (1 - 0.22 * full), w = raw.w;
   if (w > 0.02) {
     ctx.globalCompositeOperation = 'multiply';
     ctx.fillStyle = `rgb(255,${Math.round(250 - 16 * w)},${Math.round(242 - 38 * w)})`;
@@ -108,6 +113,26 @@ export function drawNight(ctx, cw, ch, lights, tw) {
       ctx.drawImage(SPR.glow, x - r * k, y - r * k * 0.8, 2 * r * k, 1.6 * r * k);
     }
     ctx.globalAlpha = 1;
+    if (waterAt && n > 0.4) { // the night sky mirrored in still water: stars, and the moon in its phase
+      const a = (n - 0.4) / 0.6;
+      for (const [fx, fy, b, ph] of STARS) {
+        const x = fx * cw, y = fy * ch; if (!waterAt(x, y)) continue;
+        const tw2 = 0.55 + 0.45 * Math.sin(tt * (1.3 + ph * 0.3) + ph * 2);
+        ctx.fillStyle = `rgba(235,240,255,${a * b * tw2})`; ctx.fillRect(x, y, 1.6, 1.6);
+      }
+      const mx = cw * 0.72, my = ch * 0.38, mr = Math.max(9, Math.min(22, tw * 0.5)), ph = moonPhase();
+      if (ph > 0.06 && ph < 0.94 && waterAt(mx, my)) {
+        ctx.save(); ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = a * 0.8;
+        ctx.beginPath(); ctx.ellipse(mx, my, mr, mr * 0.55, 0, 0, 6.3); ctx.clip();
+        ctx.fillStyle = 'rgb(236,240,252)'; ctx.fillRect(mx - mr, my - mr, mr * 2, mr * 2);
+        // the shadowed part slides across as the moon waxes and wanes
+        const off = ph < 0.5 ? -(ph / 0.5) * 2 * mr : (1 - (ph - 0.5) / 0.5) * 2 * mr;
+        ctx.fillStyle = 'rgb(46,60,92)'; ctx.beginPath(); ctx.ellipse(mx + off, my, mr, mr * 0.55, 0, 0, 6.3); ctx.fill();
+        ctx.restore();
+        ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = `rgba(220,230,255,${0.12 * a * full})`;
+        for (let k = 1; k < 6; k++) { const yy = my + mr * 0.6 + k * 4; ctx.fillRect(mx - mr * (1 - k / 7), yy + Math.sin(tt * 2 + k) * 1.2, mr * 2 * (1 - k / 7), 1.2); }
+      }
+    }
   }
   ctx.globalCompositeOperation = 'source-over';
 }
@@ -385,7 +410,7 @@ on('stepped', () => updateRoads()); on('joined', markRoads); on('founded', markR
 // Each town grows a branching road network outward from its hall over open ground only,
 // so roads never run under buildings. Every building connects at the free tile by its door.
 let prevRoadKeys = [];
-export const isStreet = (i) => roads.has(i) && !S.buildings.has(i);
+export const isStreet = (i) => roads.has(i) && !taken(i);
 const net = new Map(); // townId -> { parent: Map(idx -> parentIdx), conn: Map(buildingIdx -> connectorIdx), hall }
 export function updateRoads() {
   if (!roadsDirty) return;
@@ -398,7 +423,7 @@ export function updateRoads() {
     const hall = idxOf(t.x, t.y), R = (t.radius + 2) ** 2;
     // Cheapest paths outward from the hall: existing streets are cheapest, then open ground,
     // then zoned-but-unbuilt tiles (streets may claim those). Buildings are never crossed.
-    const passable = (i, x, y) => i === hall || (!S.buildings.has(i) && world.biome[i] > 2 && !nbExtraHas(i) && groundD2(x, y, t.x, t.y) <= R);
+    const passable = (i, x, y) => i === hall || ((!taken(i) || crossing(i)) && world.biome[i] > 2 && !nbExtraHas(i) && groundD2(x, y, t.x, t.y) <= R);
     // Main streets: a short straight street out of each side of the hall, kept free from the start,
     // so a town always has a tidy square and its hall is never walled in.
     const spine = new Set(), mainLen = Math.min(4, 2 + Math.floor(t.radius / 3));
@@ -455,12 +480,12 @@ export function updateRoads() {
   extraRoads((i, d) => { roads.set(i, (roads.get(i) || 0) | (1 << d)); if (!roadTown.has(i)) roadTown.set(i, -1); });
   // Roads painted by the player: join each to any road beside it (a lone tile still shows as a little square).
   for (const i of S.proads) {
-    if (S.buildings.has(i)) { S.proads.delete(i); continue; }
+    if (taken(i) && !crossing(i)) { S.proads.delete(i); continue; }
     const x = i % W, y = Math.floor(i / W);
     let m = roads.get(i) || 0;
     for (let d = 0; d < 4; d++) {
       const [nx, ny] = stepTile(x, y, d), ni = idxOf(nx, ny);
-      if (S.proads.has(ni) || (roads.has(ni) && !S.buildings.has(ni))) { m |= 1 << d; roads.set(ni, (roads.get(ni) || 0) | (1 << OPP[d])); if (!roadTown.has(ni)) roadTown.set(ni, -1); }
+      if (S.proads.has(ni) || (roads.has(ni) && (!taken(ni) || crossing(ni)))) { m |= 1 << d; roads.set(ni, (roads.get(ni) || 0) | (1 << OPP[d])); if (!roadTown.has(ni)) roadTown.set(ni, -1); }
     }
     roads.set(i, m || 16); if (!roadTown.has(i)) roadTown.set(i, -1);
   }

@@ -11,6 +11,43 @@ export const FESTIVALS = [
   { key: 'harvest', name: 'Harvest Fair', icon: '🍎', desc: 'Pies, cider and the year’s finest crops.' },
   { key: 'lights', name: 'Midwinter Lights', icon: '🏮', desc: 'Lanterns on every street to brighten the long nights.' },
 ];
+// Special celebrations any time of year (one per town each season, alongside the seasonal festival).
+export const SPECIALS = [
+  { key: 'fair', name: 'Travelling Fair', icon: '🎠', tier: 1, cost: { food: 50, gold: 60 }, desc: 'A carousel, swings, sweets and stalls on the green.' },
+  { key: 'wedding', name: 'Grand Wedding', icon: '💒', tier: 1, cost: { food: 60, gold: 30 }, desc: 'A happy couple weds in the town square, and everyone is invited.' },
+  { key: 'tournament', name: 'Grand Tournament', icon: '🏇', tier: 2, cost: { food: 80, gold: 80 }, desc: 'Knights joust in the lists while the crowd cheers. Neighbours come from far around.' },
+];
+export const ALL_FESTS = () => [...FESTIVALS, ...SPECIALS];
+export function canSpecial(t, key) {
+  const sp = SPECIALS.find((x) => x.key === key);
+  if (!sp || S.tier < sp.tier) return { ok: false, reason: `Unlocks at a later tier.` };
+  if (t.fest && S.day < t.fest.until) return { ok: false, reason: 'A celebration is on right now!' };
+  if (t.specSeason === seasonKey(t)) return { ok: false, reason: 'One special celebration a season.' };
+  if (key === 'wedding' && !weddingPair(t)) return { ok: false, reason: 'No couple is ready to wed just now.' };
+  if (!affordable(sp.cost)) return { ok: false, reason: 'Not enough food or gold.' };
+  return { ok: true };
+}
+function weddingPair(t) {
+  const singles = (t.folk || []).filter((p) => !p.p && ageOf(p) >= 20 && ageOf(p) <= 46);
+  return singles.length >= 2 ? [singles[0], singles[singles.length - 1]] : null;
+}
+export function holdSpecial(t, key) {
+  if (!canSpecial(t, key).ok) return false;
+  const sp = SPECIALS.find((x) => x.key === key);
+  for (const [r, v] of Object.entries(sp.cost)) S.res[r] -= v;
+  t.fest = { key, until: S.day + FESTIVAL_DAYS, ale: false }; t.specSeason = seasonKey(t); t.glow = S.day + FESTIVAL_DAYS + 12;
+  const reach = key === 'tournament' ? 70 : 45;
+  const guests = S.neighbors.filter((n) => !n.joined && (n.x - t.x) ** 2 + ((n.y - t.y) / 2) ** 2 < reach * reach);
+  for (const n of guests) n.friend = Math.min(100, n.friend + (key === 'tournament' ? 8 : 5));
+  (S.festsHeld ||= {})[key] = (S.festsHeld[key] || 0) + 1;
+  t.marketUntil = S.day + FESTIVAL_DAYS; t.marketFrom = guests.slice(0, 3).map((n) => n.id);
+  let extra = '';
+  if (key === 'wedding') { const [a, b] = weddingPair(t); a.p = b.i; b.p = a.i; b.l = a.l; S.stats.weddings = (S.stats.weddings || 0) + 1; extra = ` ${a.f} and ${b.f} are married!`; (t.chron ||= []).unshift({ d: Math.floor(S.day), s: `A grand wedding: ${a.f} and ${b.f} ${a.l} were married before the whole town.` }); }
+  emit('festival', { t, f: sp, guests });
+  emit('toast', `${sp.icon} ${sp.name} in ${t.name}!${extra}`);
+  emit('change');
+  return true;
+}
 export const FESTIVAL_COST = { food: 60, gold: 40 };
 export const FESTIVAL_DAYS = 3;
 export const festivalNow = (t) => FESTIVALS[seasonIndex(S.day, tileLat(t.y))];
@@ -40,6 +77,23 @@ export function holdFestival(t) {
   emit('change');
   return true;
 }
+// Royal visits: now and then a friendly neighbour's leader tours one of your towns, bringing gifts.
+let nextVisit = 0;
+function maybeRoyalVisit(dd) {
+  if (S.day < nextVisit || S.tier < 1) return;
+  nextVisit = S.day + 18 + Math.random() * 20;
+  const friends = S.neighbors.filter((n) => !n.joined && n.friend >= 45);
+  if (!friends.length) return;
+  const n = friends[Math.floor(Math.random() * friends.length)];
+  let best = null, bd = Infinity; for (const t of S.towns) { const d = (n.x - t.x) ** 2 + ((n.y - t.y) / 2) ** 2; if (d < bd) { bd = d; best = t; } }
+  if (!best || bd > 90 * 90) return;
+  best.royalVisit = { from: n.id, until: S.day + 3, name: n.leader || 'Their elder', village: n.name };
+  const gift = 30 + Math.round(n.friend / 2);
+  S.res.gold += gift; n.friend = Math.min(100, n.friend + 6);
+  best.cheer = Math.max(best.cheer || 0, S.day + 6);
+  emit('toast', `👑 ${n.leader || 'The elder'} of ${n.name} is visiting ${best.name}, with a gift of ${gift} gold!`);
+}
+on('stepped', (dd) => { if (S.started) maybeRoyalVisit(dd); });
 export const festiveMood = (t) => (t.fest && S.day < t.fest.until ? 2 + (t.fest.ale ? 1 : 0) : t.glow && S.day < t.glow ? 1 : 0);
 
 // ---------------- small requests from villagers ----------------
@@ -62,7 +116,7 @@ function newRequest() {
       const x = wrapX(t.x + Math.round((Math.random() - 0.5) * (t.radius * 2 + 6))), y = t.y + Math.round((Math.random() - 0.5) * (t.radius * 4 + 12));
       if (y < 1 || y >= H - 1) continue;
       const b = world.biome[y * W + x];
-      if (b > 2 && !S.buildings.has(y * W + x) && !(world.river && world.river[y * W + x])) {
+      if (b > 2 && !S.buildings.has(y * W + x) && !S.occupied.has(y * W + x) && !(world.river && world.river[y * W + x])) {
         const a = ANIMALS[Math.floor(Math.random() * ANIMALS.length)];
         q = { kind: 'lost', animal: a[0], icon: a[1], x, y, text: `${p.f}'s ${a[0]} has wandered off! It was last seen near ${t.name}. Can you spot it on the map?` };
       }
@@ -114,8 +168,8 @@ const ROYAL = {
   m: ['Edmund', 'Aldric', 'Leopold', 'Casimir', 'Rowan', 'Tobias', 'Alaric', 'Florian', 'Matthias', 'Osric', 'Julian', 'Anselm'],
   f: ['Eleanor', 'Isolde', 'Matilda', 'Rosalind', 'Beatrice', 'Adela', 'Cecily', 'Helena', 'Philippa', 'Agnes', 'Sabine', 'Clemence'],
 };
-const TITLES = [['Lord', 'Lady'], ['Baron', 'Baroness'], ['Count', 'Countess'], ['Duke', 'Duchess'], ['King', 'Queen']];
-const HEIR_TITLES = [['young Lord', 'young Lady'], ['young Lord', 'young Lady'], ['Viscount', 'Viscountess'], ['Marquess', 'Marchioness'], ['Prince', 'Princess']];
+const TITLES = [['Lord', 'Lady'], ['Baron', 'Baroness'], ['Count', 'Countess'], ['Duke', 'Duchess'], ['King', 'Queen'], ['Emperor', 'Empress']];
+const HEIR_TITLES = [['young Lord', 'young Lady'], ['young Lord', 'young Lady'], ['Viscount', 'Viscountess'], ['Marquess', 'Marchioness'], ['Prince', 'Princess'], ['Crown Prince', 'Crown Princess']];
 const pickName = (g) => ROYAL[g][Math.floor(Math.random() * ROYAL[g].length)];
 let rid = 1;
 function royal(g, age, role) { return { i: rid++, n: pickName(g), g, b: S.day - age * YEAR - Math.random() * YEAR, role, hair: ['#3c2a20', '#8a5a2c', '#d8b060', '#a04a2c', '#2a2a2a'][Math.floor(Math.random() * 5)], skin: ['#f0c8a0', '#e0a878', '#c08858', '#8a5a3a'][Math.floor(Math.random() * 4)] }; }

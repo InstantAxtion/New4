@@ -72,23 +72,46 @@ function pluck(freq, t, vol = 0.12, bus = musicBus, len = 2.2) {
 }
 
 let bar = 0, nextBar = 0;
+// The music changes with the region you are building in and with the seasons.
+const MINOR_CHORDS = [[-3, 0, 4, 7], [2, 5, 9, 12], [0, 4, 7, 11], [-5, -1, 2, 5], [-1, 2, 5, 9], [-3, 0, 4, 9]];
+const REGION_MUSIC = {
+  temperate: { scale: PENTA, chords: CHORDS, prog: PROG },
+  nordic: { scale: [0, 2, 4, 7, 9], chords: CHORDS, prog: [0, 2, 1, 0, 3, 1, 4, 0], bar: 7.5 },
+  mediterranean: { scale: [0, 2, 4, 5, 7, 9, 11], chords: CHORDS, prog: [0, 3, 1, 4, 0, 1, 4, 0], bar: 6 },
+  desert: { scale: [0, 1, 4, 5, 7, 8, 10], chords: MINOR_CHORDS, prog: [0, 0, 1, 0, 3, 0, 1, 0], drone: true },
+  arabic: { scale: [0, 1, 4, 5, 7, 8, 10], chords: MINOR_CHORDS, prog: [0, 1, 0, 3, 0, 1, 4, 0], drone: true },
+  tropical: { scale: [0, 2, 4, 7, 9], chords: CHORDS, prog: [0, 1, 4, 1, 0, 1, 4, 3], bar: 5, density: 1.5 },
+  eastasian: { scale: [0, 2, 4, 7, 9], chords: CHORDS, prog: [0, 3, 2, 1, 0, 3, 5, 0], bar: 8, density: 0.7, octUp: 12 },
+  indian: { scale: [0, 1, 4, 5, 7, 8, 11], chords: [[0, 7, 12, 19]], prog: [0], drone: true, bar: 7, density: 1.4 },
+  andean: { scale: [0, 3, 5, 7, 10], chords: MINOR_CHORDS, prog: [0, 1, 2, 0, 3, 4, 0, 5], octUp: 12, density: 1.3 },
+  slavic: { scale: [0, 2, 3, 5, 7, 8, 10], chords: MINOR_CHORDS, prog: [0, 1, 0, 4, 3, 1, 5, 0], bar: 7 },
+};
+let music = { ...REGION_MUSIC.temperate, bar: 6.5, density: 1, octUp: 0 };
+export function setMusicMood(style, season) {
+  const r = REGION_MUSIC[style] || REGION_MUSIC.temperate;
+  const sBar = [1, 0.88, 1.05, 1.25][season] || 1, sDen = [1, 1.25, 0.95, 0.7][season] || 1;
+  // autumn and winter lean a little wistful: swap to the minor progression in major regions
+  const chords = season >= 2 && r.chords === CHORDS && Math.random() < 0.5 ? MINOR_CHORDS : r.chords;
+  music = { scale: r.scale, chords, prog: r.prog, drone: !!r.drone, bar: (r.bar || 6.5) * sBar, density: (r.density || 1) * sDen, octUp: r.octUp || 0 };
+}
 function scheduleMusic() {
-  const BAR = 6.5;
   const loop = () => {
     if (!ac) return;
-    const now = ac.currentTime;
+    const now = ac.currentTime, BAR = music.bar;
     if (nextBar < now + 0.5) {
       const t = Math.max(nextBar, now + 0.05);
-      const chord = CHORDS[PROG[bar % PROG.length]];
-      chord.slice(0, 3).forEach((n, k) => pad(mtof(BASE + n - 12 + (k === 0 ? 0 : 0)), t, BAR + 1.5, 0.05));
-      pad(mtof(BASE + chord[0] - 24), t, BAR + 1.5, 0.05);
-      // melody: a few pentatonic notes, sparse and unhurried
-      const notes = 2 + Math.floor(Math.random() * 4);
+      const chord = music.chords[music.prog[bar % music.prog.length] % music.chords.length];
+      if (music.drone) { pad(mtof(BASE - 12), t, BAR + 1.5, 0.06); pad(mtof(BASE - 5), t, BAR + 1.5, 0.04); }
+      else { chord.slice(0, 3).forEach((n) => pad(mtof(BASE + n - 12), t, BAR + 1.5, 0.05)); pad(mtof(BASE + chord[0] - 24), t, BAR + 1.5, 0.05); }
+      // melody: a few notes from the region's scale, sparse and unhurried
+      const notes = Math.max(1, Math.round((2 + Math.floor(Math.random() * 4)) * music.density));
+      let last = Math.floor(Math.random() * music.scale.length);
       for (let i = 0; i < notes; i++) {
         if (Math.random() < 0.3) continue;
-        const deg = PENTA[Math.floor(Math.random() * PENTA.length)];
-        const oct = Math.random() < 0.3 ? 24 : 12;
-        pluck(mtof(BASE + chord[0] % 12 + deg + oct), t + (i * BAR) / notes + Math.random() * 0.3, 0.07);
+        last = Math.max(0, Math.min(music.scale.length - 1, last + Math.floor(Math.random() * 3) - 1)); // stepwise, like a sung line
+        const deg = music.scale[last];
+        const oct = (Math.random() < 0.3 ? 24 : 12) + music.octUp;
+        pluck(mtof(BASE + (music.drone ? 0 : chord[0] % 12) + deg + oct), t + (i * BAR) / notes + Math.random() * 0.3, 0.07);
       }
       nextBar = t + BAR; bar++;
     }
@@ -113,6 +136,7 @@ function startNature() {
       if (amb.night > 0.6) { if (Math.random() < 0.8) crickets(); if (Math.random() < 0.08) owl(); }
       else if (Math.random() < (0.45 + (amb.forest || 0) * 0.5) * (1 - amb.rain * 0.7)) { chirp(); if ((amb.forest || 0) > 0.5 && Math.random() < 0.5) setTimeout(chirp, 500); }
       if (amb.night < 0.6 && (amb.town || 0) > 0.3 && Math.random() < amb.town * 0.7) { tap(); setTimeout(tap, 380); }
+      if (amb.night < 0.5 && (amb.town || 0) > 0.45 && Math.random() < amb.town * 0.6) { murmur(); if (Math.random() < 0.18) setTimeout(laugh, 600 + Math.random() * 900); }
     }
     setTimeout(birds, (amb.night > 0.6 ? 1500 : 2500) + Math.random() * 6000);
   };
@@ -149,6 +173,35 @@ export function setScene(sea, river, town, forest) {
   scene.river.g.gain.setTargetAtTime(river * 0.06 * on, t, 1.2);
   scene.town.g.gain.setTargetAtTime(town * 0.18 * on * (1 - amb.night * 0.7), t, 1.2);
   amb.forest = forest; amb.town = town;
+}
+// Villagers chatting: soft vowel-like murmurs, and now and then a laugh.
+function voice(t, f0, dur, gain, formant) {
+  const o = ac.createOscillator(), f = ac.createBiquadFilter(), g = ac.createGain();
+  o.type = 'sawtooth'; o.frequency.setValueAtTime(f0, t); o.frequency.linearRampToValueAtTime(f0 * (0.9 + Math.random() * 0.25), t + dur);
+  f.type = 'bandpass'; f.frequency.value = formant; f.Q.value = 6;
+  g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(gain, t + dur * 0.3); g.gain.exponentialRampToValueAtTime(0.0003, t + dur);
+  const p = ac.createStereoPanner ? ac.createStereoPanner() : null;
+  o.connect(f); f.connect(g); if (p) { p.pan.value = Math.random() * 1.2 - 0.6; g.connect(p); p.connect(natureBus); } else g.connect(natureBus);
+  o.start(t); o.stop(t + dur + 0.05);
+}
+function murmur() {
+  const t0 = ac.currentTime + 0.05, n = 3 + Math.floor(Math.random() * 5), f0 = Math.random() < 0.5 ? 120 + Math.random() * 40 : 200 + Math.random() * 60;
+  let t = t0;
+  for (let i = 0; i < n; i++) { const d = 0.08 + Math.random() * 0.14; voice(t, f0 * (0.95 + Math.random() * 0.15), d, 0.012, [500, 700, 900, 1200][(Math.random() * 4) | 0]); t += d + 0.03 + Math.random() * 0.08; }
+}
+function laugh() { const t = ac.currentTime + 0.05, f0 = 220 + Math.random() * 80; for (let i = 0; i < 4; i++) voice(t + i * 0.13, f0 * (1 - i * 0.05), 0.09, 0.016, 900); }
+// Bells from the chapel: inharmonic partials with a long, soft ring.
+export function bells(strikes = 3) {
+  if (!ac || vol('nature') <= 0) return;
+  const t0 = ac.currentTime + 0.05;
+  for (let s = 0; s < strikes; s++) {
+    const t = t0 + s * 1.3, base = s % 2 ? 392 : 330;
+    for (const [m, a] of [[1, 0.05], [2, 0.03], [2.4, 0.02], [3, 0.015], [4.2, 0.01]]) {
+      const o = ac.createOscillator(), g = ac.createGain(); o.type = 'sine'; o.frequency.value = base * m;
+      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(a, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0002, t + 4.5 / m);
+      o.connect(g); g.connect(natureBus); g.connect(reverb); o.start(t); o.stop(t + 5);
+    }
+  }
 }
 function tap() { // a distant hammer in town
   const t = ac.currentTime + 0.02, o = ac.createOscillator(), g = ac.createGain();

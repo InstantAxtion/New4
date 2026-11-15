@@ -16,11 +16,19 @@ const NAMES = {
     l: ['Haddad', 'Nasser', 'Saleh', 'Mansour', 'Khalil', 'Darwish', 'Aziz', 'Farah', 'Rahman', 'Hamdan', 'Sabri', 'Qasim'] },
   tropical: { f: ['Ana', 'Tiago', 'Luana', 'Kofi', 'Ama', 'Rafael', 'Maya', 'Joao', 'Ayo', 'Bianca', 'Kwame', 'Isabela', 'Dayo', 'Lia', 'Caio', 'Esi', 'Nia', 'Davi', 'Zola', 'Ines'],
     l: ['Silva', 'Santos', 'Mensah', 'Oliveira', 'Okafor', 'Costa', 'Asante', 'Lima', 'Adeyemi', 'Rocha', 'Boateng', 'Souza'] },
+  slavic: { f: ['Anya', 'Ivan', 'Olga', 'Dmitri', 'Katya', 'Pavel', 'Mila', 'Yuri', 'Vera', 'Boris', 'Daria', 'Lev', 'Nadia', 'Oleg', 'Zoya', 'Igor', 'Lena', 'Mikhail', 'Sonya', 'Taras'],
+    l: ['Ivanov', 'Petrov', 'Sokolov', 'Novak', 'Kowal', 'Orlov', 'Volkov', 'Lebedev', 'Morozov', 'Popov', 'Kuznets', 'Belov'] },
+  indian: { f: ['Asha', 'Arjun', 'Priya', 'Ravi', 'Meera', 'Vikram', 'Lakshmi', 'Dev', 'Anika', 'Rohan', 'Kavya', 'Sanjay', 'Isha', 'Aditya', 'Nisha', 'Kiran', 'Tara', 'Amit', 'Diya', 'Raj'],
+    l: ['Sharma', 'Patel', 'Iyer', 'Gupta', 'Rao', 'Singh', 'Nair', 'Das', 'Mehta', 'Reddy', 'Joshi', 'Bose'] },
+  andean: { f: ['Inti', 'Killa', 'Mateo', 'Rosa', 'Wayra', 'Nina', 'Tupac', 'Sisa', 'Diego', 'Carmen', 'Amaru', 'Luz', 'Pablo', 'Yupa', 'Elena', 'Ruben', 'Quilla', 'Sara', 'Felipe', 'Asiri'],
+    l: ['Quispe', 'Mamani', 'Condori', 'Huaman', 'Flores', 'Choque', 'Rojas', 'Apaza', 'Torres', 'Ccori', 'Vargas', 'Yupanqui'] },
+  arabic: { f: ['Yasmin', 'Khalid', 'Mariam', 'Yusuf', 'Fatima', 'Ali', 'Huda', 'Sami', 'Rania', 'Zaid', 'Lina', 'Bilal', 'Aisha', 'Nabil', 'Sara', 'Hadi', 'Dina', 'Imran', 'Reem', 'Tarek'],
+    l: ['Al-Amin', 'Haddad', 'Karam', 'Najjar', 'Sabbagh', 'Qadir', 'Hakim', 'Bakri', 'Yousef', 'Rashid', 'Masri', 'Faris'] },
   eastasian: { f: ['Mei', 'Hiro', 'Yuna', 'Jun', 'Lan', 'Kenji', 'Ji-woo', 'Ming', 'Sora', 'Hana', 'Tao', 'Rin', 'Min-jun', 'Aiko', 'Wei', 'Yui', 'Kai', 'Xin', 'Haru', 'Seo-yeon'],
     l: ['Chen', 'Sato', 'Kim', 'Wang', 'Tanaka', 'Li', 'Park', 'Zhang', 'Suzuki', 'Liu', 'Choi', 'Mori'] },
 };
 export const JOBS = {
-  farm: 'Farmer', pasture: 'Shepherd', woodlot: 'Forester', shops: 'Shopkeeper', lumber: 'Woodcutter', quarry: 'Stonecutter', mine: 'Miner', dock: 'Fisher', workshop: 'Craftsperson', market: 'Merchant',
+  farm: 'Farmer', pasture: 'Shepherd', pit: 'Miner', potter: 'Potter', glassworks: 'Glassblower', spicehouse: 'Spice merchant', scriptorium: 'Scribe', woodlot: 'Forester', shops: 'Shopkeeper', lumber: 'Woodcutter', quarry: 'Stonecutter', mine: 'Miner', dock: 'Fisher', workshop: 'Craftsperson', market: 'Merchant',
   harbour: 'Sailor', tower: 'Lookout', bakery: 'Baker', brewery: 'Brewer', weaver: 'Weaver', smithy: 'Smith', tavern: 'Innkeeper',
   chapel: 'Chapel keeper', school: 'Teacher', apiary: 'Beekeeper', windmill: 'Miller', vineyard: 'Vintner', riceterrace: 'Rice grower',
   icehut: 'Ice fisher', stable: 'Stablehand', yard: 'Builder', oasis: 'Gardener', cacao: 'Cacao grower', orchard: 'Orchard keeper',
@@ -98,6 +106,17 @@ function assignJobs(t, bmap) {
     if (p.j && (slots.get(p.j) || 0) > (filled.get(p.j) || 0)) filled.set(p.j, (filled.get(p.j) || 0) + 1);
     else { p.j = null; free.push(p); }
   }
+  // young folk take up a parent's trade when there is room for them
+  for (let k = free.length - 1; k >= 0; k--) {
+    const p = free[k], par = (p.par || []).map((id) => personById(t, id)).filter((q) => q && q.j);
+    for (const q of par) {
+      if ((slots.get(q.j) || 0) > (filled.get(q.j) || 0)) {
+        p.j = q.j; filled.set(q.j, (filled.get(q.j) || 0) + 1); free.splice(k, 1);
+        if (!p.trade) { p.trade = 1; chron(t, `${fullName(p)} took up ${q.f}'s trade as a ${JOBS[q.j].toLowerCase()}.`); p.k = Math.max(p.k, Math.min(40, q.k * 0.3)); }
+        break;
+      }
+    }
+  }
   for (const [type, n] of slots) {
     let have = filled.get(type) || 0;
     while (have < n && free.length) { const p = free.pop(); p.j = type; have++; }
@@ -111,7 +130,7 @@ function lifeDay(t) {
     const age = ageOf(p);
     if (p.j) {
       const before = p.k;
-      p.k = Math.min(100, p.k + (2.5 / YEAR) * (school ? 1.5 : 1) * (obs ? 1.5 : 1) * (learn ? 2 : 1) * (0.6 + Math.random() * 0.8));
+      p.k = Math.min(100, p.k + (2.5 / YEAR) * (school ? 1.5 : 1) * (obs ? 1.5 : 1) * (learn ? 2 : 1) * (S.res.books > 0.5 ? 1.25 : 1) * (0.6 + Math.random() * 0.8));
       if (before < 80 && p.k >= 80) { chron(t, `${fullName(p)} has become a master ${JOBS[p.j].toLowerCase()}!`, true); S.stats.masters = (S.stats.masters || 0) + 1; }
     }
     if (p.lastAge !== age) {
