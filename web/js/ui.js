@@ -4,7 +4,7 @@ import {
   S, M, RES, RES_NAMES, TIERS, DEFS, MANUAL, WONDERS, ZONES, FOUND_COST, GIFT_AMOUNT, CONTACT_RANGE,
   on, emit, totalPop, totalCap, townById, hasWonder, wonderStarted, count, ownerOf, canPlace, placeBuilding, setZone,
   demolish, canFound, foundTown, inContact, tradeOffers, doTrade, gift, canInvite, invite, activeQuests, QUESTS,
-  newGame, PACE, crewsOf, crewsBusy, zonesWaiting, yardsIn, UPKEEP, SPECS, SPEC_TIER, SPEC_CHANGE_COST, setSpec, GOODS, EVERYDAY, GOODS_BUILDINGS, SPECIALTIES, ALL_WONDERS, MOODS, moodOf, townStyleOf, TRAITS, IMPROVEMENTS, IMPROVE_TIER, charm, improve, continentAt, realmContinents, harbourTowns, routeOptions, openRoute, ROUTE_COST, ROUTE_DAYS, routesDone, maxTowns, fulfil, nbExtra, HOUSE_LEVELS, HOUSE_CAP_MULT, save, hasSave, load, resetSave, slotInfo, setSlot, deleteSlot, SLOT_COUNT, saveSettings, surveyStart, canStart, affordable, groundDist2, DAY_SECONDS,
+  newGame, currentSlot as CUR, PACE, crewsOf, crewsBusy, zonesWaiting, yardsIn, UPKEEP, SPECS, SPEC_TIER, SPEC_CHANGE_COST, setSpec, GOODS, EVERYDAY, GOODS_BUILDINGS, SPECIALTIES, ALL_WONDERS, MOODS, moodOf, townStyleOf, TRAITS, IMPROVEMENTS, IMPROVE_TIER, charm, improve, continentAt, realmContinents, harbourTowns, routeOptions, openRoute, ROUTE_COST, ROUTE_DAYS, routesDone, maxTowns, fulfil, nbExtra, HOUSE_LEVELS, HOUSE_CAP_MULT, save, hasSave, load, resetSave, slotInfo, setSlot, deleteSlot, SLOT_COUNT, saveSettings, surveyStart, canStart, affordable, groundDist2, DAY_SECONDS,
 } from './game.js';
 import { SPR, spriteIcon } from './sprites.js';
 import { panBy, cam, markDirty, flyTo, centerOn, clampCam, screenSize, TILE_MODE_TW, sx, sy, pickTile, setHover } from './render.js';
@@ -12,6 +12,10 @@ import { initAudio, sfx, haptic, applySettings, resumeAudio } from './audio.js';
 import { tutorialActive, hint } from './tutorial.js';
 import { ageOf, fullName, personById, JOBS, thought, petOf } from './folk.js';
 import { walkerAt, clearTransient } from './render.js';
+import { scatterBirds } from './alive.js';
+import * as XP from './explore.js';
+import * as ST from './stories.js';
+import * as RC from './records.js';
 import { STYLES } from './sprites.js';
 import { townStyle } from './render.js';
 import { seasonIndex, SEASONS, SEASON_ICONS, nightAt, farmSeason } from './seasons.js';
@@ -258,7 +262,8 @@ function showRealm() {
     const f = canFound(0, 0);
     const foundLocked = S.tier < 1 || S.towns.length >= maxTowns();
     const contacts = S.neighbors.filter((n) => !n.joined && inContact(n)).sort((a, b) => b.friend - a.friend);
-    return head(esc(S.name), `${TIERS[S.tier].name} · ${Math.floor(p)} villagers · ${S.towns.length} settlement${S.towns.length > 1 ? 's' : ''}`)
+    ST.ensureRoyals();
+    return head(esc(S.name), `${ST.rulerLine() ? esc(ST.rulerLine()) + ' · ' : ''}${TIERS[S.tier].name} · ${Math.floor(p)} villagers · ${S.towns.length} settlement${S.towns.length > 1 ? 's' : ''}`)
       + (next ? `<div class="note">Growing toward <b>${next.name}</b> at ${next.pop} villagers</div><div class="meter"><div style="width:${prog * 100}%"></div></div>` : '<div class="note">Your realm has become a true Kingdom.</div>')
       + (S.fed ? '' : '<div class="warn">The granaries are empty, so growth has paused. Zone more farmland or build a fishing dock.</div>')
       + `<div class="section"><h3>Settlements</h3><div class="list">${S.towns.map((t) =>
@@ -267,6 +272,8 @@ function showRealm() {
         ${foundLocked ? `<div class="note">${S.tier < 1 ? 'Unlocks when your realm becomes a Village.' : `A ${TIERS[S.tier].name} can hold ${maxTowns()} settlements.${S.tier >= 4 ? ' Each sea route makes room for one more.' : ''}`}</div>` : '<div class="note">Settlers can travel anywhere on Earth. Settle near neighbours to befriend them.</div>'}</div>
       ${contacts.some((n) => n.req) ? `<div class="section"><h3>✉ Letters</h3><div class="list">${contacts.filter((n) => n.req).map((n) =>
         `<button class="item" data-act="gonb" data-arg="${n.id}"><div><b>${esc(n.leader)} of ${esc(n.name)}</b><div class="meta">${esc(n.req.text)}</div></div><span>➜</span></button>`).join('')}</div></div>` : ''}
+      ${requestsSection()}${royalSection()}${exploreSection()}
+      <div class="row"><button class="btn small" data-act="history">📈 Realm history</button></div>
       <div class="section"><h3>Neighbours in reach</h3>${contacts.length ? `<div class="list">${contacts.slice(0, 12).map((n) =>
         `<button class="item" data-act="gonb" data-arg="${n.id}"><div><b>${esc(n.name)}</b><div class="meta">${Math.floor(n.pop)} folk · has ${n.surplus} · wants ${n.want}</div></div><span>${n.friend >= 100 ? '💛' : '🤝 ' + Math.floor(n.friend)}</span></button>`).join('')}</div>`
         : `<div class="note">No villages within ${CONTACT_RANGE} tiles yet. Explore the map or found settlements near others.</div>`}</div>
@@ -284,10 +291,72 @@ function showRealm() {
   });
 }
 
+// ---------------- requests, royals, explorers, history ----------------
+function requestsSection() {
+  const rq = S.requests || [];
+  if (!rq.length) return '';
+  return `<div class="section"><h3>📌 Requests from your folk</h3><div class="list">${rq.map((q, k) => {
+    const t = townById(q.town);
+    const btn = q.kind === 'lost' ? `<button class="btn small" data-act="golost" data-arg="${q.id}">Show me</button>`
+      : q.kind === 'gift' ? `<button class="btn small primary ${S.res[q.res] >= q.amt ? '' : 'disabled'}" data-act="givereq" data-arg="${q.id}">Give ${q.amt} ${RES_NAMES[q.res].toLowerCase()}</button>`
+      : `<span class="meta">Build it in ${t ? esc(t.name) : 'town'}</span>`;
+    return `<div class="item"><div><b>${esc(q.who)}</b><div class="meta">${esc(q.text)}</div></div>${btn}</div>`;
+  }).join('')}</div><div class="note">Each kindness earns a little gold and cheers the town. Unanswered requests simply pass.</div></div>`;
+}
+function royalSection() {
+  ST.ensureRoyals();
+  const ms = S.royal.members.filter((m) => m.role !== 'gone');
+  return `<div class="section"><h3>👑 The royal family</h3><div class="list">${ms.map((m) =>
+    `<div class="item" style="justify-content:flex-start;gap:12px">${ST.portrait(m, 46)}<div><b>${esc(ST.titleOf(m))} ${esc(m.n)}</b><div class="meta">${m.role === 'ruler' ? 'Rules the realm' : m.role === 'consort' ? 'Royal consort' : m.role === 'heir' ? 'Heir' : 'Enjoying a quiet retirement'} · ${ST.rAge(m)} years old</div></div></div>`).join('')}</div>
+    ${(S.royal.log || []).length ? `<div class="note">${S.royal.log.slice(0, 3).map((e) => `• ${esc(e.s)}`).join('<br>')}</div>` : ''}</div>`;
+}
+function exploreSection() {
+  const ex = S.expeditions || [], jr = S.journal || [];
+  return `<div class="section"><h3>🧭 Explorers</h3>
+    ${ex.length ? `<div class="list">${ex.map((e) => { const u = Math.min(1, (S.day - e.start) / e.days); return `<div class="item"><div><b>${esc(e.leader)}</b><div class="meta">${u < 0.5 ? 'Travelling to' : 'Returning from'} ${XP.LANDMARKS[e.lm][0]} · ${Math.round(u * 100)}%</div></div><span>${e.horse ? '🐎' : '🚶'}</span></div>`; }).join('')}</div>` : ''}
+    ${S.tier < XP.EXPLORE_TIER ? '<div class="note">Expeditions begin when your realm becomes a Village.</div>' : '<div class="row"><button class="btn small primary" data-act="explore">Plan an expedition</button>' + (jr.length ? `<button class="btn small" data-act="journal">📖 Journal (${jr.length})</button>` : '') + '</div>'}</div>`;
+}
+function showExplore() {
+  openSheet('explore', () => {
+    const opts = XP.LANDMARKS.map((l, k) => [k, XP.expeditionPlan(k)]).filter(([k, pl]) => pl && !(S.explored || []).includes(k)).sort((a, b) => a[1].d - b[1].d);
+    return head('Plan an expedition', `Supplies: 40 food, 30 gold · ${(S.expeditions || []).length}/${XP.MAX_EXPEDITIONS} parties out`)
+      + `<div class="note">Explorers ride out to a natural wonder of the world and come back with stories for your journal and a gift of gold. Stables make them faster. Distant continents need a Harbour.</div>
+      <div class="list">${opts.slice(0, 14).map(([k, pl]) => { const c = XP.canExplore(k); return `<div class="item"><div><b>${XP.LANDMARKS[k][3]} ${XP.LANDMARKS[k][0]}</b><div class="meta">${pl.days} days there and back from ${esc(pl.town.name)}${pl.overseas ? ' · overseas' : ''}${c.ok ? '' : ` · ${esc(c.reason)}`}</div></div><button class="btn small primary ${c.ok ? '' : 'disabled'}" data-act="sendexp" data-arg="${k}">Send</button></div>`; }).join('')}</div>`;
+  });
+}
+function showJournal() {
+  openSheet('journal', () => head('📖 Explorers’ journal', `${(S.journal || []).length} of ${XP.LANDMARKS.length} wonders recorded`)
+    + `<div class="list">${(S.journal || []).map((j) => `<div class="item"><div><b>${XP.LANDMARKS[j.lm][3]} ${XP.LANDMARKS[j.lm][0]}</b><div class="meta">“${esc(j.text)}”<br>Recorded by ${esc(j.who)}, Year ${Math.floor(j.d / 48) + 1}</div></div></div>`).join('')}</div>`);
+}
+function showHistory() {
+  openSheet('history', () => {
+    const h = S.hist || [];
+    const ser = (k) => h.map((r) => [r[0], r[k]]);
+    const res = [['Food', 2, '#b08a2a'], ['Wood', 3, '#8a5a3c'], ['Stone', 4, '#6e6860'], ['Gold', 5, '#a87a1a']];
+    return head('📈 Realm history', `${esc(S.name)} · ${h.length ? `since Year ${Math.floor(h[0][0] / 48) + 1}` : 'just founded'}`)
+      + `<div class="section"><h3>Villagers</h3>${RC.lineChart(ser(1), { label: 'Villagers over time', color: '#c0603e' })}</div>
+      <div class="section"><h3>Stores</h3><div class="note">Each chart has its own scale.</div>${res.map(([n, k, c]) => `<div class="note" style="margin:6px 0 0"><b>${n}</b></div>${RC.lineChart(ser(k), { label: `${n} over time`, color: c, h: 90 })}`).join('')}</div>
+      <div class="section"><h3>Milestones</h3>${(S.miles || []).length ? `<div class="list">${S.miles.slice().reverse().map((m) => `<div class="item" style="justify-content:flex-start;gap:10px"><span style="font-size:20px">${m.icon}</span><div><b>${esc(m.s)}</b><div class="meta">Year ${Math.floor(m.d / 48) + 1}</div></div></div>`).join('')}</div>` : '<div class="note">Milestones will appear as your realm grows.</div>'}</div>`;
+  });
+  RC.wireCharts($('#sheetbody'));
+}
+function festivalSection(t) {
+  const f = ST.festivalNow(t), c = ST.canFestival(t), on = t.fest && S.day < t.fest.until;
+  return `<div class="section"><h3>${f.icon} Festivals</h3><div class="note">${on ? `<b>${ST.FESTIVALS.find((x) => x.key === t.fest.key).name}</b> is on now! The whole town is out celebrating.` : `This season's festival is <b>${f.name}</b>: ${f.desc} The town is happier during it, and for a season afterwards, and neighbours come to visit.`}</div>
+    ${on ? '' : `<div class="row"><button class="btn small leaf ${c.ok ? '' : 'disabled'}" data-act="festival" data-arg="${t.id}">Hold ${f.name}</button><div class="cost">${costChips(ST.FESTIVAL_COST)}</div></div>${c.ok ? '' : `<div class="note">${esc(c.reason)}</div>`}`}</div>`;
+}
+function showBackup() {
+  openSheet('backup', () => head('Back up this realm', esc(S.name))
+    + `<div class="note">Keep a copy of your realm somewhere safe, so a new phone or a reinstall never loses it. Restore it from the main menu (Load Realm).</div>
+    <div class="list"><button class="item" data-act="bkfile"><div><b>💾 Save a backup file</b><div class="meta">Share it to Drive, email or your files</div></div><span>➜</span></button>
+    <button class="item" data-act="bkcode"><div><b>📋 Copy a backup code</b><div class="meta">A long text code you can paste anywhere</div></div><span>➜</span></button></div>
+    <textarea id="bkout" class="text hidden" rows="4" readonly style="font-size:11px"></textarea>`);
+}
+
 // ---------------- menu ----------------
 function showMenu() {
   openSheet('menu', () => head('Menu', 'Hearthlands')
-    + ['music', 'sfx', 'haptics'].map((k) => `<div class="toggle"><span>${{ music: 'Music & nature sounds', sfx: 'Sound effects', haptics: 'Vibration' }[k]}</span><button class="switch ${S.settings[k] ? 'on' : ''}" data-act="set" data-arg="${k}" aria-label="${k}"></button></div>`).join('')
+    + ['music', 'sfx', 'haptics', 'gentle'].map((k) => `<div class="toggle"><span>${{ music: 'Music & nature sounds', sfx: 'Sound effects', haptics: 'Vibration', gentle: 'Gentle visuals (fewer effects, saves battery)' }[k]}</span><button class="switch ${S.settings[k] ? 'on' : ''}" data-act="set" data-arg="${k}" aria-label="${k}"></button></div>`).join('')
     + `<div class="section"><h3>How to play</h3><div class="note">
       • <b>Zones</b>: paint Housing for homes, Farmland for food and Workshops for gold. Villagers build them over time.<br>
       • <b>Build</b>: place Lumber Camps by woods, Quarries and Mines by hills, Docks on the shore.<br>
@@ -296,7 +365,7 @@ function showMenu() {
       • Nothing can go wrong. Pause whenever you like, and the realm waits for you.<br>
       • <b>S Pen</b>: hover to see what's there. In Zones, the pen paints and fingers move the map. Hold the pen's side button to erase.</div></div>
       <div class="section"><h3>Map data</h3><div class="note">Earth outlines from Natural Earth (public domain) via world-atlas.</div></div>
-      <div class="row"><button class="btn small" data-act="savenow">Save now</button>${document.body.classList.contains('native') || !document.documentElement.requestFullscreen ? '' : '<button class="btn small" data-act="fullscreen">Full screen</button>'}<button class="btn small primary" data-act="mainmenu">Main menu</button></div>`);
+      <div class="row"><button class="btn small" data-act="savenow">Save now</button>${document.body.classList.contains('native') || !document.documentElement.requestFullscreen ? '' : '<button class="btn small" data-act="fullscreen">Full screen</button>'}<button class="btn small" data-act="backup">Back up realm</button><button class="btn small primary" data-act="mainmenu">Main menu</button></div>`);
 }
 
 // ---------------- tile info ----------------
@@ -393,7 +462,7 @@ function townInfo(t, sub) {
       <div class="note">${t.pop >= t.cap - 0.5 ? 'Every home is full. Zone more housing to grow.' : S.fed ? 'Families are moving in.' : 'Growth has paused until there is more food.'}</div>
       ${t.capital && next ? `<div class="note">The keep grows grander as your realm reaches ${next.name}.</div>` : ''}
       <div class="kv"><span>Continent</span><span>${continentAt(t.x, t.y)}</span><span>Harbour</span><span>${harbourTowns().includes(t) ? 'Yes ⚓' : 'None yet'}</span><span>Charm</span><span>${'✿'.repeat(charm(t)) || '—'} ${charm(t)}/5</span></div>
-      ${specSection(t)}${moodSection(t)}${folkSection(t)}
+      ${specSection(t)}${moodSection(t)}${festivalSection(t)}${folkSection(t)}
       <div class="section"><h3>Make ${esc(t.name)} lovelier</h3>${S.tier < IMPROVE_TIER ? `<div class="note">Civic improvements unlock when your realm becomes a ${TIERS[IMPROVE_TIER].name}.</div>` : `<div class="note">Each improvement changes how the town looks and makes room for 4% more villagers.</div>
         <div class="list">${Object.entries(IMPROVEMENTS).map(([k, d]) => {
           const done = t.imp && t.imp[k];
@@ -428,6 +497,8 @@ function neighborInfo(n, sub) {
 const nbAt = (t) => t && (S.nbIndex.get(idxOf(t.x, t.y)) || nbExtra.get(idxOf(t.x, t.y)));
 
 // ---------------- actions ----------------
+let CURSLOT = () => CUR;
+const await_slot = () => ({ currentSlot: CURSLOT() });
 function act(name, arg, el) {
   const sel = M.selected;
   switch (name) {
@@ -450,6 +521,17 @@ function act(name, arg, el) {
     case 'savenow': save(); toast('Your realm is saved.'); break;
     case 'fullscreen': if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen().catch(() => {}); break;
     case 'mainmenu': backToMenu(); break;
+    case 'history': showHistory(); break;
+    case 'explore': showExplore(); break;
+    case 'journal': showJournal(); break;
+    case 'sendexp': { const r = XP.sendExpedition(+arg); if (r.ok) { sfx('quest'); haptic('medium'); closeSheet(); } else { sfx('error'); toast(r.reason); } break; }
+    case 'festival': { const t = townById(+arg); if (t && ST.holdFestival(t)) { sfx('tier'); haptic('medium'); refreshSheet(); } else sfx('error'); break; }
+    case 'givereq': { const q = (S.requests || []).find((r) => r.id === +arg); if (q && ST.giveFor(q)) { sfx('quest'); refreshSheet(); } else sfx('error'); break; }
+    case 'golost': { const q = (S.requests || []).find((r) => r.id === +arg); if (q) { closeSheet(); flyTo(q.x, q.y, 60); toast(`Look for the ${q.animal} with a ? and tap it.`); } break; }
+    case 'backup': save(); showBackup(); break;
+    case 'bkfile': { save(); const { currentSlot } = await_slot(); RC.saveBackupFile(currentSlot).then((r) => toast(r === 'shared' || r === 'downloaded' ? 'Backup saved.' : r === 'cancel' ? 'Backup cancelled.' : 'Could not save a file here. Try the backup code instead.')); break; }
+    case 'bkcode': { save(); const { currentSlot } = await_slot(); const code = RC.exportCode(currentSlot); const ta = $('#bkout'); ta.value = code || ''; ta.classList.remove('hidden'); ta.select();
+      (navigator.clipboard ? navigator.clipboard.writeText(code) : Promise.reject()).then(() => toast('Backup code copied.')).catch(() => toast('Select the code above and copy it.')); break; }
     case 'restart':
       if (el.dataset.confirm) { resetSave(); location.reload(); }
       else { el.dataset.confirm = '1'; el.textContent = 'Tap again to abandon this realm'; el.classList.add('primary'); }
@@ -483,6 +565,8 @@ export function handleTap(px, py) {
   const tile = pickTile(px, py);
   if (!tile) return;
   const mode = M.mode;
+  if (!mode && ST.tapLost(tile.x, tile.y)) { sfx('quest'); haptic('medium'); return; }
+  if (!mode && cam.tw >= TILE_MODE_TW) { const bt = world.biome[tile.y * W + tile.x]; if (!S.buildings.has(tile.y * W + tile.x) && (bt === B.FOREST || bt === B.JUNGLE || bt === B.TAIGA || bt === B.GRASS)) scatterBirds(px, py); }
   if (!mode && cam.tw >= TILE_MODE_TW) { const w = walkerAt(px, py); if (w && w.pid) { sfx('tap'); showPerson(w.town, w.pid); return; } }
   if (mode && mode.kind === 'start') return startTap(tile);
   if (mode && mode.kind === 'build') {
@@ -560,19 +644,29 @@ function menuPage(page) {
       <button class="mbtn ${latest ? '' : 'primary'}" data-m="new"><span class="mi">🌍</span><div>New Realm<small>Choose your homeland anywhere on Earth</small></div></button>
       ${saved.length ? `<button class="mbtn" data-m="load"><span class="mi">📜</span><div>Load Realm<small>${saved.length} saved realm${saved.length > 1 ? 's' : ''}</small></div></button>` : ''}
       <button class="mbtn" data-m="settings"><span class="mi">⚙️</span><div>Settings<small>Music, sounds and vibration</small></div></button>
+      <button class="mbtn" data-m="trophies"><span class="mi">🏆</span><div>Trophies<small>${Object.keys(RC.trophies()).length} of ${RC.TROPHIES.length} earned</small></div></button>
       <button class="mbtn" data-m="help"><span class="mi">❓</span><div>How to Play</div></button>
       <button class="mbtn" data-m="credits"><span class="mi">✨</span><div>Credits</div></button></div>`;
   } else if (page === 'load') {
     html = mhead('Load Realm') + `<div class="slots">${slots.map((d, k) => d
       ? `<div class="slot"><button class="si" data-slot="${k + 1}" style="text-align:left"><b>${esc(d.name)}</b><small>${tierNames[d.tier] || ''}${d.pop != null ? ` · ${d.pop} folk` : ''}${d.place ? ` · ${esc(d.place)}` : ''}<br>Year ${Math.floor((d.day || 0) / 48) + 1} · played ${ago(d.savedAt)}</small></button><button class="del" data-del="${k + 1}" aria-label="Delete realm">🗑</button></div>`
-      : `<button class="slot empty" data-new="${k + 1}">＋ Empty slot: begin a new realm</button>`).join('')}</div>`;
+      : `<button class="slot empty" data-new="${k + 1}">＋ Empty slot: begin a new realm</button>`).join('')}</div>
+      <button class="mbtn" data-m="restore" style="margin-top:10px"><span class="mi">♻️</span><div>Restore from backup<small>From a backup file or code</small></div></button>`;
+  } else if (page === 'restore') {
+    html = mhead('Restore a realm') + `<div class="note" style="text-align:left">Choose a backup file, or paste a backup code. It goes into ${freeSlot ? `empty slot ${freeSlot}` : 'slot 1 (replacing what is there)'}.</div>
+      <input type="file" id="rsfile" accept=".json,application/json,text/plain" class="text" style="font-size:14px">
+      <textarea id="rscode" class="text" rows="4" placeholder="…or paste a HEARTH1: backup code here" style="font-size:12px"></textarea>
+      <button class="mbtn primary" id="rsgo"><span class="mi">♻️</span><div>Restore realm</div></button>`;
+  } else if (page === 'trophies') {
+    const got = RC.trophies();
+    html = mhead('Trophies') + `<div class="note" style="text-align:left">Earned across all your realms: ${Object.keys(got).length} of ${RC.TROPHIES.length}.</div><div class="list">${RC.TROPHIES.map(([id, ic, name, desc]) => `<div class="item" style="justify-content:flex-start;gap:12px;${got[id] ? '' : 'opacity:.5'}"><span style="font-size:24px;${got[id] ? '' : 'filter:grayscale(1)'}">${ic}</span><div style="text-align:left"><b>${name}</b><div class="meta">${desc}${got[id] ? ` · ${esc(got[id].realm || '')}` : ''}</div></div><span style="margin-left:auto">${got[id] ? '🏆' : '🔒'}</span></div>`).join('')}</div>`;
   } else if (page === 'new') {
     html = mhead('New Realm') + (freeSlot ? `<label class="note" for="rname" style="display:block;text-align:left">Name your realm</label>
       <input id="rname" class="text" maxlength="24" value="Hearthlands" autocomplete="off">
       <button class="mbtn primary" id="tgo"><span class="mi">🧭</span><div>Choose your homeland<small>Saved in slot ${freeSlot} of ${SLOT_COUNT}</small></div></button>`
       : `<div class="note">All ${SLOT_COUNT} save slots are in use. Open <b>Load Realm</b> and delete one to make room.</div><button class="mbtn" data-m="load"><span class="mi">📜</span><div>Load Realm</div></button>`);
   } else if (page === 'settings') {
-    html = mhead('Settings') + ['music', 'sfx', 'haptics'].map((k) => `<div class="toggle"><span>${{ music: 'Music & nature sounds', sfx: 'Sound effects', haptics: 'Vibration' }[k]}</span><button class="switch ${S.settings[k] ? 'on' : ''}" data-set="${k}" aria-label="${k}"></button></div>`).join('');
+    html = mhead('Settings') + ['music', 'sfx', 'haptics', 'gentle'].map((k) => `<div class="toggle"><span>${{ music: 'Music & nature sounds', sfx: 'Sound effects', haptics: 'Vibration', gentle: 'Gentle visuals (fewer effects, saves battery)' }[k]}</span><button class="switch ${S.settings[k] ? 'on' : ''}" data-set="${k}" aria-label="${k}"></button></div>`).join('');
   } else if (page === 'help') {
     html = mhead('How to Play') + `<div class="helptext">
       <p>Pick any spot on Earth and grow a hamlet into a kingdom. There is no way to lose, so take your time.</p>
@@ -596,6 +690,15 @@ function menuPage(page) {
     const inp = $('#rname'); inp.focus(); inp.select();
     const go = () => { sfx('tap'); setSlot(freeSlot); startPicking(inp.value.trim() || 'Hearthlands'); };
     $('#tgo').onclick = go; inp.onkeydown = (ev) => { if (ev.key === 'Enter') go(); };
+  }
+  if (page === 'restore') {
+    const dest = freeSlot || 1;
+    const finish = (raw) => { const ok = raw && RC.importInto(dest, raw); sfx(ok ? 'quest' : 'error'); toast(ok ? 'Realm restored!' : 'That backup could not be read.'); if (ok) menuPage('load'); };
+    $('#rsgo').onclick = () => {
+      const f = $('#rsfile').files && $('#rsfile').files[0];
+      if (f) { f.text().then((txt) => finish(RC.parseBackup(txt))); return; }
+      finish(RC.parseBackup($('#rscode').value));
+    };
   }
   box.onclick = (e) => {
     initAudio();
@@ -727,6 +830,9 @@ export function initUI() {
   on('request', (n) => { toast(`✉ A letter from ${n.leader} of ${n.name}`); sfx('coin'); });
   on('story', ({ text }) => toast(text));
   on('folk', (text) => toast(`🏡 ${text}`));
+  on('trophy', (t) => { toast(`🏆 Achievement: ${t[1]} ${t[2]}`, true); sfx('tier'); });
+  on('request2', (q) => toast(`📌 ${q.who} has a small request.`));
+  on('tier', (t) => { if (t === 1) hint('explore', 'New things to do: send <b>explorers</b> to wonders of the world, hold a <b>festival</b> each season, and help villagers with small <b>requests</b>. Find them in the Realm panel and town halls.', '#bottombar [data-tab=realm]'); });
   on('marketday', ({ t, visitors }) => { if (visitors.length) toast(`🛒 Market day in ${t.name}! Wagons from ${visitors.map((n) => n.name).join(', ')}.`); });
   on('tier', (t) => {
     if (t === 1) {

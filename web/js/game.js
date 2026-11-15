@@ -28,6 +28,7 @@ export const DEFS = {
   quarry: { name: 'Quarry', cost: { wood: 15 }, prod: { stone: 1 }, jobs: 3, time: 3, tier: 0, desc: 'Works anywhere; full output near hills, mountains or rocky ground, half elsewhere.' },
   mine: { name: 'Iron Mine', cost: { wood: 20, stone: 15 }, prod: { iron: 0.6 }, jobs: 3, time: 4, tier: 1, desc: 'Build on hills or beside mountains.' },
   tower: { name: 'Watchtower', cost: { wood: 20, stone: 25 }, jobs: 1, time: 4, tier: 1, radius: 3, desc: 'Pushes the town border outward.' },
+  shipyard: { name: 'Shipyard', cost: { wood: 50, stone: 20 }, prod: { food: 0.8 }, jobs: 3, time: 5, tier: 1, desc: 'On a shore or riverbank. A fishing fleet (+food, docks here +25%) and ferries that carry settlers across short stretches of sea.' },
   harbour: { name: 'Harbour', cost: { wood: 80, stone: 60, gold: 40 }, prod: { gold: 1 }, jobs: 4, time: 8, tier: 2, desc: 'On the coast. Settlers and traders sail from here to other continents.' },
   green: { name: 'Town Green', hidden: true, civic: true, time: 1 },
   fountain: { name: 'Fountain Square', hidden: true, civic: true, time: 1 },
@@ -66,6 +67,7 @@ export const DEFS = {
 };
 // Daily upkeep for bigger buildings. If it can't be paid the building idles (never breaks).
 export const UPKEEP = {
+  shipyard: { wood: 0.08 },
   tower: { wood: 0.05 }, harbour: { wood: 0.15, gold: 0.1 }, market: { wood: 0.08 },
   chapel: { gold: 0.05 }, tavern: { food: 0.1 }, school: { gold: 0.1 }, stable: { food: 0.15 }, windmill: { wood: 0.03 },
   bakery: { wood: 0.04 }, brewery: { wood: 0.04 }, weaver: { wood: 0.03 }, smithy: { stone: 0.04 },
@@ -173,6 +175,9 @@ export function moodOf(t) {
   if (S.res.cloth > 0.5) { parts.push(['Fine clothes', 1]); score += 1; }
   const c = charm(t); if (c) { parts.push(['Civic charm', c * 0.5]); score += c * 0.5; }
   if (t.spec === 'learning') { parts.push(['A town of learning', 1]); score += 1; }
+  if (t.fest && S.day < t.fest.until) { const v = 2 + (t.fest.ale ? 1 : 0); parts.push(['A festival!', v]); score += v; }
+  else if (t.glow && S.day < t.glow) { parts.push(['Fond festival memories', 1]); score += 1; }
+  if (t.cheer && S.day < t.cheer) { parts.push(['A good deed done', 1]); score += 1; }
   if (hasWonder('monastery')) { parts.push(['The Cliff Monastery', 1]); score += 1; }
   if (hasWonder('dome')) { parts.push(['The Botanical Dome', 1]); score += 1; }
   const level = score >= 6 ? 2 : score >= 2.5 ? 1 : 0;
@@ -217,7 +222,7 @@ export function improve(t, key) {
   emit('improved', { t, key }); emit('change');
   return true;
 }
-export const MANUAL = ['lumber', 'dock', 'quarry', 'mine', 'tower', 'market', 'harbour'];
+export const MANUAL = ['lumber', 'dock', 'quarry', 'mine', 'tower', 'market', 'shipyard', 'harbour'];
 export const WONDERS = ['library', 'gardens', 'lighthouse', 'greatcastle', 'cathedral'];
 export const ALL_WONDERS = [...WONDERS, 'monastery', 'bridge', 'observatory', 'dome'];
 export const ZONES = {
@@ -277,6 +282,8 @@ export function nearNeighbor(x, y, r = 2.6) {
 }
 // Streets are reserved: set by the road planner (life.js) to avoid a circular import.
 let streetCheck = () => false;
+let ferryCheck = () => false;
+export function setFerryCheck(f) { ferryCheck = f; }
 export function setStreetCheck(f) { streetCheck = f; }
 export const byRiver = (x, y) => neighbors(x, y).some(([nx, ny]) => ny >= 0 && ny < H && riverAt(nx, ny));
 const adjacent = (x, y, pred) => neighbors(x, y).some(([nx, ny]) => ny >= 0 && ny < H && pred(biomeAt(nx, ny)));
@@ -326,7 +333,7 @@ export function canPlace(type, x, y) {
   if (type === 'observatory' && !(b === B.DESERT || b === B.STEPPE || b === B.HILLS || b === B.TUNDRA)) return { ok: false, reason: 'Needs open desert, steppe or hills.' };
   if (type === 'dome' && !(b === B.GRASS || b === B.FOREST || b === B.JUNGLE || b === B.SAVANNA)) return { ok: false, reason: 'Needs green land.' };
   if (type === 'lumber' && !WOODS.has(b) && !adjacent(x, y, (n) => WOODS.has(n))) return { ok: false, reason: 'Needs woodland nearby.' };
-  if ((type === 'dock' || type === 'lighthouse' || type === 'harbour') && !adjacent(x, y, (n) => n === B.SHALLOW || n === B.OCEAN) && !(type === 'dock' && byRiver(x, y))) return { ok: false, reason: 'Must touch the water.' };
+  if ((type === 'dock' || type === 'lighthouse' || type === 'harbour' || type === 'shipyard') && !adjacent(x, y, (n) => n === B.SHALLOW || n === B.OCEAN) && !((type === 'dock' || type === 'shipyard') && byRiver(x, y))) return { ok: false, reason: 'Must touch the water.' };
   if (type === 'mine' && !(b === B.HILLS || adjacent(x, y, (n) => n === B.MOUNTAIN || n === B.SNOW))) return { ok: false, reason: 'Needs hills or mountains.' };
   if (!affordable(d.cost)) return { ok: false, reason: 'Not enough resources.', own };
   return { ok: true, own };
@@ -398,7 +405,7 @@ export function canFound(x, y) {
   if (S.tier < 1) return { ok: false, reason: 'Founding new settlements unlocks at Village.' };
   if (S.towns.length >= maxTowns()) return { ok: false, reason: `A ${TIERS[S.tier].name} can hold ${maxTowns()} settlements. ${S.tier >= 4 ? 'Each sea route makes room for one more.' : 'Grow to unlock more.'}` };
   const cont = continentAt(x, y);
-  if (!realmContinents().includes(cont) && !hasHarbour()) return { ok: false, reason: `Settlers need a Harbour to sail to ${cont}.` };
+  if (!realmContinents().includes(cont) && !hasHarbour() && !ferryCheck(x, y)) return { ok: false, reason: `Settlers need a Harbour to sail to ${cont} (or a Shipyard within a short ferry ride).` };
   const b = biomeAt(x, y);
   if (isWater(b) || !BUILDABLE.has(b) || riverAt(x, y)) return { ok: false, reason: 'Pick open land for a new settlement.' };
   for (const t of S.towns) if (groundDist2(x, y, t.x, t.y) < (t.radius + 3) ** 2) return { ok: false, reason: `Too close to ${t.name}.` };
@@ -712,6 +719,7 @@ function step(dd) {
   const eff = jobs ? Math.min(1, pop / jobs) : 1;
   const before = { ...S.res };
   const mills = new Set(); let producers = 0, changedIdle = false;
+  const yardTowns = new Set(); for (const b of S.buildings.values()) if (b.t === 'shipyard' && b.p >= 1 && !b.idle) yardTowns.add(b.town);
   for (const b of S.buildings.values()) if (b.t === 'windmill' && b.p >= 1 && !b.idle) mills.add(b.town);
   for (const t of S.towns) t.served = false;
   for (const [i, b] of S.buildings) {
@@ -741,7 +749,7 @@ function step(dd) {
     const skill = (t && t.skillMult) || 1;
     for (const [r, v] of Object.entries(d.prod)) {
       let amt = v * dd * PACE.prod * f * (b.t === 'townhall' ? 1 : eff) * (b.m || 1) * lib * season * skill * obs * (hasTools ? 1.08 : 1) * specMult(t, b.t);
-      if (r === 'food') amt *= gardens * dome * (b.t === 'dock' ? lh : 1) * (b.t === 'farm' && mills.has(b.town) ? 1.15 : 1);
+      if (r === 'food') amt *= gardens * dome * (b.t === 'dock' ? lh * (yardTowns.has(b.town) ? 1.25 : 1) : 1) * (b.t === 'farm' && mills.has(b.town) ? 1.15 : 1);
       if (r === 'gold') amt *= gcGold * bridge;
       S.res[r] += amt;
     }
@@ -829,6 +837,7 @@ export function newGame(name, x, y) {
   S.started = true; S.name = name || 'Hearthlands'; S.day = 0; S.tier = 0; S.speed = 1;
   S.res = { food: 60, wood: 50, stone: 20, gold: 30, iron: 0, bread: 0, tools: 0, cloth: 0, ale: 0 };
   S.hints = [];
+  S.expeditions = []; S.explored = []; S.journal = []; S.treasures = {}; S.festsHeld = {}; S.requests = []; S.nextReq = 0; S.royal = null; S.hist = []; S.miles = [];
   S.towns = []; S.buildings = new Map(); S.zones = new Map(); S.nextTownId = 1;
   S.questsDone = new Set(); S.stats = { trades: 0, gifts: 0, joins: 0 }; S.routes = [];
   S.tutorial = 0;
@@ -862,7 +871,9 @@ export function save() {
     v: 1, name: S.name, day: S.day, speed: S.speed, tier: S.tier, res: S.res, towns: S.towns,
     buildings: [...S.buildings].map(([i, b]) => [i, b.t, +b.p.toFixed(3), b.town, +(b.m || 1).toFixed(2), b.z ? 1 : 0, b.lv || 1]),
     zones: [...S.zones], nb: S.neighbors.filter((n) => n.friend || n.joined || n.req || (n.log && n.log.length) || n.pop > 70).map((n) => [n.id, n.friend, n.joined ? 1 : 0, +n.pop.toFixed(1), n.req || null, n.log || []]),
-    quests: [...S.questsDone], stats: S.stats, routes: S.routes || [], hints: S.hints || [], cam: S.cam, nextTownId: S.nextTownId, tutorial: S.tutorial,
+    quests: [...S.questsDone], stats: S.stats, routes: S.routes || [], hints: S.hints || [],
+    expeditions: S.expeditions || [], explored: S.explored || [], journal: S.journal || [], treasures: S.treasures || {}, festsHeld: S.festsHeld || {},
+    requests: S.requests || [], nextReq: S.nextReq || 0, royal: S.royal || null, hist: S.hist || [], miles: S.miles || [], nextFolk: S.nextFolk || 1, cam: S.cam, nextTownId: S.nextTownId, tutorial: S.tutorial,
     meta: {
       pop: Math.floor(totalPop()), savedAt: Date.now(),
       place: capital && world.country ? (world.countryNames[world.country[idxOf(capital.x, capital.y)] - 1] || '') : '',
@@ -896,6 +907,8 @@ export function load(n = currentSlot) {
   S.tutorial = d.tutorial ?? 99; // realms from before the tutorial existed skip it
   for (const g of GOODS) if (S.res[g] === undefined) S.res[g] = 0;
   S.hints = d.hints || [];
+  S.expeditions = d.expeditions || []; S.explored = d.explored || []; S.journal = d.journal || []; S.treasures = d.treasures || {}; S.festsHeld = d.festsHeld || {};
+  S.requests = d.requests || []; S.nextReq = d.nextReq || 0; S.royal = d.royal || null; S.hist = d.hist || []; S.miles = d.miles || []; if (d.nextFolk) S.nextFolk = d.nextFolk;
   S.buildings = new Map(d.buildings.map(([i, t, p, town, m, z, lv]) => [i, { t, p, town, m, z, lv: lv || 1 }]));
   S.zones = new Map(d.zones);
   S.neighbors = generateNeighbors();

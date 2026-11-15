@@ -5,6 +5,9 @@ import { S, M, DEFS, ZONES, townById, canPlace, canZone, canFound, canStart, own
 import { hash2 } from './noise.js';
 import { idxOf } from './world.js';
 import * as L from './life.js';
+import * as A from './alive.js';
+import * as X from './explore.js';
+import * as ST from './stories.js';
 import { petOf, personById } from './folk.js';
 import { styleAt } from './regions.js';
 import { nbExtra, SPECS } from './game.js';
@@ -12,6 +15,9 @@ L.setExtraLookup((i) => nbExtra.has(i));
 const MOOD_FACES = ['🙂', '😊', '😄'];
 
 export const TILE_MODE_TW = 20;
+const A_GENTLE = () => !!S.settings.gentle;
+const A_FLAT = new Set(['farm', 'green', 'fountain', 'riceterrace', 'vineyard', 'orchard', 'oasis', 'cacao', 'apiary', 'quarry', 'dock']);
+const SMOKY = new Set(['house', 'townhall', 'tavern', 'bakery', 'smithy', 'brewery', 'workshop']);
 const LIT = new Set(['stable', 'house', 'townhall', 'workshop', 'market', 'tower', 'dock', 'library', 'cathedral', 'greatcastle', 'lighthouse', 'lumber', 'harbour', 'fountain',
   'chapel', 'tavern', 'school', 'bakery', 'brewery', 'weaver', 'smithy', 'windmill', 'monastery', 'bridge', 'observatory', 'dome', 'icehut', 'well']);
 export const MAX_TW = 160;
@@ -338,6 +344,15 @@ function drawWalkerList(ws) {
         ctx.fillStyle = '#7a5a34'; ctx.beginPath(); ctx.ellipse(x + w.face * 0.3 * s, y - 8.8 * s - bob, 2.6 * s, 0.8 * s, 0, 0, 6.3); ctx.fill();
         ctx.fillRect(x + w.face * 0.3 * s - 1 * s, y - 10 * s - bob, 2 * s, 1.4 * s);
       }
+      if (!w.kind) {
+        const night = L.daylight().n;
+        if (night > 0.45 && w.moving) { // a little lantern lights the way home
+          const lx = x + w.face * 2.6 * s, ly = y - 5 * s - bob;
+          ctx.fillStyle = '#ffd88a'; ctx.fillRect(lx - 1 * s, ly - 1 * s, 2 * s, 2.2 * s); lights.push([lx, ly, 0.35]);
+        }
+        const db = S.buildings.get(w.dest), em = !A_GENTLE() && A.emoteFor(w, animTime, night, db && db.t === 'tavern');
+        if (em && cam.tw >= 40) A.bubble(ctx, x + 3 * s, y - 13 * s - bob, s * 0.9, em);
+      }
       if (w.dog) { // the family dog trots along behind
         const dxp = x - w.face * 6 * s, hop = w.moving ? Math.abs(Math.sin(w.ph * 1.3)) * 0.8 * s : 0;
         L.drawAnimal(ctx, 'dog', dxp, y + 0.5 * s - hop, s, w.face, animTime * (w.moving ? 1.8 : 0.3), w.pid || 1);
@@ -394,6 +409,8 @@ export function frame(now) {
   const visTowns = tileMode && cam.tw >= 30 ? S.towns.filter((t) => Math.abs(sx(tileWX(t.x, t.y)) - cw / 2) < cw / 2 + t.radius * cam.tw && Math.abs(sy(tileWY(t.y)) - ch / 2) < ch / 2 + t.radius * cam.tw) : [];
   if (visTowns.length) { updateWalkers(dt, visTowns); dirty = true; }
   L.updateWeather(dt);
+  A.updateSky(dt);
+  if ((sceneT += dt) > 1.5 && world.ready && S.started) { sceneT = 0; sampleScene(); }
   L.updateRoads();
   // Clouds, animals and water move gently all the time; redraw for them at up to 30 fps.
   ambientT += dt;
@@ -407,10 +424,17 @@ export function frame(now) {
   if (tileMode) { bucketWalkers(visTowns); drawTiles(); } else drawOverview();
   if (visTowns.length && !tileMode) drawWalkers(visTowns);
   if (S.routes && S.routes.length) L.drawRoutes(ctx, animTime, S.routes, townById, sx, sy, cam.tw);
+  const view = curView();
+  A.drawTravellers(ctx, view);
+  X.drawHighwayTraffic(ctx, view);
+  drawExplorers();
   L.drawClouds(ctx, animTime, cam, cw, ch, sx, sy, tileMode);
   L.drawBirds(ctx, animTime, cam, cw, ch, sx, sy);
   if (tileMode) L.drawFalling(ctx, fdt, cw, ch, L.fallingSnow(Math.max(0, Math.min(H - 1, Math.round(cam.y / 0.25)))));
+  A.drawLight(ctx, view);
+  A.drawSky(ctx, view);
   L.drawNight(ctx, cw, ch, lights, cam.tw);
+  A.drawAir(ctx, view, fdt);
   drawLabels(tileMode);
 }
 
@@ -478,6 +502,75 @@ function drawOverview() {
 }
 
 // Ownership cache for visible region
+let sceneT = 0;
+// What's on screen right now, for the soundscape (sea, river, town, forest: 0..1).
+function sampleScene() {
+  let sea = 0, river = 0, town = 0, forest = 0, n = 0;
+  const span = Math.min(30, cw / cam.tw / 2);
+  for (let a = -3; a <= 3; a++) for (let b = -3; b <= 3; b++) {
+    const X = cam.x + (a / 3) * span, Y = cam.y + (b / 3) * span * 0.5, y = Math.max(0, Math.min(H - 1, Math.round(Y / 0.25))), x = wrapX(Math.round(X));
+    const i = y * W + x, bio = world.biome[i]; n++;
+    if (bio <= 1) sea++; if (world.river[i]) river++; if (S.buildings.has(i)) town++;
+    if (bio === B.FOREST || bio === B.JUNGLE || bio === B.TAIGA) forest++;
+  }
+  const close = cam.tw >= 20 ? 1 : 0.35;
+  sceneFn && sceneFn(Math.min(1, (sea / n) * 2.5) * close, Math.min(1, river / 6) * close, Math.min(1, (town / n) * 3) * close, Math.min(1, (forest / n) * 2) * close);
+}
+let sceneFn = null;
+export function onScene(f) { sceneFn = f; }
+// Bunting and lanterns around the hall during a festival.
+function festive(ctx, cx, cy, s, tw, t) {
+  const cols = ['#c0503e', '#e8c040', '#4a78a8', '#5a9a5a', '#f2b6c6'];
+  for (let ring = 0; ring < 2; ring++) {
+    const R = tw * (0.7 + ring * 0.35);
+    for (let k = 0; k < 14; k++) {
+      const a = (k / 14) * Math.PI * 2 + animTime * 0.05, x = cx + Math.cos(a) * R, y = cy + Math.sin(a) * R * 0.5 - 14 * s;
+      const a2 = ((k + 1) / 14) * Math.PI * 2 + animTime * 0.05, x2 = cx + Math.cos(a2) * R, y2 = cy + Math.sin(a2) * R * 0.5 - 14 * s;
+      ctx.strokeStyle = 'rgba(90,64,48,0.6)'; ctx.lineWidth = 0.6; ctx.beginPath(); ctx.moveTo(x, y); ctx.quadraticCurveTo((x + x2) / 2, (y + y2) / 2 + 3 * s, x2, y2); ctx.stroke();
+      if (t.fest.key === 'lights') { lights.push([x, y + 2 * s, 0.4]); ctx.fillStyle = '#ffcf70'; ctx.beginPath(); ctx.arc(x, y + 2 * s, 1.6 * s, 0, 6.3); ctx.fill(); }
+      else { ctx.fillStyle = cols[(k + ring) % 5]; ctx.beginPath(); ctx.moveTo(x - 1.6 * s, y + 0.6 * s); ctx.lineTo(x + 1.6 * s, y + 0.6 * s); ctx.lineTo(x, y + 4 * s); ctx.closePath(); ctx.fill(); }
+    }
+  }
+  if (t.fest.key === 'blossom' || t.fest.key === 'midsummer') { // a maypole
+    ctx.strokeStyle = '#8a5a3c'; ctx.lineWidth = Math.max(1, s); ctx.beginPath(); ctx.moveTo(cx + tw * 0.55, cy + tw * 0.1); ctx.lineTo(cx + tw * 0.55, cy - tw * 0.5); ctx.stroke();
+    for (let k = 0; k < 4; k++) { ctx.strokeStyle = cols[k]; ctx.beginPath(); ctx.moveTo(cx + tw * 0.55, cy - tw * 0.5); ctx.lineTo(cx + tw * 0.55 + Math.cos(animTime + k * 1.57) * tw * 0.18, cy + tw * 0.1 + Math.sin(animTime + k * 1.57) * tw * 0.06); ctx.stroke(); }
+  }
+}
+// A lost animal waiting to be found (tap it!), with a little ? above.
+function lostAnimal(ctx, q, s, tw) {
+  if (tw < 20) return;
+  const x = sx(tileWX(q.x, q.y)), y = sy(tileWY(q.y)) + tw * 0.05;
+  if (x < -30 || x > cw + 30 || y < -30 || y > ch + 30) return;
+  const [ox, , face] = L.wander(animTime * 0.6, q.id, 0.12);
+  const kind = q.animal === 'goat' ? 'goat' : q.animal === 'hen' ? 'chicken' : 'sheep';
+  L.drawAnimal(ctx, kind, x + ox * tw, y, s * 1.4, face, animTime, q.id);
+  A.bubble(ctx, x + ox * tw + 4 * s, y - 16 * s + Math.sin(animTime * 3) * 1.5 * s, s, '?');
+}
+// Explorer parties out on the map, and the landmarks already in the journal.
+function drawExplorers() {
+  const tw = cam.tw, s = tw / TB;
+  for (const k of S.explored || []) {
+    const [lx, ly] = X.lmTile(k), x = sx(tileWX(lx, ly)), y = sy(tileWY(ly));
+    if (x < -60 || x > cw + 60 || y < -40 || y > ch + 40) continue;
+    if (tw >= 3) label(`${X.LANDMARKS[k][3]} ${X.LANDMARKS[k][0]}`, x, y - (tw >= 20 ? tw * 0.6 : 8), 11);
+  }
+  for (const e of S.expeditions || []) {
+    const pp = X.partyPos(e); if (!pp) continue;
+    const x = sx(pp.X), y = sy(pp.Y);
+    if (x < -30 || x > cw + 30 || y < -30 || y > ch + 30) continue;
+    if (tw < 14) { ctx.fillStyle = '#c0503e'; ctx.beginPath(); ctx.arc(x, y, 3.5, 0, 6.3); ctx.fill(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke(); }
+    else {
+      const face = pp.out ? 1 : -1;
+      if (e.horse) L.drawAnimal(ctx, 'horse', x, y, s * 1.15, face, animTime * 1.6, 3);
+      for (let k = 0; k < 2; k++) { ctx.fillStyle = ['#5a7a4a', '#a06a3a'][k]; ctx.fillRect(x - (k + 1) * 6 * s * face - 1.4 * s, y - (e.horse ? 11 : 6) * s, 2.8 * s, 4.4 * s); ctx.fillStyle = '#f0c8a0'; ctx.beginPath(); ctx.arc(x - (k + 1) * 6 * s * face, y - (e.horse ? 12.4 : 7.4) * s, 1.4 * s, 0, 6.3); ctx.fill(); }
+      ctx.strokeStyle = '#5a4030'; ctx.lineWidth = Math.max(1, 0.8 * s); ctx.beginPath(); ctx.moveTo(x - 6 * s * face, y - 6 * s); ctx.lineTo(x - 6 * s * face, y - 20 * s); ctx.stroke();
+      ctx.fillStyle = '#c0503e'; ctx.fillRect(x - 6 * s * face, y - 20 * s, 6 * s * face, 4 * s);
+    }
+  }
+}
+function curView(X0 = 0, X1 = 0, yA = 0, yB = -1) {
+  return { X0, X1, yA, yB, tw: cam.tw, s: cam.tw / TB, sx, sy, cw, ch, time: animTime, camX: cam.x, camY: cam.y };
+}
 function drawTiles() {
   const tw = cam.tw, s = tw / TB, hw = tw / 2, hh = tw / 4;
   const X0 = cam.x - cw / 2 / tw - 1, X1 = cam.x + cw / 2 / tw + 1;
@@ -501,7 +594,7 @@ function drawTiles() {
 
   // Pass 1: ground
   const tint = new Path2D(), border = new Path2D(), valid = new Path2D(), invalid = new Path2D(), roadPath = new Path2D(), pavedPath = new Path2D();
-  const isPaved = (i) => { const t = townById(L.roadTown.get(i)); return !!(t && t.imp && t.imp.paved); };
+  const isPaved = (i) => { const rt = L.roadTown.get(i); if (rt === -1) return S.tier >= 3; const t = townById(rt); return !!(t && t.imp && t.imp.paved); };
   let anyRoad = false, anyRiver = false, anyBridge = false;
   const riverPaths = [new Path2D(), new Path2D(), new Path2D()], bridgePath = new Path2D();
   let anyOwn = false;
@@ -598,6 +691,8 @@ function drawTiles() {
   const hoverInfo = hoverTile && !mode ? hoverText(hoverTile) : null;
   if (hoverInfo) outline(hoverTile, 'rgba(255,255,255,0.85)', 1.5);
 
+  const view = curView(X0, X1, yA, yB);
+  A.drawWaterLife(ctx, view);
   // Pass 2: objects (row order for correct overlap)
   for (let y = yA; y <= yB; y++) {
     const off = (y & 1) * 0.5, cy = sy(tileWY(y));
@@ -618,7 +713,15 @@ function drawTiles() {
           if (!snowy && tw >= 30) { L.drawFarmAnimals(ctx, cx, cy, s, wx, y, animTime); if (stableTowns.has(bld.town) && hash2(wx, y, 27) < 0.5) L.drawPlough(ctx, cx, cy, s, animTime, hash2(wx, y, 28) * 6.28); }
           continue;
         }
+        if (bld.p >= 1 && !A_FLAT.has(bld.t) && tw >= 26) A.longShadow(ctx, cx, cy, s, tw);
         drawSprite(buildingSprite(bld, wx, y), cx, cy, s);
+        if (bld.t === 'shipyard' && bld.p >= 1) X.drawFleet(ctx, i, view);
+        if (bld.t === 'mine' || bld.t === 'quarry') X.drawSparkle(ctx, i, cx, cy, s, animTime);
+        if (bld.t === 'townhall') { const ft = townById(bld.town); if (ft && ft.fest && S.day < ft.fest.until) festive(ctx, cx, cy, s, tw, ft); }
+        if (bld.p >= 1 && tw >= 30) {
+          if (SMOKY.has(bld.t) && (bld.t !== 'house' || hash2(wx, y, 54) < 0.55)) A.smoke(ctx, cx + (bld.t === 'house' ? -4 : 3) * s, cy - (bld.t === 'townhall' ? 34 : 22) * s, s, animTime, hash2(wx, y, 55) * 9, rs.snow > 0.3);
+          if (bld.t === 'house' && hash2(wx, y, 53) < 0.12) A.laundry(ctx, cx + tw * 0.06, cy + tw * 0.2, s, animTime, hash2(wx, y, 56) * 9);
+        }
         if (bld.idle && tw >= 26) { // resting: upkeep could not be paid
           const bx = cx, by = cy - tw * 0.55, r = Math.max(7, tw * 0.13);
           ctx.fillStyle = 'rgba(255,250,238,0.95)'; ctx.strokeStyle = 'rgba(60,46,36,0.6)'; ctx.lineWidth = 1;
@@ -692,6 +795,7 @@ function drawTiles() {
       const nb = S.nbIndex.get(i);
       if (nb) {
         drawSprite(nb.pop < 22 ? SPR.build.hut[nb.id % 3] : SPR.build.village[nb.id % 3], cx, cy, s);
+        A.drawVillageLife(ctx, cx, cy, s, nb, animTime, tw);
         if (nb.req) { // a letter waiting: little envelope bobbing above the village
           const ey = cy - tw * 0.62 + Math.sin(animTime * 2.4 + nb.id) * tw * 0.03, ew = Math.max(9, tw * 0.2), eh = ew * 0.66;
           ctx.fillStyle = '#fffaf0'; ctx.strokeStyle = '#a0603c'; ctx.lineWidth = 1.2;
@@ -731,11 +835,18 @@ function drawTiles() {
       }
       if (tw >= 30) {
         const wk = L.wildAt(b, wx, y);
-        if (wk) { const ph = hash2(wx, y, 24) * 6.28, [ox, oy, face] = L.wander(animTime * (wk === 'rabbit' ? 1.6 : 0.8), ph, 0.3);
-          L.drawAnimal(ctx, wk, cx + ox * tw, cy + oy * tw + tw * 0.06, s * (wk === 'camel' ? 1.15 : 1), face, animTime, ph); }
+        if (wk) {
+          const n = A.herdSize(wk, wx, y), [fx, fy, fleeing] = A.herdOffset(animTime, hash2(wx, y, 26));
+          for (let k = 0; k < n; k++) {
+            const ph = hash2(wx + k, y, 24) * 6.28, [ox, oy, face] = L.wander(animTime * (wk === 'rabbit' ? 1.6 : 0.8), ph, 0.3);
+            L.drawAnimal(ctx, wk, cx + (ox + fx + (k - (n - 1) / 2) * 0.16) * tw, cy + (oy + fy + (k % 2) * 0.05) * tw + tw * 0.06, s * (wk === 'camel' ? 1.15 : 1) * (k && wk !== 'camel' ? 0.85 : 1), fleeing ? 1 : face, animTime * (fleeing ? 3 : 1), ph);
+          }
+        }
       }
     }
     drawRowWalkers(y);
+    A.drawRowLife(ctx, y, view);
+    for (const q of S.requests || []) if (q.kind === 'lost' && q.y === y) lostAnimal(ctx, q, s, tw);
   }
   if (hoverInfo) label(hoverInfo, sx(tileWX(hoverTile.x, hoverTile.y)), sy(tileWY(hoverTile.y)) - tw * 0.45, 11);
 }

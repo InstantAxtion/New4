@@ -7,7 +7,12 @@ import { initInput } from './input.js';
 import { initUI, showTitle, setMode } from './ui.js';
 import { initTutorial, updateTutorial } from './tutorial.js';
 import './folk.js';
-import { sfx, setAmbience } from './audio.js';
+import './explore.js';
+import './stories.js';
+import './records.js';
+import { sfx, setAmbience, setScene, thunder } from './audio.js';
+import { onScene } from './render.js';
+import { onThunder } from './alive.js';
 import { buildSnowMasks, daylight, weather } from './life.js';
 
 const $ = (s) => document.querySelector(s);
@@ -27,6 +32,7 @@ async function boot() {
   const keyPan = initInput(canvas);
   initUI();
   initTutorial(sfx, setMode);
+  onScene(setScene); onThunder(thunder);
   showTitle();
 
   let last = performance.now();

@@ -32,6 +32,20 @@ there are no timers, and you can pause whenever you like.
 - **Pets**: many families keep a dog or a cat. Dogs trot along behind their owners, cats doze on doorsteps, and each villager's card shows the family pet.
 - **Market days and visitors**: every 8 days, towns with a Market hold a market day. Covered wagons and travellers come in from the neighbouring villages, bringing gold and goodwill, and travellers also stop by the tavern.
 - **Builder crews**: each town starts with one crew and gains one more per 150 villagers. A **Builder's Yard** adds two crews, so more zoned tiles go up at once, and makes building there 25% faster. Builders can be seen hammering away at every construction site.
+- **A world that feels alive**:
+  - Little scenes: children playing tag, elders on benches, people fishing by rivers, neighbours chatting at the market.
+  - Emotes over villagers (♥ ♪ 💤), chimney smoke and laundry flapping in the wind.
+  - Water: waves lapping the shore, ducks and swans, jumping fish and whales far out at sea.
+  - Wildlife: deer herds that bound away, and birds that take off when you tap the trees.
+  - Seasons: blossom petals, autumn leaves, snowmen and summer swimmers.
+  - Light and weather: golden hour and blue hour, long dawn and dusk shadows, morning fog, thunderstorms followed by rainbows, desert heat shimmer.
+  - Nights: fireflies, lantern-carrying walkers, flickering windows and moonlight on the water.
+  - Neighbour villages with smoke, folk and sheep, and caravans and pilgrims travelling between them.
+  - Sound that follows the view: waves, rivers, town bustle, forest birds, owls and thunder.
+  - A **Gentle visuals** setting turns the extra effects down.
+- **Explore and connect**: send explorers to 30 natural wonders of the world for a journal of discoveries. Highways link your towns with carts travelling them. A **Shipyard** adds a fishing fleet and ferries for short sea crossings. Mines and quarries turn up rare finds (silver, gold, gems, fossils, geodes).
+- **People and stories**: seasonal **festivals** (Blossom Day, Midsummer Fair, Harvest Fair, Midwinter Lights), small **requests** from named villagers (find a lost goat, build a well, help a family), and a **royal family** whose ruler marries, has heirs and passes on the crown, with portraits and titles that grow with the realm.
+- **Keeping your realm**: back up a realm as a file or code and restore it from the main menu. **Trophies** are earned across all realms. **Realm history** shows charts of villagers and stores, plus a timeline of milestones.
 - **Gentle challenge**: bigger buildings have a small daily **upkeep**. If it can't be paid they simply rest (💤) and wake up again when it can, so nothing ever breaks. From Village tier each town can master one **speciality** (🌾 Farming, ⚒ Crafts, 💰 Trade, ⛏ Industry or 📖 Learning): +30% to that trade and −10% to the town's other work, so you plan which town does what.
 - **Regional wonders**: Cliff Monastery, Great Bridge, Observatory and Botanical Dome.
 - **The late game**: build a **Harbour** to send settlers to other continents. Chart **sea routes** between harbour towns on different continents (ships sail them, each adds gold and room for another settlement). Make towns lovelier with **civic improvements**: town green, paved streets, fountain square, street lanterns and window boxes. Long-term goals include settling six continents.
@@ -74,6 +88,10 @@ cd android && ./gradlew assembleDebug
 | `web/js/ui.js` | HUD, menus, modes and the start flow |
 | `web/js/seasons.js` | Seasons per hemisphere, day and night |
 | `web/js/regions.js` | Which building style a place uses |
+| `web/js/alive.js` | Scenes, emotes, water, wildlife, light, weather, night, travellers |
+| `web/js/explore.js` | Explorers and journal, highways, shipyard, rare finds |
+| `web/js/stories.js` | Festivals, villager requests, the royal family |
+| `web/js/records.js` | Backups, trophies, realm history and charts |
 | `web/js/rivers.js` | The real rivers' courses |
 | `web/js/folk.js` | Villagers' lives: names, families, jobs, skills, life events, chronicle |
 | `web/js/life.js` | Weather, clouds, birds, animals, boats, roads, night lighting |

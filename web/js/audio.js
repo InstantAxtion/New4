@@ -99,8 +99,9 @@ function startNature() {
     if (!ac) return;
     // birdsong by day (quieter in the rain), crickets at night
     if (!document.hidden) {
-      if (amb.night > 0.6) { if (Math.random() < 0.8) crickets(); }
-      else if (Math.random() < 0.6 * (1 - amb.rain * 0.7)) chirp();
+      if (amb.night > 0.6) { if (Math.random() < 0.8) crickets(); if (Math.random() < 0.08) owl(); }
+      else if (Math.random() < (0.45 + (amb.forest || 0) * 0.5) * (1 - amb.rain * 0.7)) { chirp(); if ((amb.forest || 0) > 0.5 && Math.random() < 0.5) setTimeout(chirp, 500); }
+      if (amb.night < 0.6 && (amb.town || 0) > 0.3 && Math.random() < amb.town * 0.7) { tap(); setTimeout(tap, 380); }
     }
     setTimeout(birds, (amb.night > 0.6 ? 1500 : 2500) + Math.random() * 6000);
   };
@@ -113,7 +114,53 @@ function startNature() {
   rainGain = ac.createGain(); rainGain.gain.value = 0;
   rsrc.connect(rf); rf.connect(rainGain); rainGain.connect(natureBus); rsrc.start();
 }
-const amb = { night: 0, rain: 0 };
+const amb = { night: 0, rain: 0, forest: 0 };
+// ---- soundscape that follows what is on screen ----
+const scene = {};
+function loopNoise(seconds, shape) {
+  const len = ac.sampleRate * seconds, buf = ac.createBuffer(1, len, ac.sampleRate), d = buf.getChannelData(0);
+  let last = 0; for (let i = 0; i < len; i++) { const w = Math.random() * 2 - 1; last = shape === 'brown' ? (last + w * 0.02) * 0.995 : w; d[i] = shape === 'brown' ? last * 3 : w; }
+  const src = ac.createBufferSource(); src.buffer = buf; src.loop = true; return src;
+}
+function buildScene() {
+  if (scene.ready || !ac) return; scene.ready = true;
+  const mk = (src, type, freq, q) => { const f = ac.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q; const g = ac.createGain(); g.gain.value = 0; src.connect(f); f.connect(g); g.connect(natureBus); src.start(); return { g, f }; };
+  scene.sea = mk(loopNoise(5, 'white'), 'lowpass', 700, 0.5);
+  const swell = ac.createOscillator(), sg = ac.createGain(); swell.frequency.value = 0.12; sg.gain.value = 300; swell.connect(sg); sg.connect(scene.sea.f.frequency); swell.start();
+  scene.river = mk(loopNoise(3, 'white'), 'bandpass', 2200, 1.6);
+  const bub = ac.createOscillator(), bg = ac.createGain(); bub.frequency.value = 3.3; bg.gain.value = 700; bub.connect(bg); bg.connect(scene.river.f.frequency); bub.start();
+  scene.town = mk(loopNoise(4, 'brown'), 'bandpass', 420, 0.9);
+}
+export function setScene(sea, river, town, forest) {
+  if (!ac) return; buildScene();
+  const t = ac.currentTime, on = S.settings.music ? 1 : 0;
+  scene.sea.g.gain.setTargetAtTime(sea * 0.22 * on, t, 1.2);
+  scene.river.g.gain.setTargetAtTime(river * 0.06 * on, t, 1.2);
+  scene.town.g.gain.setTargetAtTime(town * 0.18 * on * (1 - amb.night * 0.7), t, 1.2);
+  amb.forest = forest; amb.town = town;
+}
+function tap() { // a distant hammer in town
+  const t = ac.currentTime + 0.02, o = ac.createOscillator(), g = ac.createGain();
+  o.type = 'triangle'; o.frequency.setValueAtTime(900, t); o.frequency.exponentialRampToValueAtTime(300, t + 0.05);
+  g.gain.setValueAtTime(0.025, t); g.gain.exponentialRampToValueAtTime(0.0005, t + 0.09);
+  o.connect(g); g.connect(natureBus); o.start(t); o.stop(t + 0.1);
+}
+function owl() {
+  const t = ac.currentTime + 0.05;
+  [0, 0.45, 0.62].forEach((d, k) => {
+    const o = ac.createOscillator(), g = ac.createGain(); o.type = 'sine';
+    o.frequency.setValueAtTime(k ? 420 : 380, t + d); o.frequency.linearRampToValueAtTime(k ? 360 : 340, t + d + 0.3);
+    g.gain.setValueAtTime(0, t + d); g.gain.linearRampToValueAtTime(0.05, t + d + 0.06); g.gain.exponentialRampToValueAtTime(0.0005, t + d + (k === 2 ? 0.7 : 0.35));
+    o.connect(g); g.connect(natureBus); o.start(t + d); o.stop(t + d + 0.8);
+  });
+}
+export function thunder() {
+  if (!ac || !S.settings.music) return;
+  const src = loopNoise(3, 'brown'), f = ac.createBiquadFilter(), g = ac.createGain(), t = ac.currentTime;
+  f.type = 'lowpass'; f.frequency.value = 160; src.connect(f); f.connect(g); g.connect(natureBus);
+  g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.9, t + 0.15); g.gain.exponentialRampToValueAtTime(0.001, t + 2.8);
+  src.start(t); src.stop(t + 3);
+}
 let rainGain = null;
 // Called from the game loop with the current darkness (0..1) and rain (0..1).
 export function setAmbience(night, rain) {

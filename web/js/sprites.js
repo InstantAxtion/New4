@@ -714,6 +714,23 @@ function lifeSprites() {
     g.beginPath(); g.moveTo(lx2 + 2, ly2); g.lineTo(lx2 + 5, ly2 - 14); g.moveTo(lx2 + 5, ly2); g.lineTo(lx2 + 8, ly2 - 14);
     for (let k = 1; k < 5; k++) { g.moveTo(lx2 + 2 + k * 0.6, ly2 - k * 2.8); g.lineTo(lx2 + 5 + k * 0.6, ly2 - k * 2.8); } g.stroke();
   })];
+  S.shipyard = [frame((g) => {
+    shadow(g, 22, 10);
+    ground(g, '#b8a078', 27);
+    // slipway with a ship's hull taking shape on it
+    poly(g, [P(0.25, 0.55), P(1.0, 0.55), P(1.0, 0.85), P(0.25, 0.85)], '#9a7a54', '#7a5634');
+    const [hx, hy] = P(0.62, 0.7, 2);
+    g.fillStyle = '#8a5a3c'; g.beginPath(); g.moveTo(hx - 14, hy - 4); g.quadraticCurveTo(hx, hy + 6, hx + 14, hy - 4); g.lineTo(hx + 11, hy - 8); g.quadraticCurveTo(hx, hy, hx - 11, hy - 8); g.closePath(); g.fill();
+    g.strokeStyle = '#c89a64'; g.lineWidth = 1.1;
+    for (let k = -3; k <= 3; k++) { g.beginPath(); g.moveTo(hx + k * 3.6, hy - 6 + Math.abs(k) * 0.3); g.quadraticCurveTo(hx + k * 3.9, hy - 14, hx + k * 3.2, hy - 18 + Math.abs(k) * 1.4); g.stroke(); }
+    g.strokeStyle = '#6a4a2a'; g.lineWidth = 1.2; g.beginPath(); g.moveTo(hx - 12, hy - 15); g.lineTo(hx + 12, hy - 15); g.stroke();
+    // shed and stacked timber
+    box(g, 0.05, 0.1, 0.4, 0.45, 10, '#c8b498'); gable(g, 0.05, 0.1, 0.4, 0.45, 10, 7, '#6a5a48');
+    for (let k = 0; k < 3; k++) box(g, 0.45, 0.12 + k * 0.03, 0.9, 0.16 + k * 0.03, 1.6, k % 2 ? '#d8b07a' : '#c89a64', k * 1.6);
+    g.strokeStyle = '#5a4030'; g.lineWidth = 1.2; const [cx2, cy2] = P(0.95, 0.4, 0);
+    g.beginPath(); g.moveTo(cx2, cy2); g.lineTo(cx2, cy2 - 20); g.lineTo(cx2 - 10, cy2 - 16); g.stroke();
+    g.lineWidth = 0.5; g.beginPath(); g.moveTo(cx2 - 10, cy2 - 16); g.lineTo(cx2 - 10, cy2 - 8); g.stroke();
+  })];
   S.stable = [frame((g) => {
     shadow(g, 22, 10);
     // paddock fence

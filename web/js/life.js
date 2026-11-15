@@ -102,7 +102,11 @@ export function drawNight(ctx, cw, ch, lights, tw) {
     ctx.globalCompositeOperation = 'lighter';
     ctx.globalAlpha = Math.min(1, n * 0.42);
     const r = Math.max(8, tw * 0.42);
-    for (const [x, y, k] of lights) ctx.drawImage(SPR.glow, x - r * k, y - r * k * 0.8, 2 * r * k, 1.6 * r * k);
+    const tt = performance.now() / 1000;
+    for (const [x, y, k0] of lights) { // candle-light flicker
+      const k = k0 * (0.88 + 0.12 * Math.sin(tt * (5 + (x % 7)) + y));
+      ctx.drawImage(SPR.glow, x - r * k, y - r * k * 0.8, 2 * r * k, 1.6 * r * k);
+    }
     ctx.globalAlpha = 1;
   }
   ctx.globalCompositeOperation = 'source-over';
@@ -272,6 +276,11 @@ export function drawAnimal(ctx, kind, x, y, s, face, t, ph) {
     body(ctx, x + 4.9 * s, y - 8 * s, 1.5 * s, 0.85 * s, col);
     ctx.strokeStyle = '#2a2018'; ctx.lineWidth = 0.9 * s; ctx.beginPath(); ctx.moveTo(x + 2.6 * s, y - 6 * s); ctx.lineTo(x + 3.9 * s, y - 8.6 * s);
     ctx.moveTo(x - 3.6 * s, y - 4.8 * s); ctx.quadraticCurveTo(x - 5.2 * s, y - 4 * s, x - 4.8 * s, y - 2 * s); ctx.stroke();
+  } else if (kind === 'goat') {
+    legs(ctx, x, y - 1.8 * s, s, 1.5, 1.8, '#4a3a30', step);
+    body(ctx, x, y - 2.8 * s, 2.6 * s, 1.4 * s, '#e8e2d6'); body(ctx, x + 2.6 * s, y - 4 * s, 1.1 * s, 0.9 * s, '#e8e2d6');
+    ctx.strokeStyle = '#8a7a68'; ctx.lineWidth = 0.6 * s; ctx.beginPath(); ctx.moveTo(x + 2.4 * s, y - 4.8 * s); ctx.quadraticCurveTo(x + 1.6 * s, y - 6.4 * s, x + 1 * s, y - 6 * s); ctx.stroke();
+    ctx.fillStyle = '#c8bca8'; ctx.fillRect(x + 3 * s, y - 3.4 * s, 0.6 * s, 1.2 * s);
   } else if (kind === 'dog') {
     const col = ph % 3 < 1 ? '#a0703c' : ph % 3 < 2 ? '#3c3430' : '#d8c8a8';
     legs(ctx, x, y - 1.6 * s, s, 1.3, 1.6, '#3a2a20', step);
@@ -428,7 +437,10 @@ export function updateRoads() {
     }
     net.set(t.id, { parent, conn, hall });
   }
+  extraRoads((i, d) => { roads.set(i, (roads.get(i) || 0) | (1 << d)); if (!roadTown.has(i)) roadTown.set(i, -1); });
 }
+let extraRoads = () => {};
+export function setExtraRoads(f) { extraRoads = f; roadsDirty = true; }
 // Tiles along the road from a building's doorstep to its town hall (or null if it has no road).
 export function routeToHall(tid, bi) {
   const n = net.get(tid); if (!n) return null;
