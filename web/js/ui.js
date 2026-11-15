@@ -11,7 +11,7 @@ import { panBy, cam, markDirty, flyTo, centerOn, clampCam, screenSize, TILE_MODE
 import { initAudio, sfx, haptic, applySettings, resumeAudio } from './audio.js';
 import { tutorialActive, hint } from './tutorial.js';
 import { ageOf, fullName, personById, JOBS, thought, petOf } from './folk.js';
-import { walkerAt } from './render.js';
+import { walkerAt, clearTransient } from './render.js';
 import { STYLES } from './sprites.js';
 import { townStyle } from './render.js';
 import { seasonIndex, SEASONS, SEASON_ICONS, nightAt, farmSeason } from './seasons.js';
@@ -296,7 +296,7 @@ function showMenu() {
       • Nothing can go wrong. Pause whenever you like, and the realm waits for you.<br>
       • <b>S Pen</b>: hover to see what's there. In Zones, the pen paints and fingers move the map. Hold the pen's side button to erase.</div></div>
       <div class="section"><h3>Map data</h3><div class="note">Earth outlines from Natural Earth (public domain) via world-atlas.</div></div>
-      <div class="row"><button class="btn small" data-act="savenow">Save now</button>${document.body.classList.contains('native') || !document.documentElement.requestFullscreen ? '' : '<button class="btn small" data-act="fullscreen">Full screen</button>'}<button class="btn small" data-act="switchrealm">Switch realm…</button></div>`);
+      <div class="row"><button class="btn small" data-act="savenow">Save now</button>${document.body.classList.contains('native') || !document.documentElement.requestFullscreen ? '' : '<button class="btn small" data-act="fullscreen">Full screen</button>'}<button class="btn small primary" data-act="mainmenu">Main menu</button></div>`);
 }
 
 // ---------------- tile info ----------------
@@ -449,7 +449,7 @@ function act(name, arg, el) {
     case 'set': S.settings[arg] = !S.settings[arg]; saveSettings(); applySettings(); refreshSheet(); if (arg === 'haptics' && S.settings.haptics) haptic(); break;
     case 'savenow': save(); toast('Your realm is saved.'); break;
     case 'fullscreen': if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen().catch(() => {}); break;
-    case 'switchrealm': save(); location.reload(); break;
+    case 'mainmenu': backToMenu(); break;
     case 'restart':
       if (el.dataset.confirm) { resetSave(); location.reload(); }
       else { el.dataset.confirm = '1'; el.textContent = 'Tap again to abandon this realm'; el.classList.add('primary'); }
@@ -545,36 +545,84 @@ export function showTitle() {
   $('#loading').classList.add('hidden');
   $('#title').classList.remove('hidden');
   centerOn(1000, 1400, Math.max(1.4, screenSize().ch / 700)); // gentle drifting view of Earth behind
-  renderSlots();
+  menuPage('main');
 }
-function renderSlots() {
-  const btns = $('#titlebtns');
-  const slots = slotInfo();
-  btns.innerHTML = `<div class="slots">${slots.map((d, k) => d
-    ? `<div class="slot"><button class="si" data-slot="${k + 1}" style="text-align:left"><b>${esc(d.name)}</b><small>${tierNames[d.tier] || ''}${d.pop != null ? ` · ${d.pop} folk` : ''}${d.place ? ` · ${esc(d.place)}` : ''}<br>Year ${Math.floor((d.day || 0) / 48) + 1} · played ${ago(d.savedAt)}</small></button><button class="del" data-del="${k + 1}" aria-label="Delete realm">🗑</button></div>`
-    : `<button class="slot empty" data-new="${k + 1}">＋ Begin a new realm</button>`).join('')}</div>`;
-  btns.onclick = (e) => {
+const mhead = (title) => `<div class="mpanel-head"><button class="mback" data-m="main" aria-label="Back">←</button><h2>${title}</h2></div>`;
+function menuPage(page) {
+  const box = $('#titlebtns');
+  const slots = slotInfo(), saved = slots.filter(Boolean);
+  const latest = saved.slice().sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0))[0];
+  const freeSlot = slots.findIndex((d) => !d) + 1;
+  let html = '';
+  if (page === 'main') {
+    html = `<div class="mlist">
+      ${latest ? `<button class="mbtn primary" data-m="continue"><span class="mi">▶</span><div>Continue<small>${esc(latest.name)} · ${tierNames[latest.tier] || ''}${latest.place ? ` · ${esc(latest.place)}` : ''}</small></div></button>` : ''}
+      <button class="mbtn ${latest ? '' : 'primary'}" data-m="new"><span class="mi">🌍</span><div>New Realm<small>Choose your homeland anywhere on Earth</small></div></button>
+      ${saved.length ? `<button class="mbtn" data-m="load"><span class="mi">📜</span><div>Load Realm<small>${saved.length} saved realm${saved.length > 1 ? 's' : ''}</small></div></button>` : ''}
+      <button class="mbtn" data-m="settings"><span class="mi">⚙️</span><div>Settings<small>Music, sounds and vibration</small></div></button>
+      <button class="mbtn" data-m="help"><span class="mi">❓</span><div>How to Play</div></button>
+      <button class="mbtn" data-m="credits"><span class="mi">✨</span><div>Credits</div></button></div>`;
+  } else if (page === 'load') {
+    html = mhead('Load Realm') + `<div class="slots">${slots.map((d, k) => d
+      ? `<div class="slot"><button class="si" data-slot="${k + 1}" style="text-align:left"><b>${esc(d.name)}</b><small>${tierNames[d.tier] || ''}${d.pop != null ? ` · ${d.pop} folk` : ''}${d.place ? ` · ${esc(d.place)}` : ''}<br>Year ${Math.floor((d.day || 0) / 48) + 1} · played ${ago(d.savedAt)}</small></button><button class="del" data-del="${k + 1}" aria-label="Delete realm">🗑</button></div>`
+      : `<button class="slot empty" data-new="${k + 1}">＋ Empty slot: begin a new realm</button>`).join('')}</div>`;
+  } else if (page === 'new') {
+    html = mhead('New Realm') + (freeSlot ? `<label class="note" for="rname" style="display:block;text-align:left">Name your realm</label>
+      <input id="rname" class="text" maxlength="24" value="Hearthlands" autocomplete="off">
+      <button class="mbtn primary" id="tgo"><span class="mi">🧭</span><div>Choose your homeland<small>Saved in slot ${freeSlot} of ${SLOT_COUNT}</small></div></button>`
+      : `<div class="note">All ${SLOT_COUNT} save slots are in use. Open <b>Load Realm</b> and delete one to make room.</div><button class="mbtn" data-m="load"><span class="mi">📜</span><div>Load Realm</div></button>`);
+  } else if (page === 'settings') {
+    html = mhead('Settings') + ['music', 'sfx', 'haptics'].map((k) => `<div class="toggle"><span>${{ music: 'Music & nature sounds', sfx: 'Sound effects', haptics: 'Vibration' }[k]}</span><button class="switch ${S.settings[k] ? 'on' : ''}" data-set="${k}" aria-label="${k}"></button></div>`).join('');
+  } else if (page === 'help') {
+    html = mhead('How to Play') + `<div class="helptext">
+      <p>Pick any spot on Earth and grow a hamlet into a kingdom. There is no way to lose, so take your time.</p>
+      <h3>🌾 Zones</h3>Paint <b>Housing</b>, <b>Farmland</b> and <b>Workshops</b>. Your builders put them up one by one. A Builder's Yard adds more crews.
+      <h3>🔨 Build</h3>Place key buildings yourself: lumber camps by woods, quarries and mines by hills, docks on shores and rivers. Everyday buildings like wells, taverns and schools make towns happier.
+      <h3>😊 Mood</h3>Happy towns attract families faster. Tap a town hall to see what would help.
+      <h3>🏡 Folk</h3>Everyone has a name, a family, a trade and sometimes a pet. Tap anyone walking about to meet them.
+      <h3>🤝 Neighbours</h3>Trade, send gifts and answer letters. Close friends may join your realm.
+      <h3>⛵ Later on</h3>Choose a speciality for each town, build harbours, chart sea routes and raise wonders.
+      <h3>✋ Controls</h3>Drag to move, pinch to zoom, tap to inspect. With an S Pen, the pen paints zones and a finger moves the map.</div>`;
+  } else if (page === 'credits') {
+    html = mhead('Credits') + `<div class="helptext">
+      <p><b>Hearthlands</b>: a cosy kingdom builder on a real Earth of 8 million tiles.</p>
+      <p>Map outlines: Natural Earth (public domain), via world-atlas.<br>Rivers traced by hand along their real courses.</p>
+      <p>All art, music and sounds are made in code.</p>
+      <p>Made with Claude Code.</p></div>`;
+  }
+  box.innerHTML = html;
+  box.parentElement.scrollTop = 0;
+  if (page === 'new' && freeSlot) {
+    const inp = $('#rname'); inp.focus(); inp.select();
+    const go = () => { sfx('tap'); setSlot(freeSlot); startPicking(inp.value.trim() || 'Hearthlands'); };
+    $('#tgo').onclick = go; inp.onkeydown = (ev) => { if (ev.key === 'Enter') go(); };
+  }
+  box.onclick = (e) => {
     initAudio();
-    const play = e.target.closest('[data-slot]'), nw = e.target.closest('[data-new]'), del = e.target.closest('[data-del]');
+    const m = e.target.closest('[data-m]'), play = e.target.closest('[data-slot]'), nw = e.target.closest('[data-new]'), del = e.target.closest('[data-del]'), set = e.target.closest('[data-set]');
+    if (m) { sfx('tap'); if (m.dataset.m === 'continue') { if (load(latest.slot)) enterGame(); } else menuPage(m.dataset.m); return; }
     if (play) { sfx('tap'); if (load(+play.dataset.slot)) enterGame(); return; }
+    if (nw) { sfx('tap'); menuPage('new'); return; }
+    if (set) { const k = set.dataset.set; S.settings[k] = !S.settings[k]; saveSettings(); applySettings(); sfx('tap'); if (k === 'haptics' && S.settings.haptics) haptic(); menuPage('settings'); return; }
     if (del) {
       sfx('tap');
       if (!del.dataset.confirm) { del.dataset.confirm = 1; del.textContent = 'Sure?'; del.style.width = 'auto'; del.style.padding = '0 10px'; del.style.borderRadius = '16px'; return; }
-      deleteSlot(+del.dataset.del); renderSlots(); return;
-    }
-    if (nw) {
-      sfx('tap'); setSlot(+nw.dataset.new);
-      btns.onclick = null;
-      btns.innerHTML = `<label class="note" for="rname" style="display:block;text-align:left">Name your realm</label>
-        <input id="rname" class="text" maxlength="24" value="Hearthlands" autocomplete="off">
-        <button class="btn primary" id="tgo">Choose your homeland</button>
-        <button class="btn" id="tback" style="margin-top:8px">Back</button>`;
-      const inp = $('#rname'); inp.focus(); inp.select();
-      const go = () => { sfx('tap'); startPicking(inp.value.trim() || 'Hearthlands'); };
-      $('#tgo').onclick = go; inp.onkeydown = (ev) => { if (ev.key === 'Enter') go(); };
-      $('#tback').onclick = () => { sfx('tap'); renderSlots(); };
+      deleteSlot(+del.dataset.del); menuPage(slotInfo().some(Boolean) ? 'load' : 'main');
     }
   };
+}
+// Back to the main menu from a game in progress (saves first, no reload).
+export function backToMenu() {
+  save();
+  closeSheet(); setMode(null);
+  $('#hud').classList.add('hidden');
+  S.started = false;
+  // clear the realm from the map behind the menu (it is safely saved)
+  S.towns = []; S.buildings = new Map(); S.zones = new Map(); S.neighbors = []; S.nbIndex.clear(); S.routes = [];
+  $('#toasts').innerHTML = '';
+  clearTransient();
+  emit('change');
+  showTitle();
 }
 
 const REGIONS = [['Europe', 10, 50], ['Africa', 20, 5], ['Asia', 95, 35], ['N. America', -100, 42], ['S. America', -60, -15], ['Oceania', 140, -25]];

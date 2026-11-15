@@ -275,6 +275,9 @@ export function nearNeighbor(x, y, r = 2.6) {
   for (const n of S.neighbors) if (!n.joined && groundDist2(x, y, n.x, n.y) <= r * r) return n;
   return null;
 }
+// Streets are reserved: set by the road planner (life.js) to avoid a circular import.
+let streetCheck = () => false;
+export function setStreetCheck(f) { streetCheck = f; }
 export const byRiver = (x, y) => neighbors(x, y).some(([nx, ny]) => ny >= 0 && ny < H && riverAt(nx, ny));
 const adjacent = (x, y, pred) => neighbors(x, y).some(([nx, ny]) => ny >= 0 && ny < H && pred(biomeAt(nx, ny)));
 const affordable = (cost) => Object.entries(cost || {}).every(([k, v]) => S.res[k] >= v);
@@ -309,6 +312,7 @@ export function canPlace(type, x, y) {
   if (S.buildings.has(i)) return { ok: false, reason: 'Something is already built here.' };
   if (isWater(b)) return { ok: false, reason: 'You cannot build on water.' };
   if (riverAt(x, y)) return { ok: false, reason: 'A river flows here.' };
+  if (streetCheck(i)) return { ok: false, reason: 'A street runs here. Build beside it.' };
   if (!BUILDABLE.has(b)) return { ok: false, reason: `${BIOMES[b].name} is too rugged to build on.` };
   const own = ownerOf(x, y);
   if (!own) return { ok: false, reason: 'Outside your borders.' };
@@ -359,7 +363,7 @@ export function canZone(x, y) {
   x = wrapX(x);
   if (y < 1 || y >= H - 1) return false;
   const i = idxOf(x, y), b = world.biome[i];
-  if (S.buildings.has(i) || !BUILDABLE.has(b) || riverAt(x, y)) return false;
+  if (S.buildings.has(i) || !BUILDABLE.has(b) || riverAt(x, y) || streetCheck(i)) return false;
   if (!ownerOf(x, y) || nearNeighbor(x, y)) return false;
   return true;
 }
@@ -682,7 +686,7 @@ function step(dd) {
     const cands = new Map();
     for (const [i, z] of S.zones) {
       const x = i % W, y = Math.floor(i / W), t = ownerOf(x, y);
-      if (!t || (busy.get(t.id) || 0) >= crewsOf(t)) continue;
+      if (!t || (busy.get(t.id) || 0) >= crewsOf(t) || streetCheck(i)) continue;
       if (!cands.has(t.id)) cands.set(t.id, []);
       cands.get(t.id).push({ i, x, y, z, d: groundDist2(x, y, t.x, t.y), t });
     }

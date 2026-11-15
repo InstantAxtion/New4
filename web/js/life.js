@@ -1,6 +1,6 @@
 // The living world: seasons on the map, day and night, weather, animals, boats and roads.
 import { W, H, B, world, tileLat, tileWX, tileWY, idxOf } from './world.js';
-import { S, on } from './game.js';
+import { S, on, setStreetCheck } from './game.js';
 import { hash2 } from './noise.js';
 import { SPR } from './sprites.js';
 import * as SE from './seasons.js';
@@ -369,25 +369,79 @@ export const roads = new Map(); // tile idx -> bitmask of directions
 export const roadTown = new Map(); // tile idx -> town id that built the road
 let roadsDirty = true;
 const markRoads = () => { roadsDirty = true; };
-on('built', markRoads); on('change', markRoads); on('improved', markRoads); on('joined', markRoads); on('founded', markRoads);
+on('built', markRoads); on('change', markRoads); on('improved', markRoads);
+// Plan streets as part of the simulation (not only when the screen redraws).
+on('stepped', () => updateRoads()); on('joined', markRoads); on('founded', markRoads);
+// Each town grows a branching road network outward from its hall over open ground only,
+// so roads never run under buildings. Every building connects at the free tile by its door.
+let prevRoadKeys = [];
+export const isStreet = (i) => roads.has(i) && !S.buildings.has(i);
+const net = new Map(); // townId -> { parent: Map(idx -> parentIdx), conn: Map(buildingIdx -> connectorIdx), hall }
 export function updateRoads() {
   if (!roadsDirty) return;
-  roadsDirty = false; roads.clear(); roadTown.clear();
-  const halls = new Map(S.towns.map((t) => [t.id, t]));
-  for (const [i, b] of S.buildings) {
-    if (b.p < 1 || b.t === 'townhall') continue;
-    const t = halls.get(b.town); if (!t) continue;
-    const p = lPath(i % W, Math.floor(i / W), t.x, t.y);
-    for (let k = 1; k < p.length; k++) {
-      const [x, y, d] = p[k], [px, py] = p[k - 1];
-      const a = idxOf(px, py), c = idxOf(x, y);
-      roads.set(a, (roads.get(a) || 0) | (1 << d));
-      roads.set(c, (roads.get(c) || 0) | (1 << OPP[d]));
-      if (!roadTown.has(a)) roadTown.set(a, t.id);
-      if (!roadTown.has(c)) roadTown.set(c, t.id);
+  roadsDirty = false; prevRoadKeys = [...roads.keys()]; roads.clear(); roadTown.clear(); net.clear();
+  const byTown = new Map();
+  for (const [i, b] of S.buildings) if (b.p >= 1 && b.t !== 'townhall') { if (!byTown.has(b.town)) byTown.set(b.town, []); byTown.get(b.town).push(i); }
+  const mark = (a, d, tid) => { roads.set(a, (roads.get(a) || 0) | (1 << d)); if (!roadTown.has(a)) roadTown.set(a, tid); };
+  const prevRoads = new Set(prevRoadKeys);
+  for (const t of S.towns) {
+    const hall = idxOf(t.x, t.y), R = (t.radius + 2) ** 2;
+    // Cheapest paths outward from the hall: existing streets are cheapest, then open ground,
+    // then zoned-but-unbuilt tiles (streets may claim those). Buildings are never crossed.
+    const cost = (i) => (prevRoads.has(i) ? 1 : S.zones.has(i) ? 5 : 2);
+    const passable = (i, x, y) => i === hall || (!S.buildings.has(i) && world.biome[i] > 2 && !nbExtraHas(i) && groundD2(x, y, t.x, t.y) <= R);
+    const dist = new Map([[hall, 0]]), parent = new Map([[hall, -1]]), pdir = new Map();
+    const buckets = [[hall]];
+    for (let c = 0; c < buckets.length; c++) {
+      const bucket = buckets[c]; if (!bucket) continue;
+      for (const i of bucket) {
+        if (dist.get(i) !== c) continue;
+        const x = i % W, y = Math.floor(i / W);
+        for (let d = 0; d < 4; d++) {
+          const [nx, ny] = stepTile(x, y, d); if (ny < 1 || ny >= H - 1) continue;
+          const ni = idxOf(nx, ny);
+          if (!passable(ni, nx, ny)) continue;
+          const nd = c + cost(ni);
+          if (dist.has(ni) && dist.get(ni) <= nd) continue;
+          dist.set(ni, nd); parent.set(ni, i); pdir.set(ni, d);
+          (buckets[nd] ||= []).push(ni);
+        }
+      }
     }
+    const conn = new Map();
+    const blds = (byTown.get(t.id) || []).sort((a, b) => groundD2(a % W, Math.floor(a / W), t.x, t.y) - groundD2(b % W, Math.floor(b / W), t.x, t.y));
+    for (const bi of blds) {
+      const bx = bi % W, by = Math.floor(bi / W);
+      let best = -1, bd = Infinity, bdir = 0;
+      for (let d = 0; d < 4; d++) {
+        const [nx, ny] = stepTile(bx, by, d), ni = idxOf(nx, ny);
+        if (dist.has(ni) && dist.get(ni) < bd) { bd = dist.get(ni); best = ni; bdir = OPP[d]; }
+      }
+      if (best < 0) continue;
+      conn.set(bi, best);
+      mark(best, bdir, t.id); // a short drive up to the door
+      for (let i = best; i !== hall; i = parent.get(i)) {
+        const d = pdir.get(i), pi = parent.get(i);
+        if (S.zones.has(i)) S.zones.delete(i); // the street claims this zoned tile
+        mark(i, OPP[d], t.id); mark(pi, d, t.id);
+      }
+    }
+    net.set(t.id, { parent, conn, hall });
   }
 }
+// Tiles along the road from a building's doorstep to its town hall (or null if it has no road).
+export function routeToHall(tid, bi) {
+  const n = net.get(tid); if (!n) return null;
+  if (bi === n.hall) return [n.hall];
+  const c = n.conn.get(bi); if (c == null) return null;
+  const out = [];
+  for (let i = c, g = 0; i !== -1 && g < 4000; i = n.parent.get(i), g++) out.push(i);
+  return out;
+}
+const groundD2 = (ax, ay, bx, by) => { let dx = tileWX(ax, ay) - tileWX(bx, by); if (dx > W / 2) dx -= W; else if (dx < -W / 2) dx += W; const dy = (tileWY(ay) - tileWY(by)) * 2; return dx * dx + dy * dy; };
+let nbExtraHas = () => false;
+export function setExtraLookup(f) { nbExtraHas = f; }
+
 // Edge midpoints for each direction, as fractions of (half width, half height).
 const EDGE = [[0.5, 0.5], [-0.5, -0.5], [-0.5, 0.5], [0.5, -0.5]];
 export function addRoad(path, mask, cx, cy, hw, hh) {
@@ -451,3 +505,5 @@ function harbourOf(t) {
   for (const [i, b] of S.buildings) if (b.t === 'harbour' && b.town === t.id && b.p >= 1) { const v = [i % W, Math.floor(i / W), i]; harbourCache.set(t.id, v); return v; }
   return null;
 }
+
+setStreetCheck((i) => isStreet(i));

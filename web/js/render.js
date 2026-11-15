@@ -1,6 +1,6 @@
 // Isometric renderer with an overview (atlas) mode for far zoom levels.
 import { BIOMES, W, H, B, world, wrapX, tileWX, tileWY, biomeAt, isWater } from './world.js';
-import { SPR, TB, DECOR_DENSITY } from './sprites.js';
+import { SPR, TB, DECOR_DENSITY, homeArt } from './sprites.js';
 import { S, M, DEFS, ZONES, townById, canPlace, canZone, canFound, canStart, ownerOf, groundDist2, CONTACT_RANGE, inContact } from './game.js';
 import { hash2 } from './noise.js';
 import { idxOf } from './world.js';
@@ -8,6 +8,7 @@ import * as L from './life.js';
 import { petOf, personById } from './folk.js';
 import { styleAt } from './regions.js';
 import { nbExtra, SPECS } from './game.js';
+L.setExtraLookup((i) => nbExtra.has(i));
 const MOOD_FACES = ['🙂', '😊', '😄'];
 
 export const TILE_MODE_TW = 20;
@@ -134,8 +135,12 @@ function planWalk(w, tiles, t) {
   const target = tiles[Math.floor(Math.random() * tiles.length)];
   const hall = idxOf(t.x, t.y);
   const tilesPath = [];
+  // follow the town's roads where they exist, else walk the straight way
   const leg = (from, to, reverse) => {
-    let p = L.lPath(from % W, Math.floor(from / W), to % W, Math.floor(to / W));
+    const r = L.routeToHall(t.id, from);
+    let p = r ? r.map((i) => [i % W, Math.floor(i / W)]) : L.lPath(from % W, Math.floor(from / W), to % W, Math.floor(to / W));
+    if (r && !reverse) p.unshift([from % W, Math.floor(from / W)]);
+    if (r && reverse) p.unshift([from % W, Math.floor(from / W)]);
     if (reverse) p = p.slice().reverse();
     for (const [x, y] of p) tilesPath.push([x, y]);
   };
@@ -157,6 +162,8 @@ function planWalk(w, tiles, t) {
   for (let k = 1; k < pts.length; k++) { const d = gdist(pts[k - 1][0], pts[k - 1][1], pts[k][0], pts[k][1]); w.seg.push(d); w.len += d; }
   w.d = 0; w.k = 0; w.dest = target;
 }
+// Forget everyone walking about (when leaving a realm).
+export function clearTransient() { walkers.clear(); visitors.clear(); tileCacheStamp = -1; dirty = true; }
 // Visitors: market-day wagons from neighbouring villages, and the odd traveller heading for the tavern.
 export const visitors = new Map(); // townId -> array
 function routeVisitor(v, fromTile, toTile, nearX) {
@@ -354,7 +361,7 @@ function buildingSprite(b, x, y) {
   }
   if (b.t === 'house') {
     const t = townById(b.town);
-    const arr = SPR.homes[t ? townStyle(t) : 'temperate'][(b.lv || 1) - 1];
+    const arr = homeArt(t ? townStyle(t) : 'temperate', b.lv || 1);
     return arr[Math.floor(hash2(x, y, 3) * arr.length)];
   }
   const arr = SPR.build[b.t];

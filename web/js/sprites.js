@@ -283,7 +283,7 @@ function home(g, st, du, dv, sz, h, roofCol, rnd, opts = {}) {
     g.strokeStyle = '#6a4a2a'; g.lineWidth = 1.2;
     for (const [u, v] of [[u0 + 0.03, v1 - 0.03], [u1 - 0.03, v1 - 0.03], [u1 - 0.03, v0 + 0.03]]) { g.beginPath(); g.moveTo(...P(u, v, 0)); g.lineTo(...P(u, v, z0)); g.stroke(); }
   }
-  box(g, u0, v0, u1, v1, h, st.wall, z0);
+  box(g, u0, v0, u1, v1, h, opts.wall || st.wall, z0);
   if (st.trim) {
     g.strokeStyle = st.trim; g.lineWidth = 0.8; g.beginPath();
     for (const z of h > 11 ? [z0 + h / 2] : [z0 + h * 0.5]) { g.moveTo(...P(u0, v1, z)); g.lineTo(...P(u1, v1, z)); g.lineTo(...P(u1, v0, z)); }
@@ -313,7 +313,7 @@ function home(g, st, du, dv, sz, h, roofCol, rnd, opts = {}) {
     }
     const [rx, ry] = P(u1 + 0.1, (v0 + v1) / 2, top + st.rh * (sz / 0.5)); g.fillStyle = rgb(hex(roofCol), 0.6); g.beginPath(); g.arc(rx, ry, 1.2, 0, 7); g.fill();
   } else if (st.roof === 'flat') {
-    box(g, u0, v1 - 0.04, u1, v1, 2, st.wall, top); box(g, u1 - 0.04, v0, u1, v1, 2, st.wall, top);
+    box(g, u0, v1 - 0.04, u1, v1, 2, opts.wall || st.wall, top); box(g, u1 - 0.04, v0, u1, v1, 2, opts.wall || st.wall, top);
     if (opts.dome) {
       const [cx, cy] = P((u0 + u1) / 2, (v0 + v1) / 2, top); const r = sz * 14;
       const gr = g.createLinearGradient(cx - r, 0, cx + r, 0); gr.addColorStop(0, '#fbf2dc'); gr.addColorStop(1, '#c8b48c');
@@ -326,26 +326,66 @@ function hedge(g, u0, v0, u1, v1) {
   g.strokeStyle = '#4f7f3e'; g.lineWidth = 2.4; g.beginPath();
   g.moveTo(...P(u0, v1)); g.lineTo(...P(u1, v1)); g.lineTo(...P(u1, v0)); g.stroke();
 }
+// Little touches around a home, so no two houses look quite alike.
+function yardProp(g, kind, u, v, rnd) {
+  const [x, y] = P(u, v);
+  if (kind === 'woodpile') { for (let k = 0; k < 3; k++) for (let j = 0; j < 3 - k; j++) { g.fillStyle = '#8a5f3c'; g.beginPath(); g.arc(x + j * 2.6 + k * 1.3 - 3, y - 1.2 - k * 2.2, 1.3, 0, 7); g.fill(); g.fillStyle = '#d8b07a'; g.beginPath(); g.arc(x + j * 2.6 + k * 1.3 - 3, y - 1.2 - k * 2.2, 0.7, 0, 7); g.fill(); } }
+  else if (kind === 'barrels') { cyl(g, u, v, 0, 1.8, 3.2, '#8a5f3c'); cyl(g, u + 0.08, v + 0.03, 0, 1.8, 3.2, '#9a6a44'); }
+  else if (kind === 'washing') {
+    g.strokeStyle = '#6a4a2a'; g.lineWidth = 0.7; g.beginPath(); g.moveTo(x - 7, y); g.lineTo(x - 7, y - 8); g.moveTo(x + 7, y + 2); g.lineTo(x + 7, y - 6); g.stroke();
+    g.strokeStyle = 'rgba(80,70,60,0.6)'; g.lineWidth = 0.4; g.beginPath(); g.moveTo(x - 7, y - 7.5); g.lineTo(x + 7, y - 5.5); g.stroke();
+    const cols = ['#f4f0e6', '#c0503e', '#4a78a8', '#e8c040']; for (let k = 0; k < 3; k++) { g.fillStyle = cols[(k + ((rnd() * 4) | 0)) % 4]; g.fillRect(x - 5 + k * 4, y - 7.2 + k * 0.6, 2.6, 3); }
+  } else if (kind === 'fence') {
+    g.strokeStyle = '#a07a50'; g.lineWidth = 0.8; g.beginPath();
+    const [ax, ay] = P(0.06, 0.95), [bx, by] = P(0.94, 0.95); g.moveTo(ax, ay - 2); g.lineTo(bx, by - 2);
+    for (let k = 0; k <= 6; k++) { const px = ax + (bx - ax) * k / 6, py = ay + (by - ay) * k / 6; g.moveTo(px, py); g.lineTo(px, py - 3); } g.stroke();
+  } else if (kind === 'flowers') { for (let k = 0; k < 7; k++) { g.fillStyle = ['#f2b6c6', '#f4e9a8', '#e8705a', '#c8a0f0', '#ffffff'][k % 5]; g.fillRect(x - 6 + rnd() * 12, y - 2 + rnd() * 3, 1.6, 1.6); } g.fillStyle = '#6a9a4a'; g.fillRect(x - 6, y + 1, 12, 1); }
+  else if (kind === 'tree') tree(g, x, y + 2, 0.75, rnd() < 0.5 ? 'round' : 'pine', rnd);
+  else if (kind === 'bush') { g.fillStyle = '#6a9a4a'; g.beginPath(); g.arc(x, y - 2, 3, 0, 7); g.arc(x + 3, y - 1.4, 2.4, 0, 7); g.fill(); }
+}
+const tintHex = (hexCol, k) => { const c = hex(hexCol); return '#' + c.map((v) => Math.max(0, Math.min(255, Math.round(v * k))).toString(16).padStart(2, '0')).join(''); };
+const PROPS = ['woodpile', 'barrels', 'washing', 'fence', 'flowers', 'tree', 'bush'];
+export const HOME_VARIANTS = 6;
 function homeSprite(styleKey, lv, v) {
-  const st = STYLES[styleKey], rnd = mulberry32(v * 131 + lv * 17 + styleKey.length * 7);
+  const st = STYLES[styleKey], rnd = mulberry32(v * 131 + lv * 17 + styleKey.length * 7 + 5);
   const roof = () => st.roofs[(rnd() * st.roofs.length) | 0];
+  const wall = tintHex(st.wall, 0.9 + rnd() * 0.18); // each house painted a slightly different shade
+  const props = PROPS.slice().sort(() => rnd() - 0.5).slice(0, 1 + (v % 2));
   return make(72, 92, 36, 68, (g) => {
     shadow(g, 21, 9.5);
+    if (props.includes('fence')) yardProp(g, 'fence', 0, 0, rnd);
+    const behind = props.filter((p) => p === 'tree' || p === 'washing');
+    for (const p of behind) yardProp(g, p, 0.82, 0.22, rnd);
+    const o = { wall };
     if (lv === 1) {
-      if (v === 1) { home(g, st, -0.17, -0.12, 0.36, 8, roof(), rnd); home(g, st, 0.16, 0.2, 0.34, 8, roof(), rnd, { dome: st.dome && rnd() < 0.5 }); }
-      else { home(g, st, 0, 0, 0.5, 8, roof(), rnd, { dome: st.dome && v === 2 }); g.fillStyle = '#7aa04a'; g.beginPath(); g.arc(18, 4, 3, 0, 7); g.fill(); }
+      const layout = v % 4;
+      if (layout === 0) home(g, st, 0, 0, 0.5, 8, roof(), rnd, { ...o, dome: st.dome && rnd() < 0.5 });
+      else if (layout === 1) { home(g, st, -0.17, -0.12, 0.36, 8, roof(), rnd, o); home(g, st, 0.16, 0.2, 0.34, 8, roof(), rnd, { ...o, dome: st.dome && rnd() < 0.5 }); }
+      else if (layout === 2) { home(g, st, -0.1, -0.02, 0.44, 8, roof(), rnd, o); home(g, st, 0.22, 0.08, 0.24, 6, roof(), rnd, { ...o, deep: 1.1 }); } // with a side extension
+      else { home(g, st, 0.04, 0.04, 0.42, 9, roof(), rnd, { ...o, deep: 1 }); box(g, 0.28, 0.72, 0.62, 0.84, 5, '#a07a50'); } // lean-to porch
     } else if (lv === 2) {
-      home(g, st, 0, 0.02, 0.56, 14, roof(), rnd, { deep: 0.75, dome: st.dome && v === 1 });
-      if (v === 2) { g.fillStyle = '#7aa04a'; g.beginPath(); g.arc(-19, 3, 3.2, 0, 7); g.fill(); }
+      const layout = v % 3;
+      if (layout === 0) home(g, st, 0, 0.02, 0.56, 14, roof(), rnd, { ...o, deep: 0.75, dome: st.dome && rnd() < 0.5 });
+      else if (layout === 1) { home(g, st, -0.06, -0.02, 0.46, 15, roof(), rnd, { ...o, deep: 0.85 }); home(g, st, 0.26, 0.16, 0.26, 8, roof(), rnd, { ...o, deep: 0.9 }); }
+      else { home(g, st, 0.04, 0, 0.6, 13, roof(), rnd, { ...o, deep: 0.62 }); }
     } else {
-      // manor: main hall, a side wing and a little garden
+      // manor: main hall, a side wing and a little garden, laid out differently each time
       hedge(g, 0.04, 0.05, 0.96, 0.96);
-      home(g, st, -0.14, -0.12, 0.42, 9, roof(), rnd, { deep: 0.8 });
-      home(g, st, 0.08, 0.08, 0.6, 15, roof(), rnd, { deep: 0.72, dome: !!st.dome });
+      if (v % 2) { home(g, st, 0.16, -0.14, 0.4, 9, roof(), rnd, { ...o, deep: 0.8 }); home(g, st, -0.06, 0.1, 0.58, 15, roof(), rnd, { ...o, deep: 0.72, dome: !!st.dome }); }
+      else { home(g, st, -0.14, -0.12, 0.42, 9, roof(), rnd, { ...o, deep: 0.8 }); home(g, st, 0.08, 0.08, 0.6, 15, roof(), rnd, { ...o, deep: 0.72, dome: !!st.dome }); }
       g.fillStyle = '#f2b6c6'; for (const [u, v2] of [[0.85, 0.9], [0.9, 0.6], [0.2, 0.92]]) { const [x, y] = P(u, v2); g.beginPath(); g.arc(x, y - 1, 1.3, 0, 7); g.fill(); }
     }
+    for (const p of props.filter((q) => !behind.includes(q) && q !== 'fence')) yardProp(g, p, v % 2 ? 0.2 : 0.86, v % 2 ? 0.86 : 0.78, rnd);
   });
 }
+// Homes are drawn on first use per style and level, keeping memory low.
+export function homeArt(style, lv) {
+  const k = style + lv;
+  if (!homeCache[k]) homeCache[k] = Array.from({ length: HOME_VARIANTS }, (_, v) => homeSprite(style, lv, v));
+  return homeCache[k];
+}
+const homeCache = {};
+
 function field(g, rnd, snowy = false) {
   if (snowy) {
     g.save(); diamond(g, 29, 14.5); g.clip();
@@ -414,8 +454,7 @@ function buildingSprites() {
     g.fillStyle = 'rgba(210,235,255,0.9)'; g.beginPath(); g.arc(0, -11, 1.4, 0, 7); g.fill();
   })];
   // Regional homes: SPR.homes[style][level-1][variant]
-  SPR.homes = {};
-  for (const k of Object.keys(STYLES)) SPR.homes[k] = [1, 2, 3].map((lv) => [0, 1, 2].map((v) => homeSprite(k, lv, v)));
+
   // a single hut for growing neighbour villages
   S.hut = [0, 1, 2].map((v) => frame((g) => {
     const [x, y] = P(0.5, 0.55, 0), r = 5 + v * 0.6;

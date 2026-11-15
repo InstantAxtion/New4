@@ -289,3 +289,30 @@ body.moding #bottombar, body.moding #quests, body.moding #zoomctl { display: non
 .person .avatar { width: 54px; height: 54px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 28px; flex: none; box-shadow: inset 0 -3px 0 rgba(0,0,0,0.12); }
 .stars { color: var(--gold); }
 .card .spec { position: absolute; top: 6px; left: 8px; font-size: 10.5px; font-weight: 700; color: #3e5a2a; background: #e2efcf; padding: 2px 7px; border-radius: 9px; }
+
+/* ---------- main menu ---------- */
+#title { background: radial-gradient(ellipse at 50% 30%, rgba(20, 40, 60, 0.05), rgba(20, 24, 30, 0.55)); padding: calc(20px + var(--sat)) 16px calc(16px + var(--sab)); }
+.menu { width: min(420px, 100%); display: flex; flex-direction: column; align-items: center; gap: 14px; max-height: 100%; }
+.menu-head { text-align: center; color: #fff8ea; }
+.menu-head h1 { font-size: clamp(42px, 12vw, 62px); color: #fff3dc; text-shadow: 0 3px 0 #7a3a24, 0 6px 18px rgba(0,0,0,0.45); letter-spacing: 1px; }
+.menu-head .tagline { color: #f4e6cc; margin: 4px 0 0; font-style: italic; text-shadow: 0 1px 6px rgba(0,0,0,0.6); }
+.menu-card { width: 100%; background: var(--paper); border-radius: 22px; box-shadow: var(--shadow); padding: 16px; overflow-y: auto; max-height: 62vh; }
+.menu-foot { color: rgba(255, 246, 228, 0.85); font-size: 12px; text-shadow: 0 1px 4px rgba(0,0,0,0.6); text-align: center; }
+.mbtn { display: flex; align-items: center; gap: 12px; width: 100%; padding: 13px 16px; border-radius: 15px; background: #fff9ec; border: 1.5px solid var(--line); font-weight: 700; font-size: 17px; text-align: left; color: var(--ink); }
+.mbtn .mi { font-size: 22px; width: 28px; text-align: center; }
+.mbtn small { display: block; font-weight: 500; font-size: 12.5px; color: var(--ink-soft); margin-top: 1px; }
+.mbtn.primary { background: var(--accent); color: #fff8ec; border-color: transparent; box-shadow: inset 0 -3px 0 var(--accent-dark); }
+.mbtn.primary small { color: #ffe8d0; }
+.mbtn:active { transform: scale(0.98); }
+.mlist { display: flex; flex-direction: column; gap: 9px; }
+.mpanel-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.mpanel-head h2 { font-size: 21px; flex: 1; }
+.mback { width: 36px; height: 36px; border-radius: 50%; background: rgba(110, 90, 60, 0.12); font-size: 18px; flex: none; }
+.helptext { font-size: 14px; line-height: 1.5; color: var(--ink); text-align: left; }
+.helptext h3 { font-size: 15px; color: var(--accent-dark); margin: 12px 0 4px; }
+@media (orientation: landscape) and (max-height: 520px) {
+  .menu { flex-direction: row; width: min(820px, 100%); align-items: center; gap: 20px; }
+  .menu-head { flex: 1; }
+  .menu-card { flex: 1.2; max-height: calc(100vh - 40px); }
+  .menu-foot { display: none; }
+}
