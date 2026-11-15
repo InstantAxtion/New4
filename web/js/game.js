@@ -116,7 +116,7 @@ export function setSpec(t, key) {
 export const EVERYDAY = ['yard', 'well', 'apiary', 'windmill', 'chapel', 'tavern', 'school', 'stable'];
 // Builder crews per town: one to start, one more per 150 folk, and two per Builder's Yard.
 export const yardsIn = (t) => { let n = 0; for (const b of S.buildings.values()) if (b.t === 'yard' && b.town === t.id && b.p >= 1 && !b.idle) n++; return n; };
-export const crewsOf = (t) => 1 + Math.floor(t.pop / PACE.builders) + 2 * yardsIn(t);
+export const crewsOf = (t) => 1 + Math.floor(t.pop / PACE.builders) + 2 * yardsIn(t) + (hasTalent('crews') ? 1 : 0);
 export function crewsBusy(t) { let n = 0; for (const b of S.buildings.values()) if (b.town === t.id && b.p < 1 && b.z) n++; return n; }
 export function zonesWaiting(t) { let n = 0; for (const i of S.zones.keys()) if (ownerOf(i % W, Math.floor(i / W)) === t) n++; return n; }
 export const hasStables = () => count('stable') >= 1;
@@ -189,12 +189,15 @@ export function moodOf(t) {
   if (S.res.spices > 0.5) { parts.push(['Spiced food', 1]); score += 1; }
   if (S.res.books > 0.5) { parts.push(['Books to read', 1]); score += 1; }
   if (S.golden) { parts.push(['A golden age', 1]); score += 1; }
+  if (hasTech('harmony')) { parts.push(['Golden Harmony', 1]); score += 1; }
+  if (hasTalent('joy')) { parts.push(['A merry realm', 1]); score += 1; }
   if ((S.caravans || []).some(([a, b]) => a === t.id || b === t.id)) { parts.push(['Goods by caravan', 1]); score += 1; }
   const c = charm(t); if (c) { parts.push(['Civic charm', c * 0.5]); score += c * 0.5; }
   if (t.spec === 'learning') { parts.push(['A town of learning', 1]); score += 1; }
   if (t.fest && S.day < t.fest.until) { const v = 2 + (t.fest.ale ? 1 : 0); parts.push(['A festival!', v]); score += v; }
   else if (t.glow && S.day < t.glow) { parts.push(['Fond festival memories', 1]); score += 1; }
   if (t.cheer && S.day < t.cheer) { parts.push(['A good deed done', 1]); score += 1; }
+  if (t.jobSkill && ((t.jobSkill.tavern || 0) >= 50 || (t.jobSkill.chapel || 0) >= 50)) { parts.push(['Warm hospitality and kindness', 0.5]); score += 0.5; }
   if (hasWonder('monastery')) { parts.push(['The Cliff Monastery', 1]); score += 1; }
   if (hasWonder('dome')) { parts.push(['The Botanical Dome', 1]); score += 1; }
   const level = score >= 6 ? 2 : score >= 2.5 ? 1 : 0;
@@ -303,13 +306,34 @@ export const townById = (id) => S.towns.find((t) => t.id === id);
 export const hasWonder = (w) => { for (const b of S.buildings.values()) if (b.t === w && b.p >= 1) return true; return false; };
 export const wonderStarted = (w) => { for (const b of S.buildings.values()) if (b.t === w) return true; return false; };
 // Prestige: the realm's renown, from everything it has done.
-export function prestige() {
+export function prestige() { return Math.round(rawPrestige() * (hasTalent('fame') ? 1.25 : 1)); }
+function rawPrestige() {
   let w = 0; for (const b of S.buildings.values()) if (b.p >= 1 && DEFS[b.t] && DEFS[b.t].wonder) w++;
   const friends = S.neighbors.filter((n) => n.friend >= 60 || n.joined).length;
   return Math.round(totalPop() * 2 + S.towns.length * 60 + w * 400 + (S.explored || []).length * 40 + friends * 25 + S.questsDone.size * 15 + (S.stats.coronations || 0) * 100 + (S.festsHeld ? Object.keys(S.festsHeld).length * 30 : 0) + (S.golden ? 1000 : 0));
 }
 export const PRESTIGE_RANKS = [[0, 'Humble'], [500, 'Known'], [1500, 'Respected'], [4000, 'Renowned'], [9000, 'Famed'], [18000, 'Legendary']];
 export const prestigeRank = (p) => PRESTIGE_RANKS.filter(([v]) => p >= v).pop()[1];
+// A trade's own skill: from 0.9x for raw beginners to 1.3x for a town of masters.
+// What research and talents add to each building's work.
+const FIELDS = new Set(['farm', 'orchard', 'riceterrace', 'vineyard', 'oasis']);
+function techMult(type, r, i) {
+  let m = hasTech('tools') ? 1.05 : 1;
+  if (r === 'food') {
+    if (FIELDS.has(type)) m *= (hasTech('rotation') ? 1.1 : 1) * (hasTech('plough') ? 1.1 : 1) * (hasTech('irrigation') ? 1.1 : 1);
+    if (type === 'pasture' && hasTech('plough')) m *= 1.1;
+    if ((type === 'dock' || type === 'shipyard') && hasTech('navigation')) m *= 1.2;
+    if (hasTalent('bounty')) m *= 1.15;
+    if (hasTalent('granary') && FIELDS.has(type) && i !== undefined && farmSeason(S.day, tileLat(Math.floor(i / W))) < 0.6) m *= 1.25;
+  }
+  if (r === 'stone' && (type === 'quarry' || type === 'pit')) m *= (hasTech('masonry') ? 1.2 : 1) * (hasTech('engineering') ? 1.15 : 1);
+  if (r === 'iron' && hasTech('engineering')) m *= 1.15;
+  if (r === 'gold') m *= (hasTech('guilds') ? 1.15 : 1) * (hasTech('banking') ? 1.2 : 1) * (hasTalent('coin') ? 1.1 : 1);
+  if (hasTech('waterwheel') && (type === 'workshop' || type === 'windmill' || GOODS_BUILDINGS.includes(type))) m *= 1.1;
+  return m;
+}
+export const techBuild = (type) => (hasTech('carpentry') ? 1.15 : 1) * (hasTech('engineering') ? 1.25 : 1) * (hasTalent('quick') ? 1.2 : 1) * (hasTalent('grand') && DEFS[type] && DEFS[type].wonder ? 1.4 : 1);
+export function jobSkillMult(t, type) { const v = t && t.jobSkill ? t.jobSkill[type] : undefined; return v === undefined ? 1 : 0.9 + (v / 100) * 0.4; }
 export function count(type) { let n = 0; for (const b of S.buildings.values()) if (b.t === type && b.p >= 1) n++; return n; }
 
 export function ownerOf(x, y) {
@@ -375,8 +399,8 @@ export function recomputeTowns() {
   }
   for (const t of S.towns) {
     const cap = TIERS[S.tier].radiusCap;
-    t.radius = Math.min(cap, (t.capital ? 5 : 4) + t.n * 0.3) + t.towers * 3 + gc;
-    t.cap = Math.round(t.capRaw * cath * (1 + 0.04 * charm(t)) * (S.res.glass > 0.5 ? 1.05 : 1));
+    t.radius = Math.min(cap, (t.capital ? 5 : 4) + t.n * 0.3) + t.towers * 3 + gc + (hasTech('cartography') ? 2 : 0) + (hasTalent('border') ? 2 : 0);
+    t.cap = Math.round(t.capRaw * cath * (1 + 0.04 * charm(t)) * (S.res.glass > 0.5 ? 1.05 : 1) * (hasTech('architecture') ? 1.1 : 1));
     computeDistricts(t);
   }
 }
@@ -539,10 +563,71 @@ export function canFound(x, y) {
   if (isWater(b) || !BUILDABLE.has(b) || riverAt(x, y)) return { ok: false, reason: 'Pick open land for a new settlement.' };
   for (const t of S.towns) if (groundDist2(x, y, t.x, t.y) < (t.radius + 3) ** 2) return { ok: false, reason: `Too close to ${t.name}.` };
   const nb = nearNeighbor(x, y, 5); if (nb) return { ok: false, reason: `Too close to ${nb.name}.` };
-  if (!affordable(FOUND_COST)) return { ok: false, reason: 'Needs 50 food, 50 wood and 30 gold.' };
+  if (!affordable(FOUND_COST)) return { ok: false, reason: `Needs ${FOUND_COST.food} food, ${FOUND_COST.wood} wood and ${FOUND_COST.gold} gold.` };
   return { ok: true };
 }
-export const FOUND_COST = { food: 50, wood: 50, gold: 30 };
+export const FOUND_COST_BASE = { food: 50, wood: 50, gold: 30 };
+export let FOUND_COST = FOUND_COST_BASE;
+
+// ---------------- research tree ----------------
+// Knowledge comes from schools, scriptoria, the library and the observatory; it fills whichever project you pick.
+export const RESEARCH = [
+  { id: 'rotation', era: 0, icon: '🌾', name: 'Crop Rotation', cost: 30, req: [], desc: '+10% food from fields and orchards.' },
+  { id: 'carpentry', era: 0, icon: '🪚', name: 'Carpentry', cost: 30, req: [], desc: 'Everything is built 15% faster.' },
+  { id: 'tools', era: 0, icon: '⚒️', name: 'Better Tools', cost: 30, req: [], desc: '+5% to all work.' },
+  { id: 'plough', era: 1, icon: '🐂', name: 'Heavy Plough', cost: 70, req: ['rotation'], desc: '+10% food from fields and pastures.' },
+  { id: 'herbal', era: 1, icon: '🌿', name: 'Herbal Lore', cost: 70, req: ['rotation'], desc: 'Families settle 15% faster.' },
+  { id: 'masonry', era: 1, icon: '🧱', name: 'Masonry', cost: 70, req: ['carpentry'], desc: '+20% stone from quarries and pits.' },
+  { id: 'waterwheel', era: 1, icon: '💧', name: 'Water Wheels', cost: 70, req: ['tools'], desc: '+10% from workshops, mills and goods makers.' },
+  { id: 'irrigation', era: 2, icon: '🚿', name: 'Irrigation', cost: 140, req: ['plough'], desc: '+10% more food from fields.' },
+  { id: 'navigation', era: 2, icon: '🧭', name: 'Navigation', cost: 140, req: ['herbal'], desc: '+20% fishing and better trades.' },
+  { id: 'architecture', era: 2, icon: '📐', name: 'Architecture', cost: 140, req: ['masonry'], desc: 'Homes hold 10% more people.' },
+  { id: 'guilds', era: 2, icon: '🏛️', name: 'Guilds', cost: 140, req: ['waterwheel'], desc: '+15% gold, and skills grow 20% faster.' },
+  { id: 'cartography', era: 3, icon: '🗺️', name: 'Cartography', cost: 260, req: ['navigation'], desc: 'Every town’s border reaches 2 tiles further.' },
+  { id: 'engineering', era: 3, icon: '⚙️', name: 'Engineering', cost: 260, req: ['architecture'], desc: 'Build 25% faster; +15% stone and iron.' },
+  { id: 'printing', era: 3, icon: '📜', name: 'Printing Press', cost: 260, req: ['guilds'], desc: 'Skills grow 40% faster.' },
+  { id: 'banking', era: 3, icon: '💰', name: 'Banking', cost: 260, req: ['guilds'], desc: '+20% gold.' },
+  { id: 'harmony', era: 4, icon: '☀️', name: 'Golden Harmony', cost: 500, req: ['printing', 'banking', 'engineering'], desc: 'Every town is a little happier (+1 mood).' },
+];
+export const ERAS = ['Early days', 'Growing', 'Flourishing', 'Golden', 'Legend'];
+export const hasTech = (id) => !!(S.research && S.research.done.includes(id));
+export const canResearch = (r) => !hasTech(r.id) && r.req.every(hasTech);
+export function pickResearch(id) { const r = RESEARCH.find((q) => q.id === id); if (!r || !canResearch(r)) return false; S.research.cur = id; emit('change'); return true; }
+export function knowledgeRate() {
+  let k = 0.5;
+  for (const b of S.buildings.values()) if (b.p >= 1 && !b.idle) k += { school: 1.2, scriptorium: 1.8, library: 3, observatory: 2, monastery: 1, chapel: 0.3 }[b.t] || 0;
+  for (const t of S.towns) if (t.spec === 'learning') k += 1;
+  if (S.res.books > 0.5) k *= 1.2;
+  return k * (hasTalent('teach') ? 1.15 : 1);
+}
+function stepResearch(dd) {
+  const R = (S.research ||= { cur: null, prog: 0, done: [], bank: 0 });
+  let k = knowledgeRate() * dd * 0.6;
+  if (!R.cur) { R.bank = Math.min(600, (R.bank || 0) + k); return; }
+  if (R.bank > 0) { const take = Math.min(R.bank, k * 3); R.bank -= take; k += take; }
+  R.prog += k;
+  const r = RESEARCH.find((q) => q.id === R.cur);
+  if (r && R.prog >= r.cost) { R.done.push(r.id); R.prog = 0; R.cur = null; recomputeTowns(); emit('researched', r); }
+}
+// ---------------- realm talents ----------------
+// A point each time the realm grows a tier, and more as its prestige spreads.
+export const TALENTS = [
+  { branch: 'Steward', icon: '🌾', nodes: [['bounty', 'Bountiful Harvests', '+15% food.'], ['feast', 'Full Tables', 'Towns grow 20% faster while the stores hold plenty of food.'], ['granary', 'Great Granaries', 'Fields keep giving a little in winter (+25% winter harvest).']] },
+  { branch: 'Builder', icon: '🔨', nodes: [['quick', 'Quick Hands', 'Build 20% faster.'], ['crews', 'Extra Crews', '+1 builder crew in every town.'], ['grand', 'Grand Designs', 'Wonders go up 40% faster.']] },
+  { branch: 'Merchant', icon: '💰', nodes: [['coin', 'Sharp Ledgers', '+10% gold.'], ['friends', 'Warm Welcome', 'Gifts make 50% more friendship.'], ['roads', 'Busy Roads', 'Caravans earn twice as much.']] },
+  { branch: 'Patron', icon: '🎓', nodes: [['teach', 'Patron of Learning', 'Skills and knowledge grow 15% faster.'], ['joy', 'Merry Realm', 'Every town is a little happier.'], ['fame', 'Far-famed', '+25% prestige.']] },
+  { branch: 'Explorer', icon: '🧭', nodes: [['scout', 'Pathfinders', 'Explorers travel 30% faster.'], ['border', 'Wide Lands', 'Every border reaches 2 tiles further.'], ['settler', 'Eager Settlers', 'New settlements cost half as much.']] },
+];
+export const hasTalent = (id) => !!(S.talents && S.talents.includes(id));
+export function talentPoints() { let base = 0; for (const b of S.buildings.values()) if (b.p >= 1 && DEFS[b.t] && DEFS[b.t].wonder) base++; return S.tier + Math.floor(Math.min(40000, rawPrestige()) / 2500) + base; }
+export const talentsFree = () => talentPoints() - (S.talents || []).length;
+export function takeTalent(id) {
+  const br = TALENTS.find((b) => b.nodes.some((n) => n[0] === id)); if (!br || hasTalent(id) || talentsFree() <= 0) return false;
+  const k = br.nodes.findIndex((n) => n[0] === id); if (k > 0 && !hasTalent(br.nodes[k - 1][0])) return false;
+  (S.talents ||= []).push(id);
+  FOUND_COST = hasTalent('settler') ? { food: 25, wood: 25, gold: 15 } : FOUND_COST_BASE;
+  recomputeTowns(); emit('change'); return true;
+}
 
 function addTown(x, y, opts = {}) {
   const t = { id: S.nextTownId++, name: opts.name || makeName(nameRng), x: wrapX(x), y, capital: !!opts.capital, pop: opts.pop ?? 3, cap: 0, radius: 4, n: 0, founded: S.day };
@@ -682,7 +767,7 @@ export function priceNote() {
   return ['Spring: prices are steady.', 'Summer: food is plentiful and a little cheaper.', 'Autumn harvest: food is cheap.', 'Winter: food and firewood are dear, so they fetch more.'][priceSeason()];
 }
 export function tradeOffers(n) {
-  const bonus = Math.floor(n.friend * 0.1) + (count('market') ? 5 : 0) + (hasWonder('lighthouse') ? 4 : 0) + (n.trait === 'generous' ? 3 : 0) + (hasStables() ? 3 : 0) + Math.min(6, 2 * S.towns.filter((t) => t.spec === 'trade').length);
+  const bonus = Math.floor(n.friend * 0.1) + (count('market') ? 5 : 0) + (hasWonder('lighthouse') ? 4 : 0) + (n.trait === 'generous' ? 3 : 0) + (hasStables() ? 3 : 0) + (hasTech('navigation') ? 2 : 0) + Math.min(6, 2 * S.towns.filter((t) => t.spec === 'trade').length);
   const pm = (r) => priceOf(r), sp = S.res.spices > 0.5 ? 1.08 : 1;
   const offers = [{ give: { [n.want]: 20 }, get: { [n.surplus]: Math.max(4, Math.round((14 + bonus) * pm(n.want) / pm(n.surplus) * sp)) } }];
   if (n.surplus !== 'gold') offers.push({ give: { gold: 15 }, get: { [n.surplus]: Math.max(4, Math.round((16 + bonus) / pm(n.surplus) * sp)) } });
@@ -702,7 +787,7 @@ export const GIFT_AMOUNT = 25;
 export function gift(n, res) {
   if (!inContact(n) || S.res[res] < GIFT_AMOUNT) return false;
   S.res[res] -= GIFT_AMOUNT;
-  n.friend = Math.min(100, n.friend + Math.round((res === n.want ? 18 : 10) * TRAITS[n.trait || 'cheerful'].gift * (hasStables() ? 1.15 : 1))); S.stats.gifts++;
+  n.friend = Math.min(100, n.friend + Math.round((res === n.want ? 18 : 10) * TRAITS[n.trait || 'cheerful'].gift * (hasStables() ? 1.15 : 1) * (hasTalent('friends') ? 1.5 : 1))); S.stats.gifts++;
   addLog(n, `You sent a gift of ${GIFT_AMOUNT} ${res}.`);
   emit('change');
   return true;
@@ -815,7 +900,7 @@ function step(dd) {
   for (const [i, b] of S.buildings) {
     if (b.p >= 1) continue;
     const t = townById(b.town);
-    b.p += (dd / (DEFS[b.t].time * PACE.build)) * (t && t.pop >= 2 ? 1 : 0.5) * (hasTools ? 1.25 : 1) * (t ? 1 + 0.25 * Math.min(2, t._yards || 0) : 1);
+    b.p += (dd / (DEFS[b.t].time * PACE.build)) * (t && t.pop >= 2 ? 1 : 0.5) * (hasTools ? 1.25 : 1) * (t ? 1 + 0.25 * Math.min(2, t._yards || 0) : 1) * (t && t.jobSkill && t.jobSkill.yard ? 1 + t.jobSkill.yard / 300 : 1) * techBuild(b.t); // skilled carpenters build faster
     if (b.p >= 1) {
       b.p = 1; changed = true;
       b.d = S.day; emit('built', { b, i, x: i % W, y: Math.floor(i / W) });
@@ -884,12 +969,12 @@ function step(dd) {
     // Fields rest in winter and give a harvest boost in late summer and autumn (stronger far from the equator).
     const seasonal = (b.t === 'farm' || b.t === 'riceterrace' || b.t === 'orchard' || b.t === 'vineyard') && !d.noSeason;
     const season = seasonal ? farmSeason(S.day, tileLat(Math.floor(i / W))) : 1;
-    const skill = (t && t.skillMult) || 1;
+    const skill = ((t && t.skillMult) || 1) * jobSkillMult(t, b.t);
     for (const [r, v] of Object.entries(d.prod)) {
       let amt = v * dd * PACE.prod * f * (b.t === 'townhall' ? 1 : eff) * (b.m || 1) * lib * season * skill * obs * (hasTools ? 1.08 : 1) * specMult(t, b.t);
       if (r === 'food') amt *= gardens * dome * (b.t === 'dock' ? lh * (yardTowns.has(b.town) ? 1.25 : 1) : 1) * (b.t === 'farm' && mills.has(b.town) ? 1.15 : 1);
       if (r === 'gold') amt *= gcGold * bridge;
-      amt *= S.golden ? 1.1 : 1;
+      amt *= (S.golden ? 1.1 : 1) * techMult(b.t, r, i);
       S.res[r] += amt; if (t) t._p[r] = (t._p[r] || 0) + amt;
     }
   }
@@ -898,7 +983,8 @@ function step(dd) {
   if (S.res.tools > 0) S.res.tools = Math.max(0, S.res.tools - 0.003 * producers * dd);
   S.res.gold += pop * 0.02 * PACE.prod * dd * gcGold;
   S.caravans = (S.caravans || []).filter(([a, b]) => townById(a) && townById(b));
-  S.res.gold += S.caravans.length * 0.3 * PACE.prod * dd;
+  S.res.gold += S.caravans.length * 0.3 * PACE.prod * dd * (hasTalent('roads') ? 2 : 1);
+  stepResearch(dd);
 
   // Food and growth: nobody starves, growth just pauses.
   const breadEat = Math.min(S.res.bread * 0.5, pop * 0.0015 * dd); // a loaf now and then, so bread keeps in the stores
@@ -910,7 +996,7 @@ function step(dd) {
   S.res.food = Math.max(0, S.res.food - eat);
   updateMoods();
   for (const t of S.towns) {
-    const mg = 1 + 0.2 * (t.mood ? t.mood.level : 0); // happier towns attract families faster (mood never punishes)
+    const mg = (1 + 0.2 * (t.mood ? t.mood.level : 0)) * (hasTech('herbal') ? 1.15 : 1) * (hasTalent('feast') && S.res.food > 150 ? 1.2 : 1); // happier towns attract families faster (mood never punishes)
     if (t.pop < t.cap && S.fed) t.pop = Math.min(t.cap, t.pop + Math.max(t.pop < 30 ? PACE.minGrowth : 0.02, (t.cap - t.pop) * 0.06 * PACE.growth) * mg * dd);
     else if (t.pop > t.cap) t.pop = Math.max(t.cap, t.pop - 0.5 * dd);
   }
@@ -980,7 +1066,7 @@ function step(dd) {
 export function newGame(name, x, y) {
   S.started = true; S.name = name || 'Hearthlands'; S.day = 0; S.tier = 0; S.speed = 1;
   S.res = { food: 60, wood: 50, stone: 20, gold: 30, iron: 0, bread: 0, tools: 0, cloth: 0, ale: 0, pottery: 0, glass: 0, spices: 0, books: 0 };
-  S.hints = []; S.golden = false; S.undo = [];
+  S.hints = []; S.golden = false; S.undo = []; S.research = { cur: null, prog: 0, done: [], bank: 0 }; S.talents = []; FOUND_COST = FOUND_COST_BASE;
   S.expeditions = []; S.explored = []; S.journal = []; S.treasures = {}; S.festsHeld = {}; S.requests = []; S.nextReq = 0; S.royal = null; S.hist = []; S.miles = [];
   S.towns = []; S.buildings = new Map(); S.zones = new Map(); S.proads = new Set(); S.canals = new Set(); S.caravans = []; S.occupied = new Map(); S.nextTownId = 1;
   S.questsDone = new Set(); S.stats = { trades: 0, gifts: 0, joins: 0 }; S.routes = [];
@@ -1015,7 +1101,7 @@ export function save() {
     v: 1, name: S.name, day: S.day, speed: S.speed, tier: S.tier, res: S.res, towns: S.towns,
     buildings: [...S.buildings].map(([i, b]) => [i, b.t, +b.p.toFixed(3), b.town, +(b.m || 1).toFixed(2), b.z ? 1 : 0, b.lv || 1, b.f || 0, Math.round(b.d || 0)]),
     zones: [...S.zones], proads: [...S.proads], canals: [...S.canals], caravans: S.caravans || [], nb: S.neighbors.filter((n) => n.friend || n.joined || n.req || (n.log && n.log.length) || n.pop > 70).map((n) => [n.id, n.friend, n.joined ? 1 : 0, +n.pop.toFixed(1), n.req || null, n.log || []]),
-    quests: [...S.questsDone], stats: S.stats, routes: S.routes || [], hints: S.hints || [], golden: S.golden ? 1 : 0,
+    quests: [...S.questsDone], stats: S.stats, routes: S.routes || [], hints: S.hints || [], golden: S.golden ? 1 : 0, research: S.research, talents: S.talents || [],
     expeditions: S.expeditions || [], explored: S.explored || [], journal: S.journal || [], treasures: S.treasures || {}, festsHeld: S.festsHeld || {},
     requests: S.requests || [], nextReq: S.nextReq || 0, royal: S.royal || null, hist: S.hist || [], miles: S.miles || [], nextFolk: S.nextFolk || 1, cam: S.cam, nextTownId: S.nextTownId, tutorial: S.tutorial,
     meta: {
@@ -1045,12 +1131,12 @@ export function load(n = currentSlot) {
   if (!d || d.v !== 1) return false;
   currentSlot = n;
   S.started = true; S.name = d.name; S.day = d.day;
-  S.speed = d.speed ? 1 : 0; // only pause / play now
+  S.speed = d.speed === 2 ? 2 : d.speed ? 1 : 0; // pause, play or double speed
   S.tier = d.tier; S.res = d.res;
   S.towns = d.towns; S.routes = d.routes || []; S.nextTownId = d.nextTownId; S.stats = d.stats; S.questsDone = new Set(d.quests);
   S.tutorial = d.tutorial ?? 99; // realms from before the tutorial existed skip it
   for (const g of GOODS) if (S.res[g] === undefined) S.res[g] = 0;
-  S.hints = d.hints || []; S.golden = !!d.golden; S.undo = [];
+  S.hints = d.hints || []; S.golden = !!d.golden; S.undo = []; S.research = d.research || { cur: null, prog: 0, done: [], bank: 0 }; S.talents = d.talents || []; FOUND_COST = hasTalent('settler') ? { food: 25, wood: 25, gold: 15 } : FOUND_COST_BASE;
   S.expeditions = d.expeditions || []; S.explored = d.explored || []; S.journal = d.journal || []; S.treasures = d.treasures || {}; S.festsHeld = d.festsHeld || {};
   S.requests = d.requests || []; S.nextReq = d.nextReq || 0; S.royal = d.royal || null; S.hist = d.hist || []; S.miles = d.miles || []; if (d.nextFolk) S.nextFolk = d.nextFolk;
   S.buildings = new Map(d.buildings.map(([i, t, p, town, m, z, lv, f, bd]) => [i, { t, p, town, m, z, lv: lv || 1, f: f || 0, d: bd || 0 }])); recomputeOccupied();

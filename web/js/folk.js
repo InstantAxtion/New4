@@ -1,8 +1,9 @@
 // Villagers with lives: names, ages, families, jobs, skills and gentle life events.
 // The population number stays the source of truth; this module keeps a named person for each villager.
-import { S, DEFS, on, emit, townById, hasWonder, townStyleOf } from './game.js';
+import { S, DEFS, on, emit, townById, hasWonder, townStyleOf, hasTech, hasTalent } from './game.js';
 import { idxOf } from './world.js';
 import { YEAR } from './seasons.js';
+const researchLearn = () => (hasTech('guilds') ? 1.2 : 1) * (hasTech('printing') ? 1.4 : 1) * (hasTalent('teach') ? 1.15 : 1);
 
 // Name pools by building style (common given names and family names, for flavour).
 const NAMES = {
@@ -33,6 +34,20 @@ export const JOBS = {
   chapel: 'Chapel keeper', school: 'Teacher', apiary: 'Beekeeper', windmill: 'Miller', vineyard: 'Vintner', riceterrace: 'Rice grower',
   icehut: 'Ice fisher', stable: 'Stablehand', yard: 'Builder', oasis: 'Gardener', cacao: 'Cacao grower', orchard: 'Orchard keeper',
 };
+// Every trade has its own skill that makes that work go better; Know-how grows in any job and helps everywhere.
+export const SKILLS = {
+  farm: 'Green Thumb', pasture: 'Herding', lumber: 'Felling', woodlot: 'Forestry', quarry: 'Stonecraft', mine: 'Prospecting', pit: 'Digging',
+  dock: 'Netcraft', workshop: 'Handiwork', market: 'Haggling', shops: 'Salesmanship', harbour: 'Seamanship', tower: 'Keen Eye',
+  bakery: 'Kneading', brewery: 'Brewing', weaver: 'Loomcraft', smithy: 'Forging', potter: 'Throwing Clay', glassworks: 'Glassblowing',
+  spicehouse: 'Spice Lore', scriptorium: 'Calligraphy', tavern: 'Hospitality', chapel: 'Kindness', school: 'Teaching', apiary: 'Bee Lore',
+  windmill: 'Milling', vineyard: 'Vine Tending', riceterrace: 'Paddy Craft', icehut: 'Ice Fishing', stable: 'Horse Sense', yard: 'Carpentry',
+  oasis: 'Gardening', cacao: 'Harvesting', orchard: 'Grafting', shipyard: 'Shipwrighting',
+};
+export const SKILL_HELP = {
+  yard: 'builds faster', tavern: 'cheers the town', chapel: 'cheers the town', school: 'pupils learn faster', tower: 'border reaches further',
+  stable: 'riders travel faster', market: 'better trades', harbour: 'more gold',
+};
+export const GENERAL_SKILL = 'Know-how';
 const PET_NAMES = ['Biscuit', 'Pepper', 'Maple', 'Bramble', 'Clover', 'Juniper', 'Bean', 'Hazel', 'Sage', 'Tansy', 'Rusty', 'Willow',
   'Pudding', 'Socks', 'Mittens', 'Barley', 'Fennel', 'Nutmeg', 'Poppy', 'Toffee', 'Pebble', 'Acorn', 'Thistle', 'Sooty'];
 const newPet = () => ({ k: Math.random() < 0.55 ? 'dog' : 'cat', n: PET_NAMES[Math.floor(Math.random() * PET_NAMES.length)] });
@@ -119,7 +134,17 @@ function assignJobs(t, bmap) {
   }
   for (const [type, n] of slots) {
     let have = filled.get(type) || 0;
-    while (have < n && free.length) { const p = free.pop(); p.j = type; have++; }
+    while (have < n && free.length) { // whoever knows this work best takes the place
+      let bi = free.length - 1, bv = -1;
+      for (let k = 0; k < free.length; k++) { const v = (free[k].xp && free[k].xp[type]) || 0; if (v > bv) { bv = v; bi = k; } }
+      const p = free.splice(bi, 1)[0]; p.j = type; have++;
+    }
+  }
+  // remember experience in each trade: skills stay with the person when they change jobs
+  for (const p of t.folk) {
+    p.xp ||= {};
+    if (p._lj === undefined) { p._lj = p.j; if (p.j) p.xp[p.j] = Math.max(p.xp[p.j] || 0, p.k); if (p.g === undefined) p.g = Math.round(p.k * 0.5); continue; }
+    if (p.j !== p._lj) { if (p._lj) p.xp[p._lj] = Math.max(p.xp[p._lj] || 0, p.k); if (p.j) p.k = p.xp[p.j] || 0; p._lj = p.j; }
   }
 }
 
@@ -130,7 +155,10 @@ function lifeDay(t) {
     const age = ageOf(p);
     if (p.j) {
       const before = p.k;
-      p.k = Math.min(100, p.k + (2.5 / YEAR) * (school ? 1.5 : 1) * (obs ? 1.5 : 1) * (learn ? 2 : 1) * (S.res.books > 0.5 ? 1.25 : 1) * (0.6 + Math.random() * 0.8));
+      const rate = (2.5 / YEAR) * (school ? 1.5 * (t.teach || 1) : 1) * (obs ? 1.5 : 1) * (learn ? 2 : 1) * (S.res.books > 0.5 ? 1.25 : 1) * (1 + (p.g || 0) / 200) * researchLearn() * (0.6 + Math.random() * 0.8);
+      p.k = Math.min(100, p.k + rate); // the same job, day after day: better and better at it
+      p.g = Math.min(100, (p.g || 0) + rate * 0.35); // and a little wiser about work in general
+      (p.xp ||= {})[p.j] = p.k;
       if (before < 80 && p.k >= 80) { chron(t, `${fullName(p)} has become a master ${JOBS[p.j].toLowerCase()}!`, true); S.stats.masters = (S.stats.masters || 0) + 1; }
     }
     if (p.lastAge !== age) {
@@ -212,7 +240,12 @@ on('stepped', (dd) => {
       t.hasSchool = bs.some((b) => b.t === 'school' && !b.idle);
       assignJobs(t, bs);
       const workers = t.folk.filter((p) => p.j);
-      t.skillMult = workers.length ? 1 + (workers.reduce((s, p) => s + p.k, 0) / workers.length / 100) * 0.15 : 1;
+      // general Know-how lifts everything a little; each trade's own skill lifts that trade a lot
+      t.skillMult = workers.length ? 1 + (workers.reduce((s, p) => s + (p.g || 0), 0) / workers.length / 100) * 0.1 : 1;
+      const sums = {}, cnt = {};
+      for (const p of workers) { sums[p.j] = (sums[p.j] || 0) + p.k; cnt[p.j] = (cnt[p.j] || 0) + 1; }
+      t.jobSkill = {}; for (const j in sums) t.jobSkill[j] = sums[j] / cnt[j];
+      t.teach = 1 + (t.jobSkill.school || 0) / 100;
     }
     if (newDay) lifeDay(t);
   }

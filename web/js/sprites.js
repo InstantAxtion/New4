@@ -31,17 +31,35 @@ const P = (u, v, z = 0) => [(u - v) * 32, (u + v - 1) * 16 - z];
 // Box from (u0,v0) to (u1,v1), height h, optionally raised by z0.
 function box(g, u0, v0, u1, v1, h, wall, z0 = 0, top = null) {
   const L = hex(wall);
-  poly(g, [P(u0, v1, z0), P(u1, v1, z0), P(u1, v1, z0 + h), P(u0, v1, z0 + h)], rgb(L, 1.0), rgb(L, 0.7)); // front-left face
-  poly(g, [P(u1, v1, z0), P(u1, v0, z0), P(u1, v0, z0 + h), P(u1, v1, z0 + h)], rgb(L, 0.78), rgb(L, 0.6)); // front-right face
+  // walls: lit from the upper left, a touch darker towards the ground, with a crisp corner and a soft base
+  const faceGrad = (k, a, b) => { const gr = g.createLinearGradient(0, a, 0, b); gr.addColorStop(0, rgb(L, k * 1.04)); gr.addColorStop(1, rgb(L, k * 0.9)); return gr; };
+  const fl = [P(u0, v1, z0), P(u1, v1, z0), P(u1, v1, z0 + h), P(u0, v1, z0 + h)], fr = [P(u1, v1, z0), P(u1, v0, z0), P(u1, v0, z0 + h), P(u1, v1, z0 + h)];
+  poly(g, fl, h > 3 ? faceGrad(1.0, fl[3][1], fl[0][1]) : rgb(L, 1.0), rgb(L, 0.68)); // front-left face
+  poly(g, fr, h > 3 ? faceGrad(0.78, fr[3][1], fr[0][1]) : rgb(L, 0.78), rgb(L, 0.58)); // front-right face
   poly(g, [P(u0, v0, z0 + h), P(u1, v0, z0 + h), P(u1, v1, z0 + h), P(u0, v1, z0 + h)], top || rgb(L, 1.12), rgb(L, 0.75));
+  if (h > 3) {
+    g.strokeStyle = rgb(L, 1.25, 0.7); g.lineWidth = 0.6; g.beginPath(); g.moveTo(...P(u1, v1, z0 + 0.5)); g.lineTo(...P(u1, v1, z0 + h - 0.3)); g.stroke(); // sunlit corner
+    g.strokeStyle = 'rgba(40,30,20,0.18)'; g.lineWidth = 1; g.beginPath(); g.moveTo(...P(u0, v1, z0 + 0.4)); g.lineTo(...P(u1, v1, z0 + 0.4)); g.lineTo(...P(u1, v0, z0 + 0.4)); g.stroke(); // plinth
+  }
 }
 // Gable roof over box footprint, ridge running along u.
 function gable(g, u0, v0, u1, v1, h, rh, roof, over = 0.05) {
   const C = hex(roof), vm = (v0 + v1) / 2;
+  // a soft shadow where the eaves overhang the walls
+  g.fillStyle = 'rgba(30,20,10,0.16)'; g.beginPath(); g.moveTo(...P(u0, v1, h)); g.lineTo(...P(u1, v1, h)); g.lineTo(...P(u1, v0, h)); g.lineTo(...P(u1, v0, h - 1.6)); g.lineTo(...P(u1, v1, h - 1.6)); g.lineTo(...P(u0, v1, h - 1.6)); g.closePath(); g.fill();
   u0 -= over; v0 -= over; u1 += over; v1 += over;
   poly(g, [P(u0, v0, h), P(u1, v0, h), P(u1, vm, h + rh), P(u0, vm, h + rh)], rgb(C, 0.82), rgb(C, 0.6)); // back slope
   poly(g, [P(u1, v0, h), P(u1, v1, h), P(u1, vm, h + rh)], rgb(C, 0.7), rgb(C, 0.55));                    // gable end
-  poly(g, [P(u0, vm, h + rh), P(u1, vm, h + rh), P(u1, v1, h), P(u0, v1, h)], rgb(C, 1.05), rgb(C, 0.65)); // front slope
+  const front = [P(u0, vm, h + rh), P(u1, vm, h + rh), P(u1, v1, h), P(u0, v1, h)];
+  const gr = g.createLinearGradient(0, front[0][1], 0, front[3][1]); gr.addColorStop(0, rgb(C, 1.14)); gr.addColorStop(1, rgb(C, 0.96));
+  poly(g, front, gr, rgb(C, 0.62)); // front slope, brighter near the ridge
+  // rows of tiles or shingles across the front slope
+  g.strokeStyle = rgb(C, 0.72, 0.55); g.lineWidth = 0.5; g.beginPath();
+  const rows = Math.max(2, Math.round(rh / 2.2));
+  for (let k = 1; k < rows; k++) { const f = k / rows, v = vm + (v1 - vm) * f, z = h + rh * (1 - f); g.moveTo(...P(u0, v, z)); g.lineTo(...P(u1, v, z)); }
+  g.stroke();
+  g.strokeStyle = rgb(C, 1.3, 0.85); g.lineWidth = 0.9; g.beginPath(); g.moveTo(...P(u0, vm, h + rh)); g.lineTo(...P(u1, vm, h + rh)); g.stroke(); // ridge cap
+  g.strokeStyle = rgb(C, 0.55, 0.8); g.lineWidth = 0.7; g.beginPath(); g.moveTo(...P(u0, v1, h)); g.lineTo(...P(u1, v1, h)); g.stroke(); // eave edge
 }
 function cone(g, u, v, z, r, h, col) {
   const [x, y] = P(u, v, z), C = hex(col);
@@ -65,10 +83,14 @@ function shadow(g, rx = 22, ry = 10, cy = 2) {
   g.fillStyle = 'rgba(30,40,20,0.18)'; g.beginPath(); g.ellipse(0, cy, rx, ry, 0, 0, Math.PI * 2); g.fill();
 }
 function windows(g, u0, u1, v, z, n, col = '#3c3a40') {
-  g.fillStyle = col;
   for (let k = 0; k < n; k++) {
     const u = u0 + ((k + 0.5) / n) * (u1 - u0);
-    const [x, y] = P(u, v, z); g.fillRect(x - 1.2, y - 2.5, 2.4, 3);
+    const [x, y] = P(u, v, z);
+    g.fillStyle = 'rgba(60,40,28,0.55)'; g.fillRect(x - 1.7, y - 3, 3.4, 4); // frame
+    g.fillStyle = col; g.fillRect(x - 1.2, y - 2.5, 2.4, 3);
+    g.fillStyle = 'rgba(255,255,255,0.35)'; g.fillRect(x - 1.2, y - 2.5, 1, 1.2); // a glint on the glass
+    g.fillStyle = 'rgba(60,40,28,0.5)'; g.fillRect(x - 0.15, y - 2.5, 0.3, 3); // mullion
+    g.fillStyle = 'rgba(240,230,210,0.85)'; g.fillRect(x - 1.9, y + 0.6, 3.8, 0.7); // sill
   }
 }
 function crenels(g, u0, v0, u1, v1, h, col) {
@@ -491,15 +513,21 @@ function buildingSprites() {
     const [x, y] = P(0.82, 0.25, 0); g.fillStyle = '#e0bf5a'; g.beginPath(); g.ellipse(x, y, 4, 4, 0, Math.PI, 0); g.fill();
     g.fillStyle = '#c9a344'; g.fillRect(x - 4, y - 0.5, 8, 1.5);
   }));
-  S.workshop = [frame((g) => {
-    shadow(g, 20, 9);
-    box(g, 0.25, 0.25, 0.75, 0.7, 10, '#c8b498');
-    windows(g, 0.25, 0.75, 0.7, 7, 2, '#f5d78a');
-    gable(g, 0.25, 0.25, 0.75, 0.7, 10, 7, '#6d7b8a');
-    box(g, 0.32, 0.3, 0.4, 0.38, 10, '#8c6e5a', 14);
-    const [x, y] = P(0.85, 0.85, 0); g.fillStyle = '#5a5a62'; g.fillRect(x - 3, y - 3, 6, 3); g.fillRect(x - 1, y - 5, 2, 2);
-    g.fillStyle = '#9a7a56'; g.fillRect(x - 10, y - 4, 4, 4);
-  })];
+  S.workshop = [0, 1].map((v) => frame((g) => {
+    shadow(g, 22, 10);
+    const wall = v ? '#d8c4a4' : '#e2d2b4';
+    box(g, 0.2, 0.25, 0.78, 0.7, 11, wall);
+    g.strokeStyle = '#6e4a30'; g.lineWidth = 0.9; g.beginPath();
+    for (const u of [0.2, 0.39, 0.59, 0.78]) { g.moveTo(...P(u, 0.7, 0)); g.lineTo(...P(u, 0.7, 11)); }
+    g.moveTo(...P(0.2, 0.7, 6)); g.lineTo(...P(0.78, 0.7, 6)); g.lineTo(...P(0.78, 0.25, 6)); g.stroke();
+    windows(g, 0.6, 0.78, 0.7, 9, 1, '#f5d78a'); windows(g, 0.78, 0.78, 0.48, 9, 1, '#f5d78a');
+    const [dx, dy] = P(0.33, 0.7, 0); g.fillStyle = '#3a2a20'; g.fillRect(dx - 3.5, dy - 7, 7, 7); g.fillStyle = '#c89a5a'; g.fillRect(dx - 2.5, dy - 3, 5, 1); // open door, a bench inside
+    gable(g, 0.2, 0.25, 0.78, 0.7, 11, 8, v ? '#6d7b8a' : '#8a5a3c');
+    const [cx, cy] = P(0.3, 0.45, 17); g.fillStyle = '#7a6a5a'; g.fillRect(cx - 1.5, cy - 6, 3, 6);
+    const [sx, sy] = P(0.52, 0.72, 9); g.strokeStyle = '#3c3a40'; g.lineWidth = 0.6; g.beginPath(); g.moveTo(sx, sy); g.lineTo(sx + 4, sy); g.stroke(); g.fillStyle = '#c0a060'; g.fillRect(sx + 1.5, sy + 0.5, 4, 3); g.fillStyle = '#5a3a24'; g.fillRect(sx + 2.5, sy + 1.5, 2, 1);
+    box(g, 0.82, 0.78, 0.92, 0.88, 3, '#a07a50'); box(g, 0.84, 0.66, 0.92, 0.74, 3, '#8a6a44'); box(g, 0.85, 0.79, 0.91, 0.86, 2.4, '#b08a5a', 3);
+    const [wx, wy] = P(0.1, 0.85); g.fillStyle = '#8a5f3c'; g.fillRect(wx - 3, wy - 2.5, 6, 2.5); g.fillStyle = '#9a9488'; g.fillRect(wx - 1, wy - 4, 2, 1.6);
+  }));
   // Pasture: a fenced meadow with a water trough (the sheep themselves wander about live)
   S.pasture = [0, 1].map((v) => frame((g) => {
     const rnd = mulberry32(v * 13 + 5);
@@ -633,15 +661,24 @@ function buildingSprites() {
     const [x, y] = P(0.42, 0.9); g.fillStyle = '#8a5a3c'; g.fillRect(x - 5, y - 2.5, 10, 2.5); for (let k = 0; k < 3; k++) { g.fillStyle = ['#a03030', '#305a90', '#3a7a3a'][k]; g.fillRect(x - 4 + k * 3, y - 6, 2.4, 3.5); }
   })];
   S.lumber = [frame((g) => {
-    shadow(g, 20, 9);
-    box(g, 0.2, 0.2, 0.55, 0.5, 8, '#b08a62');
-    gable(g, 0.2, 0.2, 0.55, 0.5, 8, 6, '#8a5a3c');
-    for (let k = 0; k < 3; k++) for (let j = 0; j < 3 - k; j++) {
-      const [x, y] = P(0.62 + j * 0.1 + k * 0.05, 0.72, k * 3.4);
-      g.fillStyle = '#8a5f3c'; g.beginPath(); g.arc(x, y - 2, 2, 0, 7); g.fill();
-      g.fillStyle = '#d8b07a'; g.beginPath(); g.arc(x, y - 2, 1.2, 0, 7); g.fill();
+    shadow(g, 22, 10);
+    // an open-sided sawing shed
+    g.strokeStyle = '#6e4a30'; g.lineWidth = 1.3; g.beginPath();
+    for (const [u, v] of [[0.18, 0.62], [0.52, 0.62], [0.52, 0.2]]) { g.moveTo(...P(u, v, 0)); g.lineTo(...P(u, v, 9)); } g.stroke();
+    box(g, 0.2, 0.22, 0.5, 0.6, 9, '#a07a50'); // back wall
+    gable(g, 0.18, 0.2, 0.52, 0.62, 9, 6, '#7a5a3a');
+    const [bx, by] = P(0.35, 0.62, 0); g.fillStyle = '#8a6040'; g.fillRect(bx - 6, by - 4, 12, 1.4); g.fillStyle = '#d8b07a'; g.fillRect(bx - 5, by - 5.2, 10, 1.2); // a log on the saw bench
+    // stacked logs, end on
+    for (let k = 0; k < 3; k++) for (let j = 0; j < 4 - k; j++) {
+      const [x, y] = P(0.66 + j * 0.08 + k * 0.04, 0.76, k * 3.6);
+      g.fillStyle = '#7a5434'; g.beginPath(); g.arc(x, y - 2, 2.1, 0, 7); g.fill();
+      g.fillStyle = '#e0bc86'; g.beginPath(); g.arc(x, y - 2, 1.4, 0, 7); g.fill(); g.strokeStyle = 'rgba(140,100,60,0.6)'; g.lineWidth = 0.3; g.beginPath(); g.arc(x, y - 2, 0.7, 0, 7); g.stroke();
     }
-    const [sx, sy] = P(0.3, 0.85, 0); g.fillStyle = '#9a7048'; g.beginPath(); g.ellipse(sx, sy, 2.5, 1.3, 0, 0, 7); g.fill();
+    // planks drying, a stump with an axe, and fresh sawdust
+    for (let k = 0; k < 3; k++) { const [x, y] = P(0.78, 0.3 + k * 0.05, 1 + k * 1.2); g.fillStyle = k % 2 ? '#d8b07a' : '#c89a64'; g.fillRect(x - 6, y - 1, 12, 1.2); }
+    const [sx, sy] = P(0.3, 0.88, 0); g.fillStyle = '#8a6040'; g.beginPath(); g.ellipse(sx, sy - 1, 3, 1.5, 0, 0, 7); g.fill(); g.fillRect(sx - 3, sy - 1, 6, 2); g.fillStyle = '#d8b07a'; g.beginPath(); g.ellipse(sx, sy - 1.2, 2.4, 1.1, 0, 0, 7); g.fill();
+    g.strokeStyle = '#6e4a30'; g.lineWidth = 0.9; g.beginPath(); g.moveTo(sx + 0.5, sy - 1.5); g.lineTo(sx + 3.5, sy - 6); g.stroke(); g.fillStyle = '#9aa0a8'; g.fillRect(sx - 0.4, sy - 2.6, 2.2, 1.6);
+    g.fillStyle = 'rgba(232,206,150,0.7)'; g.beginPath(); g.ellipse(...P(0.35, 0.72), 6, 2, 0, 0, 7); g.fill();
   })];
   S.dock = [frame((g) => {
     g.fillStyle = '#9a7048'; poly(g, [P(0.1, 0.35), P(0.9, 0.35), P(0.9, 0.65), P(0.1, 0.65)], '#a57a4e', '#7a5634');
@@ -685,17 +722,33 @@ function buildingSprites() {
       }
       const [x, y] = P(u + 0.14, v + 0.24, 6); g.fillStyle = '#e8a040'; g.beginPath(); g.arc(x - 2, y - 1, 1.3, 0, 7); g.fill(); g.fillStyle = '#9bbd5a'; g.beginPath(); g.arc(x + 2, y - 1, 1.3, 0, 7); g.fill();
     };
-    stall(0.15, 0.18, '#c0503e'); stall(0.55, 0.22, '#4a78a8'); stall(0.3, 0.58, '#5a9a5a');
+    g.strokeStyle = 'rgba(150,130,100,0.45)'; g.lineWidth = 0.5; g.beginPath();
+    for (let k = 1; k < 6; k++) { g.moveTo(...P(k / 6, 0.05)); g.lineTo(...P(k / 6, 0.95)); g.moveTo(...P(0.05, k / 6)); g.lineTo(...P(0.95, k / 6)); } g.stroke(); // paving
+    stall(0.15, 0.18, '#c0503e'); stall(0.55, 0.22, '#4a78a8');
+    cyl(g, 0.72, 0.68, 0, 3.4, 4, '#b8ae9c'); g.fillStyle = '#5a8ab0'; const [wx, wy] = P(0.72, 0.68, 4); g.beginPath(); g.ellipse(wx, wy, 2.6, 1.3, 0, 0, 7); g.fill(); // a well in the square
+    g.strokeStyle = '#6e4a30'; g.lineWidth = 0.8; g.beginPath(); g.moveTo(wx - 3, wy); g.lineTo(wx - 3, wy - 6); g.lineTo(wx + 3, wy - 6); g.lineTo(wx + 3, wy); g.stroke();
+    stall(0.3, 0.58, '#5a9a5a');
+    for (const [u, v2, c] of [[0.12, 0.62, '#a07a50'], [0.18, 0.7, '#8a6a44']]) box(g, u, v2, u + 0.07, v2 + 0.07, 3, c);
   })];
   S.townhall = [frame((g) => {
-    shadow(g, 24, 11);
-    box(g, 0.18, 0.22, 0.82, 0.78, 13, '#ead9b6');
-    g.strokeStyle = '#8a5a3c'; g.lineWidth = 0.9;
-    for (let k = 0; k <= 4; k++) { g.beginPath(); g.moveTo(...P(0.18 + k * 0.16, 0.78, 0)); g.lineTo(...P(0.18 + k * 0.16, 0.78, 13)); g.stroke(); }
-    windows(g, 0.2, 0.8, 0.78, 9, 3, '#f5d78a');
-    gable(g, 0.18, 0.22, 0.82, 0.78, 13, 11, '#b5543c');
-    const [x, y] = P(0.5, 0.5, 24); flag(g, x, y, 14, '#d9a440');
-  }, 80, 96, 40, 70)];
+    shadow(g, 26, 12);
+    box(g, 0.14, 0.2, 0.86, 0.8, 3, '#b8ae9c'); // stone plinth
+    box(g, 0.18, 0.24, 0.82, 0.76, 12, '#ead9b6', 3);
+    g.strokeStyle = '#7a4e30'; g.lineWidth = 0.9; g.beginPath();
+    for (let k = 0; k <= 4; k++) { g.moveTo(...P(0.18 + k * 0.16, 0.76, 3)); g.lineTo(...P(0.18 + k * 0.16, 0.76, 15)); }
+    g.moveTo(...P(0.18, 0.76, 9)); g.lineTo(...P(0.82, 0.76, 9)); g.lineTo(...P(0.82, 0.24, 9));
+    for (let k = 0; k < 4; k++) { g.moveTo(...P(0.18 + k * 0.16, 0.76, 3)); g.lineTo(...P(0.34 + k * 0.16, 0.76, 9)); } // braces
+    g.stroke();
+    windows(g, 0.2, 0.8, 0.76, 13, 4, '#f5d78a');
+    const [dx, dy] = P(0.5, 0.8, 0); g.fillStyle = '#b8ae9c'; g.fillRect(dx - 5, dy - 3, 10, 3); // steps
+    g.fillStyle = '#5a3a24'; g.beginPath(); g.moveTo(dx - 2.6, dy - 3); g.lineTo(dx - 2.6, dy - 8); g.quadraticCurveTo(dx, dy - 10.5, dx + 2.6, dy - 8); g.lineTo(dx + 2.6, dy - 3); g.fill();
+    gable(g, 0.18, 0.24, 0.82, 0.76, 15, 11, '#b5543c');
+    // clock tower on the ridge
+    box(g, 0.43, 0.43, 0.57, 0.57, 9, '#ead9b6', 22); cone(g, 0.5, 0.5, 31, 7, 11, '#8a3e2c');
+    const [cx, cy] = P(0.57, 0.5, 27); g.fillStyle = '#fbf6ea'; g.beginPath(); g.arc(cx - 2, cy, 2.2, 0, 7); g.fill(); g.strokeStyle = '#3c3a40'; g.lineWidth = 0.5; g.beginPath(); g.moveTo(cx - 2, cy); g.lineTo(cx - 2, cy - 1.6); g.moveTo(cx - 2, cy); g.lineTo(cx - 0.8, cy); g.stroke();
+    const [x, y] = P(0.5, 0.5, 42); flag(g, x, y, 12, '#d9a440');
+    const [nx, ny] = P(0.86, 0.95); g.fillStyle = '#7a4e30'; g.fillRect(nx - 0.5, ny - 7, 1, 7); g.fillRect(nx + 4.5, ny - 5, 1, 5); g.fillStyle = '#c8a070'; g.fillRect(nx - 1, ny - 8, 7, 4); g.fillStyle = '#f4ead8'; g.fillRect(nx, ny - 7.4, 2, 2.4); g.fillRect(nx + 2.8, ny - 7.2, 2, 2);
+  }, 80, 104, 40, 76)];
   // Capital keep grows with the realm's tier.
   S.castle = [0, 1, 2, 3, 4, 5].map((t) => frame((g) => {
     shadow(g, 28, 13);

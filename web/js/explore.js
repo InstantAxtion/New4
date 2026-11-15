@@ -1,6 +1,6 @@
 // Explorers and their journal, highways between towns, the shipyard, and rare finds.
 import { W, H, B, world, tileWX, tileWY, idxOf, wrapX, tileLat } from './world.js';
-import { S, on, emit, townById, groundDist2, affordable, continentAt, hasStables, count, setFerryCheck } from './game.js';
+import { S, on, emit, townById, groundDist2, affordable, continentAt, hasStables, count, setFerryCheck, hasTalent } from './game.js';
 import { hash2 } from './noise.js';
 import * as L from './life.js';
 import { YEAR } from './seasons.js';
@@ -52,7 +52,7 @@ export function expeditionPlan(k) {
   if (!best) return null;
   const overseas = continentAt(lx, ly) !== continentAt(best.t.x, best.t.y);
   const harbour = [...S.buildings.values()].some((b) => b.t === 'harbour' && b.p >= 1);
-  const speed = hasStables() ? 7 : 4.5; // tiles a day
+  const speed = (hasStables() ? 7 : 4.5) * (hasTalent('scout') ? 1.3 : 1); // tiles a day
   const days = Math.max(6, Math.round((best.d * 2) / speed));
   return { town: best.t, d: best.d, days, overseas, ok: !overseas || harbour, need: overseas && !harbour ? 'Needs a Harbour to sail there' : null };
 }

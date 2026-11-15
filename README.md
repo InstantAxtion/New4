@@ -16,7 +16,7 @@ there are no timers, and you can pause whenever you like.
 - **Progression**: Hamlet → Village → Town → City → Kingdom, 19 gentle goals, and 5 Wonders.
 - **Cozy feel**: villagers walk around your towns, the capital's keep grows with your tier, generative music
   plays alongside birdsong, and building gives a little vibration.
-- **A slow, calm pace** meant to be enjoyed over days: Village takes about 30 minutes of play, Town about 2 hours, City about 5 and Kingdom about 10. There is one speed plus pause, and nothing happens while the app is closed.
+- **A slow, calm pace** meant to be enjoyed over days: Village takes about 30 minutes of play, Town about 2 hours, City about 5 and Kingdom about 10. There is play, double speed and pause, and nothing happens while the app is closed.
 - **Pip the messenger bird** guides your first few steps: zoning fields and homes, then building a Lumber Camp. You can skip the guide at any time.
 - **Three save slots**, so you can keep realms in different places on Earth. Each autosaves on the device.
 - Goals are tucked into a 📜 scroll button that shows a badge when you finish one.
@@ -57,6 +57,9 @@ there are no timers, and you can pause whenever you like.
 - **A wider world**: peaceful **neighbouring kingdoms** slowly grow across the map, and great **migrations** cross the continents (birds heading south in autumn, the Serengeti herds, caribou on the tundra). Hold a **Travelling Fair**, a **Grand Wedding** or a **Grand Tournament**, and friendly leaders pay **royal visits** with gifts.
 - **Four more building styles**: Slavic log houses, Indian havelis, Andean stone houses and domed Arabic homes.
 - **Living details**: windmill sails, water wheels, a swinging tavern sign and smithy sparks. At night the stars and the moon, in its current phase, reflect in the water. Music changes with the region and the season, villagers chat in busy towns, and chapel bells ring at noon and for weddings.
+- **Research and talents**: a **research tree** of 16 ideas across five eras (crop rotation to golden harmony), studied with knowledge from schools, scriptoria, the library and the observatory. A **talent tree** with five branches (Steward, Builder, Merchant, Patron, Explorer), with points earned from tiers, wonders and prestige.
+- **Worker skills**: every trade has its own skill (Green Thumb for farmers, Felling for woodcutters, Forging for smiths and so on) that grows the longer someone does that job and makes that work better. **Know-how** grows in any job and helps with everything. Skills stay with a person when they change jobs, and towns put their most experienced folk in each job.
+- **Double speed**: pause, play or 2× speed.
 - **Roads** form by themselves from each building to its town hall, and villagers walk along them. The **Road** tool in Zones lets you lay extra roads for free. Roads curve smoothly round bends, with grassy verges and worn tracks, and turn to cobbles in cities.
 - **Sound settings**: separate volume sliders for master, music, nature and town sounds, rain and storms, and sound effects.
 - Works in portrait and landscape.

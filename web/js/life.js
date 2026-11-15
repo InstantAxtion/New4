@@ -420,13 +420,14 @@ export function updateRoads() {
   const mark = (a, d, tid) => { roads.set(a, (roads.get(a) || 0) | (1 << d)); if (!roadTown.has(a)) roadTown.set(a, tid); };
   const prevRoads = new Set(prevRoadKeys);
   for (const t of S.towns) {
-    const hall = idxOf(t.x, t.y), R = (t.radius + 2) ** 2;
+    const hall = idxOf(t.x, t.y), R = Math.max(4, t.radius - 0.5) ** 2; // streets stay inside the town's border
     // Cheapest paths outward from the hall: existing streets are cheapest, then open ground,
     // then zoned-but-unbuilt tiles (streets may claim those). Buildings are never crossed.
     const passable = (i, x, y) => i === hall || ((!taken(i) || crossing(i)) && world.biome[i] > 2 && !nbExtraHas(i) && groundD2(x, y, t.x, t.y) <= R);
     // Main streets: a short straight street out of each side of the hall, kept free from the start,
     // so a town always has a tidy square and its hall is never walled in.
-    const spine = new Set(), mainLen = Math.min(4, 2 + Math.floor(t.radius / 3));
+    // they start as a little square round the hall and lengthen as the town fills in
+    const spine = new Set(), mainLen = Math.max(1, Math.min(4, Math.floor((t.n || 0) / 5)));
     for (let d = 0; d < 4; d++) {
       let x = t.x, y = t.y, prev = hall;
       for (let k = 0; k < mainLen; k++) {

@@ -247,7 +247,7 @@ function updateWalkers(dt, visibleTowns) {
     tileCache.clear(); tileCacheStamp = S.buildings.size; stableTowns.clear();
     for (const b of S.buildings.values()) if (b.t === 'stable' && b.p >= 1) stableTowns.add(b.town);
   }
-  const pace = 1;
+  const pace = S.speed === 2 ? 1.6 : 1; // villagers bustle a little quicker at double speed
   for (const t of visibleTowns) {
     if (!tileCache.has(t.id)) tileCache.set(t.id, townTiles(t));
     const tiles = tileCache.get(t.id);

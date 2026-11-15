@@ -4,13 +4,13 @@ import {
   S, M, RES, RES_NAMES, TIERS, DEFS, MANUAL, WONDERS, ZONES, FOUND_COST, GIFT_AMOUNT, CONTACT_RANGE,
   on, emit, totalPop, totalCap, townById, hasWonder, wonderStarted, count, ownerOf, canPlace, placeBuilding, setZone,
   demolish, canFound, foundTown, inContact, tradeOffers, doTrade, gift, canInvite, invite, activeQuests, QUESTS,
-  CARAVAN_COST, maxCaravans, caravanPairs, startCaravan, stopCaravan, prestige, prestigeRank, priceNote, anchorOf, moveBuilding, turnBuilding, BIG, footprint, newGame, currentSlot as CUR, PACE, crewsOf, crewsBusy, zonesWaiting, yardsIn, UPKEEP, SPECS, SPEC_TIER, SPEC_CHANGE_COST, setSpec, GOODS, EVERYDAY, GOODS_BUILDINGS, SPECIALTIES, ALL_WONDERS, MOODS, moodOf, townStyleOf, TRAITS, IMPROVEMENTS, IMPROVE_TIER, charm, improve, continentAt, realmContinents, harbourTowns, routeOptions, openRoute, ROUTE_COST, ROUTE_DAYS, routesDone, maxTowns, fulfil, nbExtra, HOUSE_LEVELS, HOUSE_CAP_MULT, save, hasSave, load, resetSave, slotInfo, setSlot, deleteSlot, SLOT_COUNT, saveSettings, surveyStart, canStart, affordable, groundDist2, DAY_SECONDS,
+  RESEARCH, ERAS, hasTech, canResearch, pickResearch, knowledgeRate, TALENTS, hasTalent, talentsFree, takeTalent, CARAVAN_COST, maxCaravans, caravanPairs, startCaravan, stopCaravan, prestige, prestigeRank, priceNote, anchorOf, moveBuilding, turnBuilding, BIG, footprint, newGame, currentSlot as CUR, PACE, crewsOf, crewsBusy, zonesWaiting, yardsIn, UPKEEP, SPECS, SPEC_TIER, SPEC_CHANGE_COST, setSpec, GOODS, EVERYDAY, GOODS_BUILDINGS, SPECIALTIES, ALL_WONDERS, MOODS, moodOf, townStyleOf, TRAITS, IMPROVEMENTS, IMPROVE_TIER, charm, improve, continentAt, realmContinents, harbourTowns, routeOptions, openRoute, ROUTE_COST, ROUTE_DAYS, routesDone, maxTowns, fulfil, nbExtra, HOUSE_LEVELS, HOUSE_CAP_MULT, save, hasSave, load, resetSave, slotInfo, setSlot, deleteSlot, SLOT_COUNT, saveSettings, surveyStart, canStart, affordable, groundDist2, DAY_SECONDS,
 } from './game.js';
 import { SPR, spriteIcon, homeArt } from './sprites.js';
 import { panBy, cam, markDirty, flyTo, centerOn, clampCam, screenSize, TILE_MODE_TW, sx, sy, pickTile, setHover } from './render.js';
 import { initAudio, sfx, haptic, applySettings, resumeAudio, VOLUMES, vol } from './audio.js';
 import { tutorialActive, hint } from './tutorial.js';
-import { ageOf, fullName, personById, JOBS, thought, petOf } from './folk.js';
+import { ageOf, fullName, personById, JOBS, thought, petOf, SKILLS, SKILL_HELP, GENERAL_SKILL } from './folk.js';
 import { walkerAt, clearTransient } from './render.js';
 import { scatterBirds } from './alive.js';
 import { stepTile, moonIcon } from './life.js';
@@ -178,13 +178,13 @@ function buildHUD() {
   $('#resbar').innerHTML = RES.map((r) => `<div class="res" id="res-${r}" title="${RES_NAMES[r]}">${ICON[r]}<div class="rv"><span class="v">0</span><small class="flat">+0</small></div></div>`).join('')
     + `<div class="res" id="res-pop" title="Villagers">${ICON.pop}<div class="rv"><span class="v">0</span><small class="flat">/0</small></div></div>`;
   $('#goodsbar').innerHTML = GOODS.map((r) => `<div class="res" id="res-${r}" title="${RES_NAMES[r]}">${ICON[r]}<div class="rv"><span class="v">0</span><small class="flat">+0</small></div></div>`).join('');
-  $('#speed').innerHTML = [[0, '❚❚', 'Pause'], [1, '▶', 'Play']].map(([v, l, a]) => `<button data-speed="${v}" aria-label="${a}">${l}</button>`).join('');
+  $('#speed').innerHTML = [[0, '❚❚', 'Pause'], [1, '▶', 'Play'], [2, '▶▶', 'Double speed']].map(([v, l, a]) => `<button data-speed="${v}" aria-label="${a}">${l}</button>`).join('');
   $('#speed').addEventListener('click', (e) => {
     const b = e.target.closest('button'); if (!b) return;
     S.speed = +b.dataset.speed; sfx('tap'); updateHUD();
   });
   $('#bottombar').innerHTML = [
-    ['build', '🔨', 'Build'], ['zones', '🌾', 'Zones'], ['realm', '🏰', 'Realm'], ['menu', '☰', 'Menu'],
+    ['build', '🔨', 'Build'], ['zones', '🌾', 'Zones'], ['research', '📚', 'Research'], ['realm', '🏰', 'Realm'], ['menu', '☰', 'Menu'],
   ].map(([k, ic, l]) => `<button data-tab="${k}"><span class="ic">${ic}</span>${l}</button>`).join('');
   $('#bottombar').addEventListener('click', (e) => {
     const b = e.target.closest('button'); if (!b) return;
@@ -193,7 +193,7 @@ function buildHUD() {
     if (sheetKind === tab) { closeSheet(); return; }
     if (tab === 'zones') { closeSheet(); setMode(M.mode && M.mode.kind === 'zone' ? null : { kind: 'zone', zone: 'housing' }); return; }
     setMode(null);
-    ({ build: showBuild, realm: showRealm, menu: showMenu })[tab]();
+    ({ build: showBuild, realm: showRealm, menu: showMenu, research: showResearch })[tab]();
   });
   $('#zoomctl').addEventListener('click', (e) => {
     const b = e.target.closest('button'); if (!b) return;
@@ -214,12 +214,13 @@ function highlightBottom() {
     b.classList.toggle('on', sheetKind === t || (t === 'zones' && M.mode && M.mode.kind === 'zone'));
   });
 }
-const lastRes = {};
+const lastRes = {}; let lastDot = 0;
 const LATE_GOODS = { pottery: 'potter', glass: 'glassworks', spices: 'spicehouse', books: 'scriptorium' };
 export function updateHUD() {
   if (!S.started) return;
   $('#realmname').textContent = S.name;
   $('#tierbadge').textContent = TIERS[S.tier].name;
+  if (performance.now() - lastDot > 3000) { lastDot = performance.now(); const rb = $('#bottombar [data-tab=research]'); if (rb) rb.classList.toggle('dot', !(S.research && S.research.cur) || talentsFree() > 0); }
   $('#goodsbar').classList.toggle('hidden', !(S.tier >= 1 || GOODS.some((g) => S.res[g] > 0)));
   for (const r of [...RES, ...GOODS]) {
     const el = $('#res-' + r); if (!el) continue;
@@ -297,6 +298,7 @@ function personCard(t, p) {
     + `<div class="person"><div class="avatar" style="background:${AVATAR_BG[p.i % AVATAR_BG.length]}">${stage}</div>
       <div><b>${job}</b>${p.k >= 80 && p.j ? ' · Master' : ''}<div class="stars">${stars}</div></div></div>
       <div class="note" style="font-style:italic">“${esc(thought(t, p))}”</div>
+      ${skillBlock(p)}
       <div class="kv">${partner ? `<span>Partner</span><span>${link(partner)}</span>` : ''}
       ${parents.length ? `<span>Parents</span><span>${parents.map(link).join(' ')}</span>` : ''}
       ${kids.length ? `<span>Children</span><span>${kids.map(link).join(' ')}</span>` : ''}
@@ -307,6 +309,19 @@ function personCard(t, p) {
       <button class="btn small" data-act="rename" data-arg="${t.id}:${p.i}">✏️ Rename</button>${petOf(t, p) ? `<button class="btn small" data-act="renamepet" data-arg="${t.id}:${p.i}">✏️ Rename ${petOf(t, p).k}</button>` : ''}</div>`;
 }
 let renaming = null;
+// Skills: the trade's own skill, general Know-how, and what they learned in earlier jobs.
+const skillRank = (v) => (v >= 80 ? 'Master' : v >= 55 ? 'Expert' : v >= 30 ? 'Skilled' : v >= 10 ? 'Apprentice' : 'Novice');
+function skillBar(label, v, sub) {
+  return `<div class="skill"><div class="skrow"><b>${label}</b><span>${skillRank(v)} · ${Math.floor(v)}</span></div><div class="meter"><div style="width:${Math.min(100, v)}%"></div></div>${sub ? `<div class="sksub">${sub}</div>` : ''}</div>`;
+}
+function skillBlock(p) {
+  if (ageOf(p) < 16) return '';
+  const past = Object.entries(p.xp || {}).filter(([j, v]) => j !== p.j && v >= 5 && SKILLS[j]).sort((a, b) => b[1] - a[1]).slice(0, 4);
+  return `<div class="section"><h3>🛠 Skills</h3>
+    ${p.j && SKILLS[p.j] ? skillBar(SKILLS[p.j], p.k, `Grows every day as a ${JOBS[p.j].toLowerCase()}: ${SKILL_HELP[p.j] || 'more ' + (Object.keys(DEFS[p.j].prod || {})[0] || 'work') + ' from this trade'}.`) : ''}
+    ${skillBar(GENERAL_SKILL, p.g || 0, 'Grows in any job. Helps a little with everything, and new trades come quicker.')}
+    ${past.length ? `<div class="sksub">Earlier trades: ${past.map(([j, v]) => `${SKILLS[j]} (${skillRank(v)})`).join(' · ')}</div>` : ''}</div>`;
+}
 // Family tree: grandparents down to grandchildren, as far as this town remembers.
 function treeCard(t, p) {
   if (!p) return head('Family tree', esc(t.name)) + '<div class="note">This villager has moved on.</div>';
@@ -327,7 +342,42 @@ export function showPerson(townId, pid) {
   openSheet('person', () => personCard(t, personById(t, pid)));
 }
 
-// ---------------- realm ----------------// ---------------- realm ----------------
+// ---------------- research & talents ----------------
+let progTab = 'research';
+function showResearch() {
+  openSheet('research', () => {
+    const tab = (k, l) => `<button data-act="ptab" data-arg="${k}" class="${progTab === k ? 'on' : ''}">${l}</button>`;
+    const free = talentsFree();
+    return head('Research', progTab === 'research' ? 'Scholars study new ideas, one at a time. Schools, scriptoria and the library speed it up.' : 'Spend talent points to shape your realm. You earn them as the realm grows and becomes famous.')
+      + `<div class="tabs">${tab('research', '📚 Research')}${tab('talents', `⭐ Talents${free > 0 ? ` <span class="badge">${free}</span>` : ''}`)}</div>`
+      + (progTab === 'research' ? researchTree() : talentTree());
+  });
+}
+function researchTree() {
+  const R = S.research || { cur: null, prog: 0, done: [], bank: 0 }, cur = RESEARCH.find((r) => r.id === R.cur), rate = knowledgeRate() * 0.6;
+  const top = cur ? `<div class="rcur"><span class="ric">${cur.icon}</span><div style="flex:1"><b>Studying ${cur.name}</b><div class="meter"><div style="width:${Math.min(100, (R.prog / cur.cost) * 100)}%"></div></div><small>${Math.floor(R.prog)} / ${cur.cost} knowledge · about ${Math.max(1, Math.ceil((cur.cost - R.prog) / Math.max(0.05, rate)))} days</small></div></div>`
+    : `<div class="rcur idle"><span class="ric">💡</span><div><b>Pick something to study</b><small>Knowledge is saved up meanwhile${R.bank >= 1 ? ` (${Math.floor(R.bank)} banked)` : ''}.</small></div></div>`;
+  const eras = ERAS.map((name, e) => {
+    const nodes = RESEARCH.filter((r) => r.era === e); if (!nodes.length) return '';
+    return `<div class="era"><div class="eralabel">${name}</div>${nodes.map((r) => {
+      const done = hasTech(r.id), avail = canResearch(r), on = R.cur === r.id;
+      const st = done ? 'done' : on ? 'cur' : avail ? 'avail' : 'locked';
+      const needs = r.req.filter((q) => !hasTech(q)).map((q) => RESEARCH.find((x) => x.id === q).name);
+      return `<button class="rnode ${st}" data-act="research" data-arg="${r.id}"><div class="rhead"><span class="ric">${r.icon}</span><b>${r.name}</b></div><small>${r.desc}</small>
+        <div class="rfoot">${done ? '✓ Learned' : on ? `Studying · ${Math.floor((R.prog / r.cost) * 100)}%` : avail ? `📚 ${r.cost}` : `🔒 Needs ${needs.join(', ')}`}</div></button>`;
+    }).join('')}</div>`;
+  }).join('<div class="erarrow">›</div>');
+  return top + `<div class="note">📚 Knowledge: +${rate.toFixed(1)} a day · ${(S.research ? S.research.done.length : 0)} of ${RESEARCH.length} learned</div><div class="rtree">${eras}</div>`;
+}
+function talentTree() {
+  const free = talentsFree();
+  return `<div class="rcur ${free > 0 ? '' : 'idle'}"><span class="ric">⭐</span><div><b>${free > 0 ? `${free} talent point${free > 1 ? 's' : ''} to spend` : 'No points to spend just now'}</b><small>A point for each new tier, each wonder, and every 2,500 prestige (now ${prestige().toLocaleString()}).</small></div></div>
+    <div class="ttree">${TALENTS.map((br) => `<div class="tbranch"><div class="eralabel">${br.icon} ${br.branch}</div>${br.nodes.map(([id, name, desc], k) => {
+      const got = hasTalent(id), prevOk = k === 0 || hasTalent(br.nodes[k - 1][0]), can = !got && prevOk && free > 0;
+      return `${k ? `<div class="tlinkv ${got ? 'on' : ''}"></div>` : ''}<button class="tnode ${got ? 'done' : can ? 'avail' : 'locked'}" data-act="talent" data-arg="${id}"><b>${name}</b><small>${desc}</small><div class="rfoot">${got ? '✓ Yours' : can ? 'Take · ⭐ 1' : prevOk ? 'Needs a point' : '🔒 Earlier talent first'}</div></button>`;
+    }).join('')}</div>`).join('')}</div>`;
+}
+// ---------------- realm ----------------
 function showRealm() {
   openSheet('realm', () => {
     const p = totalPop(), next = TIERS[S.tier + 1];
@@ -567,7 +617,7 @@ function statsSection(t) {
     <span>Jobs</span><span>${t.jobs || 0} · about ${workers} filled</span>
     <span>Growth</span><span>${t.pop >= t.cap - 0.5 ? 'Full, zone more homes' : S.fed ? `${Math.ceil(t.cap - t.pop)} more can move in` : 'Paused until there is food'}</span>
     <span>Makes each day</span><span>${prod.length ? prod.map(([r, v]) => `${ICON[r] ? ICON[r].replace('<svg', '<svg width="14" height="14" style="vertical-align:-2px"') : ''} ${v >= 10 ? Math.round(v) : v.toFixed(1)}`).join(' &nbsp;') : 'Nothing yet'}</span>
-    </div>${top ? `<div class="note">Here: ${top}.</div>` : ''}${t.districts && t.districts.length ? `<div class="note">Quarters: ${t.districts.map((d) => esc(d.name)).join(' · ')}</div>` : ''}</div>`;
+    </div>${top ? `<div class="note">Here: ${top}.</div>` : ''}${t.jobSkill && Object.keys(t.jobSkill).length ? `<div class="note">Best skills: ${Object.entries(t.jobSkill).filter(([j]) => SKILLS[j]).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([j, v]) => `${SKILLS[j]} ${Math.round(v)} (+${Math.round((0.9 + v / 250 - 1) * 100)}%)`).join(' · ')}</div>` : ''}${t.districts && t.districts.length ? `<div class="note">Quarters: ${t.districts.map((d) => esc(d.name)).join(' · ')}</div>` : ''}</div>`;
 }
 function townInfo(t, sub) {
   const next = TIERS[S.tier + 1];
@@ -662,6 +712,9 @@ function act(name, arg, el) {
     case 'rename': case 'renamepet': { const [, pid] = arg.split(':').map(Number); renaming = { pid, pet: name === 'renamepet' }; refreshSheet(); setTimeout(() => { const i = $('#rnin'); if (i) { i.focus(); i.select(); } }, 50); break; }
     case 'rnsave': document.activeElement && document.activeElement.blur && document.activeElement.blur(); { const [tid, pid] = arg.split(':').map(Number); const t = townById(tid), p = t && personById(t, pid), v = ($('#rnin') || {}).value; if (p && v && v.trim()) { const nm = v.trim().slice(0, 16); if (renaming && renaming.pet) { const pet = petOf(t, p); if (pet) pet.n = nm; } else p.f = nm; sfx('quest'); } renaming = null; refreshSheet(); break; }
     case 'special': { const [tid, key] = arg.split(':'); const t = townById(+tid); if (t && ST.holdSpecial(t, key)) { sfx('quest'); haptic('medium'); refreshSheet(); } break; }
+    case 'ptab': progTab = arg; refreshSheet(true); break;
+    case 'research': { const r = RESEARCH.find((q) => q.id === arg); if (r && hasTech(r.id)) toast(`${r.name}: ${r.desc}`); else if (pickResearch(arg)) { sfx('tap'); refreshSheet(true); } else if (r) { sfx('error'); toast('Learn what it needs first.'); } break; }
+    case 'talent': if (takeTalent(arg)) { sfx('quest'); haptic('medium'); refreshSheet(true); } else sfx('error'); break;
     case 'movebld': if (sel) { const i = idxOf(sel.x, sel.y), b = S.buildings.get(i); if (b) { closeSheet(); setMode({ kind: 'move', from: i, type: b.t }); toast(`Tap where the ${DEFS[b.t].name} should go.`); } } break;
     case 'turnbld': if (sel && turnBuilding(idxOf(sel.x, sel.y))) { sfx('tap'); markDirty(); } break;
     case 'flip': if (M.mode) { M.mode.flip = !M.mode.flip; setMode(M.mode); markDirty(); } break;
@@ -842,7 +895,8 @@ function menuPage(page) {
       <h3>🏡 Folk</h3>Everyone has a name, a family, a trade and sometimes a pet. Tap anyone walking about to meet them.
       <h3>🤝 Neighbours</h3>Trade, send gifts and answer letters. Close friends may join your realm.
       <h3>🛤 Getting about</h3>Paint roads and canals, build stone bridges and mountain tunnels, and send caravans between your towns from the Realm panel.
-      <h3>👪 Villagers</h3>Tap someone to rename them, see their family tree or follow them around town.
+      <h3>👪 Villagers</h3>Tap someone to rename them, see their skills and family tree, or follow them around town. Workers get better the longer they do the same job.
+      <h3>📚 Research</h3>Pick an idea to study and spend talent points as your realm grows.
       <h3>⛵ Later on</h3>Choose a speciality for each town, build harbours, chart sea routes and raise wonders. Past Kingdom lies the Empire.
       <h3>✋ Controls</h3>Drag to move, pinch to zoom, tap to inspect. With an S Pen, the pen paints zones and a finger moves the map.</div>`;
   } else if (page === 'credits') {
@@ -982,6 +1036,7 @@ export function initUI() {
   on('tick', refresh); on('change', refresh);
   on('built', ({ b }) => { if (DEFS[b.t].wonder) { toast(`The ${DEFS[b.t].name} is complete!`, true); sfx('tier'); } else sfx('built'); markDirty(); });
   on('tier', (t) => { toast(`Your realm is now ${/^[AEIOU]/.test(TIERS[t].name) ? 'an' : 'a'} ${TIERS[t].name}!`, true); sfx('tier'); haptic('medium'); });
+  on('researched', (r) => { toast(`${r.icon} Your scholars have learned ${r.name}! ${r.desc}`, true); sfx('quest'); });
   on('golden', () => toast('🌟 A golden age begins! Everything your realm makes is 10% richer.', true));
   on('quest', (q) => { setTimeout(() => { toast(`Goal complete: ${q.text}`); sfx('quest'); }, 300); questSig = ''; });
   on('toast', (m) => toast(m));
