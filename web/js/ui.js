@@ -6,7 +6,7 @@ import {
   demolish, canFound, foundTown, inContact, tradeOffers, doTrade, gift, canInvite, invite, activeQuests, QUESTS,
   CARAVAN_COST, maxCaravans, caravanPairs, startCaravan, stopCaravan, prestige, prestigeRank, priceNote, anchorOf, moveBuilding, turnBuilding, BIG, footprint, newGame, currentSlot as CUR, PACE, crewsOf, crewsBusy, zonesWaiting, yardsIn, UPKEEP, SPECS, SPEC_TIER, SPEC_CHANGE_COST, setSpec, GOODS, EVERYDAY, GOODS_BUILDINGS, SPECIALTIES, ALL_WONDERS, MOODS, moodOf, townStyleOf, TRAITS, IMPROVEMENTS, IMPROVE_TIER, charm, improve, continentAt, realmContinents, harbourTowns, routeOptions, openRoute, ROUTE_COST, ROUTE_DAYS, routesDone, maxTowns, fulfil, nbExtra, HOUSE_LEVELS, HOUSE_CAP_MULT, save, hasSave, load, resetSave, slotInfo, setSlot, deleteSlot, SLOT_COUNT, saveSettings, surveyStart, canStart, affordable, groundDist2, DAY_SECONDS,
 } from './game.js';
-import { SPR, spriteIcon } from './sprites.js';
+import { SPR, spriteIcon, homeArt } from './sprites.js';
 import { panBy, cam, markDirty, flyTo, centerOn, clampCam, screenSize, TILE_MODE_TW, sx, sy, pickTile, setHover } from './render.js';
 import { initAudio, sfx, haptic, applySettings, resumeAudio, VOLUMES, vol } from './audio.js';
 import { tutorialActive, hint } from './tutorial.js';
@@ -52,6 +52,38 @@ function bIcon(type) {
   return iconCache[type];
 }
 
+// Zone palette: a picture of what each zone grows into, and a plain-words description.
+function zIcon(type) {
+  if (type === 'house') { if (!iconCache._house) iconCache._house = spriteIcon(homeArt(S.towns[0] ? townStyle(S.towns[0]) : 'temperate', 1)[0], 40); return iconCache._house; }
+  return bIcon(type);
+}
+const ZONE_TEXT = {
+  housing: 'Cottages for families. More homes, more villagers.',
+  farmland: 'Fields that grow food. They rest in winter and give extra at harvest.',
+  pasture: 'Fenced meadows with sheep and cows. Food and a little wool.',
+  woodlot: 'Neat rows of planted trees. Steady wood, even far from forests.',
+  workshop: 'Craftsfolk who earn gold.',
+  mining: 'Pits for stone and a little iron. Only on rocky ground: hills, desert, or beside mountains.',
+  shops: 'Shopfronts with awnings that earn gold.',
+  park: 'Lawns, a duck pond and benches. Makes the town happier.',
+  road: 'Free roads. Villagers walk faster on them, and they join up with your streets.',
+  canal: 'Stone-lined water channels. Boats sail them, and docks and farms count them as a river.',
+  erase: 'Clear painted zones, roads and canals. Buildings already built stay.',
+};
+function zoneInfo(k) {
+  const z = ZONES[k], d = z && DEFS[z.builds], locked = d && d.tier > S.tier;
+  const img = z ? `<img src="${zIcon(z.builds)}" alt="">` : `<span class="zsw big ${k}"></span>`;
+  const name = z ? z.name : { road: 'Road', canal: 'Canal', erase: 'Erase' }[k];
+  const facts = [];
+  if (d) {
+    if (d.cap) facts.push(`🏠 Homes for ${d.cap}`);
+    if (d.prod) facts.push(Object.entries(d.prod).map(([r, v]) => `${ICON[r].replace('<svg', '<svg width="14" height="14" style="vertical-align:-2px"')} +${v}/day`).join(' '));
+    if (d.mood) facts.push('😊 Happier town');
+    if (d.jobs) facts.push(`👷 ${d.jobs} jobs`);
+  } else if (k === 'road' || k === 'canal') facts.push('Free');
+  return `<span class="mimg">${img}</span><div class="mtext"><b>${name}${locked ? ` <em class="lockt">🔒 ${TIERS[d.tier].name}</em>` : ''}</b><small>${ZONE_TEXT[k] || ''}</small>
+    <div class="zfacts">${facts.map((f) => `<span>${f}</span>`).join('')}${d ? `<span class="cost">${costChips(d.cost)}<em> each</em></span>` : ''}</div></div>`;
+}
 // Fly so the target sits in the upper part of the screen, above an open sheet.
 function flyAbove(x, y, tw) {
   const { ch, cw } = screenSize();
@@ -112,22 +144,31 @@ export function setMode(mode, background = false) {
   let html = '';
   if (mode.kind === 'build' || mode.kind === 'move') {
     const d = DEFS[mode.type];
-    html = `<div class="mlabel"><img src="${bIcon(mode.type)}" alt="" style="${mode.flip ? 'transform:scaleX(-1)' : ''}"><span>${mode.kind === 'move' ? 'Move ' : ''}${d.name}</span></div>${mode.kind === 'build' ? `<div class="cost">${costChips(d.cost)}</div>` : ''}`
-      + (mode.kind === 'build' ? `<button class="tool" data-act="flip"><span class="ic">⟲</span>Turn</button>` : '');
+    html = `<div class="minfo"><span class="mimg"><img src="${bIcon(mode.type)}" alt="" style="${mode.flip ? 'transform:scaleX(-1)' : ''}"></span>
+      <div class="mtext"><b>${mode.kind === 'move' ? 'Move: ' : ''}${d.name}</b><small>${mode.kind === 'move' ? 'Tap a green spot to move it there. Free of charge.' : esc((d.desc || 'Tap a green spot on the map to place it.').split('. ')[0].replace(/\.$/, '')) + '.'}</small>${mode.kind === 'build' ? `<div class="cost">${costChips(d.cost)}</div>` : ''}</div></div>
+      <div class="mact">${mode.kind === 'build' ? `<button class="pill" data-act="flip">⟲ Turn</button>` : ''}<button class="pill done" data-act="cancelmode">✓ Done</button></div>`;
+    bar.className = 'buildbar';
   } else if (mode.kind === 'zone') {
-    html = Object.entries(ZONES).map(([k, z]) =>
-      `<button class="tool ${mode.zone === k ? 'on' : ''} ${DEFS[z.builds].tier > S.tier ? 'disabled' : ''}" data-act="zone" data-arg="${k}"><span class="sw" style="background:${z.color}"></span>${z.name}</button>`).join('')
-      + `<button class="tool ${mode.zone === 'road' ? 'on' : ''}" data-act="zone" data-arg="road"><span class="sw road"></span>Road</button>`
-      + `<button class="tool ${mode.zone === 'canal' ? 'on' : ''}" data-act="zone" data-arg="canal"><span class="sw canal"></span>Canal</button>`
-      + `<button class="tool ${mode.zone === 'erase' ? 'on' : ''}" data-act="zone" data-arg="erase"><span class="sw erase"></span>Erase</button>`
-      + `<button class="tool ${S.undo && S.undo.length ? '' : 'disabled'}" data-act="undo"><span class="ic">↶</span>Undo</button>`;
+    const tile = (k, name, img, extra = '') => `<button class="ztile ${mode.zone === k ? 'on' : ''} ${extra}" data-act="zone" data-arg="${k}"><span class="zimg">${img}</span><span class="zname">${name}</span></button>`;
+    const zt = (k) => { const z = ZONES[k], locked = DEFS[z.builds].tier > S.tier; return tile(k, z.name, `<img src="${zIcon(z.builds)}" alt="">${locked ? '<i class="zlock">🔒</i>' : ''}<i class="zdot" style="background:${z.color}"></i>`, locked ? 'locked' : ''); };
+    const group = (label, items) => `<div class="zgroup"><div class="zglabel">${label}</div><div class="zgitems">${items}</div></div>`;
+    html = `<div class="zinfo">${zoneInfo(mode.zone)}</div>
+      <div class="zrow"><div class="zscroll">
+        ${group('Homes & food', zt('housing') + zt('farmland') + zt('pasture'))}
+        ${group('Work', zt('woodlot') + zt('workshop') + zt('mining') + zt('shops'))}
+        ${group('Town', zt('park') + tile('road', 'Road', '<span class="zsw road"></span>') + tile('canal', 'Canal', '<span class="zsw canal"></span>'))}
+        ${group('Tidy', tile('erase', 'Erase', '<span class="zsw erase"></span>'))}
+      </div>
+      <div class="zact"><button class="pill ${S.undo && S.undo.length ? '' : 'disabled'}" data-act="undo" aria-label="Undo">↶ Undo</button><button class="pill done" data-act="cancelmode">✓ Done</button></div></div>`;
+    bar.className = 'zones';
     if (!S.settings.zoneHint && !tutorialActive()) { S.settings.zoneHint = true; saveSettings(); toast('Paint with your finger or S Pen. Two fingers move the map (with the S Pen, one finger does).'); }
   } else if (mode.kind === 'found') {
-    html = `<div class="mlabel"><span>Pick land for settlers</span></div><div class="cost">${costChips(FOUND_COST)}</div>`;
+    html = `<div class="minfo"><span class="mimg">🧭</span><div class="mtext"><b>Found a settlement</b><small>Tap any open land on Earth for your settlers.</small><div class="cost">${costChips(FOUND_COST)}</div></div></div><div class="mact"><button class="pill done" data-act="cancelmode">✕ Cancel</button></div>`;
+    bar.className = 'buildbar';
   }
-  html += `<button class="tool done" data-act="cancelmode"><span class="ic">✓</span>Done</button>`;
-  bar.classList.toggle('zones', mode.kind === 'zone');
+  const sc = bar.querySelector('.zscroll'), keepX = sc ? sc.scrollLeft : 0, keepY = sc ? sc.scrollTop : 0;
   if (!(background && touchingUI)) setHTML(bar, html); // a background refresh never redraws under a finger
+  { const sc2 = bar.querySelector('.zscroll'); if (sc2) { sc2.scrollLeft = keepX; sc2.scrollTop = keepY; } }
   bar.classList.remove('hidden');
   markDirty(); highlightBottom();
 }

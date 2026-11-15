@@ -1125,9 +1125,15 @@ export const DECOR_DENSITY = { [B.FOREST]: 0.92, [B.TAIGA]: 0.9, [B.JUNGLE]: 0.9
 
 // Small icon images for UI (data URLs) of buildings.
 export function spriteIcon(spr, size = 56) {
+  // crop to what is actually drawn, so small buildings fill their icon too
+  const w0 = spr.c.width, h0 = spr.c.height, d = spr.c.getContext('2d').getImageData(0, 0, w0, h0).data;
+  let x0 = w0, y0 = h0, x1 = 0, y1 = 0;
+  for (let y = 0; y < h0; y++) for (let x = 0; x < w0; x++) if (d[(y * w0 + x) * 4 + 3] > 24) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+  if (x1 < x0) { x0 = 0; y0 = 0; x1 = w0 - 1; y1 = h0 - 1; }
+  const bw = x1 - x0 + 1, bh = y1 - y0 + 1;
   const c = document.createElement('canvas'); c.width = c.height = size * 2;
   const g = c.getContext('2d');
-  const s = Math.min((size * 2) / spr.c.width, (size * 2) / spr.c.height) * 0.95;
-  g.drawImage(spr.c, (size * 2 - spr.c.width * s) / 2, (size * 2 - spr.c.height * s) / 2, spr.c.width * s, spr.c.height * s);
+  const s = Math.min((size * 2) / bw, (size * 2) / bh) * 0.92;
+  g.drawImage(spr.c, x0, y0, bw, bh, (size * 2 - bw * s) / 2, (size * 2 - bh * s) / 2, bw * s, bh * s);
   return c.toDataURL();
 }
