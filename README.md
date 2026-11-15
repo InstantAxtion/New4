@@ -42,7 +42,7 @@ there are no timers, and you can pause whenever you like.
   - Nights: fireflies, lantern-carrying walkers, flickering windows and moonlight on the water.
   - Neighbour villages with smoke, folk and sheep, and caravans and pilgrims travelling between them.
   - Sound that follows the view: waves, rivers, town bustle, forest birds, owls and thunder.
-  - A **Gentle visuals** setting turns the extra effects down.
+  - A **Gentle visuals** setting turns the extra effects down, and **Always daytime** and **Always fair weather** switch off night and weather.
 - **Explore and connect**: send explorers to 30 natural wonders of the world for a journal of discoveries. Highways link your towns with carts travelling them. A **Shipyard** adds a fishing fleet and ferries for short sea crossings. Mines and quarries turn up rare finds (silver, gold, gems, fossils, geodes).
 - **People and stories**: seasonal **festivals** (Blossom Day, Midsummer Fair, Harvest Fair, Midwinter Lights), small **requests** from named villagers (find a lost goat, build a well, help a family), and a **royal family** whose ruler marries, has heirs and passes on the crown, with portraits and titles that grow with the realm.
 - **Keeping your realm**: back up a realm as a file or code and restore it from the main menu. **Trophies** are earned across all realms. **Realm history** shows charts of villagers and stores, plus a timeline of milestones.

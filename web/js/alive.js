@@ -142,8 +142,9 @@ export function drawRowLife(ctx, y, v) {
 
 // ---------------- emotes over walkers ----------------
 export function emoteFor(w, t, night, isTavern) {
-  const ph = (t + (w.ph || 0) * 7) % 18;
-  if (ph > 2.6) return null;
+  // phase from the person's id (not their walking step, which changes every frame), shown for a few calm seconds
+  const ph = (t + ((w.pid || 0) * 7.3) % 30) % 30;
+  if (ph > 4.5) return null;
   if (night > 0.5) return w.moving ? null : '💤';
   if (isTavern) return '♪';
   if (w.pid % 5 === 0) return '♥';
@@ -272,7 +273,7 @@ export function drawAir(ctx, v, dt) {
 // ---------------- light through the day ----------------
 // Sun direction and how long shadows are: long at dawn and dusk, short at midday.
 export function sun() {
-  const f = (((S.day / SE.CYCLE) % 1) + 1) % 1; // 0..1 through the day; night ~0.78-0.9
+  const f = SE.dayFrac(S.day); // 0..1 through the day; night ~0.78-0.9
   const dayF = f < 0.78 ? f / 0.78 : 0; // 0 sunrise .. 1 sunset
   const len = dayF ? 0.4 + Math.abs(dayF - 0.5) * 2.2 : 0;
   return { dx: dayF ? (0.5 - dayF) * 2 : 0, len, f };
@@ -306,7 +307,7 @@ export function updateSky(dt) {
   const morning = f > 0.0 && f < 0.18;
   if (w.kind === 'rain' && !w.stormRolled) { w.stormRolled = true; w.storm = Math.random() < 0.35; }
   if (w.kind !== 'rain') w.stormRolled = false;
-  const fogTarget = morning && w.kind !== 'rain' && (Math.floor(S.day / SE.CYCLE) % 3 === 0) ? 1 : 0;
+  const fogTarget = morning && !S.settings.noweather && w.kind !== 'rain' && (Math.floor(S.day / SE.CYCLE) % 3 === 0) ? 1 : 0;
   wx.fog += (fogTarget - wx.fog) * Math.min(1, dt * 0.4);
   wx.storm += ((w.kind === 'rain' && w.storm ? 1 : 0) - wx.storm) * Math.min(1, dt * 0.5);
   if (wx.storm > 0.5 && Math.random() < dt * 0.12) { wx.flash = 1; emitThunder(); }

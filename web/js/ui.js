@@ -18,7 +18,7 @@ import * as ST from './stories.js';
 import * as RC from './records.js';
 import { STYLES } from './sprites.js';
 import { townStyle } from './render.js';
-import { seasonIndex, SEASONS, SEASON_ICONS, nightAt, farmSeason } from './seasons.js';
+import { seasonIndex, SEASONS, SEASON_ICONS, nightAt, farmSeason, setNightOff } from './seasons.js';
 
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -357,7 +357,7 @@ function showBackup() {
 // ---------------- settings (shared by the in-game menu and the main menu) ----------------
 function settingsHTML(attr) {
   return VOLUMES.map(([k, label]) => `<label class="slider"><span>${label}<b data-volv="${k}">${Math.round(vol(k) * 100)}%</b></span><input type="range" min="0" max="100" step="5" value="${Math.round(vol(k) * 100)}" data-vol="${k}"></label>`).join('')
-    + [['haptics', 'Vibration'], ['gentle', 'Gentle visuals (fewer effects, saves battery)']].map(([k, label]) => `<div class="toggle"><span>${label}</span><button class="switch ${S.settings[k] ? 'on' : ''}" ${attr}="${k}" aria-label="${label}" aria-pressed="${!!S.settings[k]}"></button></div>`).join('');
+    + [['haptics', 'Vibration'], ['nonight', 'Always daytime (no night)'], ['noweather', 'Always fair weather (no rain, snow, storms or fog)'], ['gentle', 'Gentle visuals (fewer effects, saves battery)']].map(([k, label]) => `<div class="toggle"><span>${label}</span><button class="switch ${S.settings[k] ? 'on' : ''}" ${attr}="${k}" aria-label="${label}" aria-pressed="${!!S.settings[k]}"></button></div>`).join('');
 }
 // Volume sliders update live without redrawing the panel (so the thumb never jumps out from under the finger).
 document.addEventListener('input', (e) => {
@@ -369,6 +369,7 @@ document.addEventListener('input', (e) => {
 });
 document.addEventListener('change', (e) => { if (e.target && e.target.dataset && e.target.dataset.vol) { saveSettings(); if (e.target.dataset.vol === 'sfx') sfx('tap'); } });
 // Flip a switch on screen straight away, whatever else is redrawing.
+export function applyVisuals() { setNightOff(S.settings.nonight); }
 function flipSwitch(btn, on) { if (btn) { btn.classList.toggle('on', on); btn.setAttribute('aria-pressed', on); } }
 
 // ---------------- menu ----------------
@@ -535,7 +536,7 @@ function act(name, arg, el) {
     case 'goto': { const t = townById(+arg); if (t) { closeSheet(); flyTo(t.x, t.y, 56); } break; }
     case 'gonb': { const n = S.neighbors[+arg] && S.neighbors.find((q) => q.id === +arg); if (n) { flyAbove(n.x, n.y, 48); showInfo(n.x, n.y); } break; }
     case 'found': closeSheet(); setMode({ kind: 'found' }); toast('Pick open land anywhere for your settlers.'); if (cam.tw > 30) flyTo(null, null, 10, 0.8, true); break;
-    case 'set': S.settings[arg] = !S.settings[arg]; flipSwitch(el, S.settings[arg]); saveSettings(); applySettings(); touchingUI = false; refreshSheet(); if (arg === 'haptics' && S.settings.haptics) haptic(); break;
+    case 'set': S.settings[arg] = !S.settings[arg]; flipSwitch(el, S.settings[arg]); saveSettings(); applySettings(); applyVisuals(); touchingUI = false; refreshSheet(); if (arg === 'haptics' && S.settings.haptics) haptic(); break;
     case 'savenow': save(); toast('Your realm is saved.'); break;
     case 'fullscreen': if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen().catch(() => {}); break;
     case 'mainmenu': backToMenu(); break;
@@ -578,13 +579,14 @@ function bindActions(root) {
 }
 
 // ---------------- map taps ----------------
+let lastBirds = -1e9;
 export function handleTap(px, py) {
   resumeAudio();
   const tile = pickTile(px, py);
   if (!tile) return;
   const mode = M.mode;
   if (!mode && ST.tapLost(tile.x, tile.y)) { sfx('quest'); haptic('medium'); return; }
-  if (!mode && cam.tw >= TILE_MODE_TW) { const bt = world.biome[tile.y * W + tile.x]; if (!S.buildings.has(tile.y * W + tile.x) && (bt === B.FOREST || bt === B.JUNGLE || bt === B.TAIGA || bt === B.GRASS)) scatterBirds(px, py); }
+  if (!mode && cam.tw >= TILE_MODE_TW) { const bt = world.biome[tile.y * W + tile.x]; if (!S.buildings.has(tile.y * W + tile.x) && (bt === B.FOREST || bt === B.JUNGLE || bt === B.TAIGA) && Math.random() < 0.2 && performance.now() - lastBirds > 30000) { lastBirds = performance.now(); scatterBirds(px, py); } }
   if (!mode && cam.tw >= TILE_MODE_TW) { const w = walkerAt(px, py); if (w && w.pid) { sfx('tap'); showPerson(w.town, w.pid); return; } }
   if (mode && mode.kind === 'start') return startTap(tile);
   if (mode && mode.kind === 'build') {
@@ -724,7 +726,7 @@ function menuPage(page) {
     if (m) { sfx('tap'); if (m.dataset.m === 'continue') { if (load(latest.slot)) enterGame(); } else menuPage(m.dataset.m); return; }
     if (play) { sfx('tap'); if (load(+play.dataset.slot)) enterGame(); return; }
     if (nw) { sfx('tap'); menuPage('new'); return; }
-    if (set) { const k = set.dataset.set; S.settings[k] = !S.settings[k]; flipSwitch(set, S.settings[k]); saveSettings(); applySettings(); sfx('tap'); if (k === 'haptics' && S.settings.haptics) haptic(); return; }
+    if (set) { const k = set.dataset.set; S.settings[k] = !S.settings[k]; flipSwitch(set, S.settings[k]); saveSettings(); applySettings(); applyVisuals(); sfx('tap'); if (k === 'haptics' && S.settings.haptics) haptic(); return; }
     if (del) {
       sfx('tap');
       if (!del.dataset.confirm) { del.dataset.confirm = 1; del.textContent = 'Sure?'; del.style.width = 'auto'; del.style.padding = '0 10px'; del.style.borderRadius = '16px'; return; }

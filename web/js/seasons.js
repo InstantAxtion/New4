@@ -46,8 +46,13 @@ export function farmSeason(day, lat) {
 // Day and night: one gentle cycle every CYCLE in-game days (about 5 minutes of play).
 // Returns darkness n (0..1) and warmth w (0..1) for sunrise/sunset colour.
 export const CYCLE = 12;
+// "Always day" setting: the clock keeps a bright late morning.
+let nightOff = false;
+export function setNightOff(v) { nightOff = !!v; }
+export const dayFrac = (day) => (nightOff ? 0.35 : (((day / CYCLE) % 1) + 1) % 1);
 export function nightAt(day) {
-  const f = (((day / CYCLE) % 1) + 1) % 1;
+  if (nightOff) return { n: 0, w: 0 };
+  const f = dayFrac(day);
   let n = 0;
   if (f >= 0.68 && f < 0.78) n = smooth((f - 0.68) / 0.1);
   else if (f >= 0.78 && f < 0.9) n = 1;

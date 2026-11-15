@@ -62,13 +62,13 @@ function pad(freq, t, dur, vol = 0.08) {
     o.connect(f); f.connect(g); g.connect(musicBus); o.start(t); o.stop(t + dur + 0.1);
   }
 }
-function pluck(freq, t, vol = 0.12, bus = musicBus) {
+function pluck(freq, t, vol = 0.12, bus = musicBus, len = 2.2) {
   const o = ac.createOscillator(), o2 = ac.createOscillator(), g = ac.createGain();
   o.type = 'sine'; o.frequency.value = freq; o2.type = 'sine'; o2.frequency.value = freq * 2.005;
   const g2 = ac.createGain(); g2.gain.value = 0.25;
-  g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0008, t + 2.2);
+  g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0008, t + len);
   o.connect(g); o2.connect(g2); g2.connect(g); g.connect(bus);
-  o.start(t); o2.start(t); o.stop(t + 2.4); o2.stop(t + 2.4);
+  o.start(t); o2.start(t); o.stop(t + len + 0.2); o2.stop(t + len + 0.2);
 }
 
 let bar = 0, nextBar = 0;
@@ -208,7 +208,7 @@ export function sfx(kind) {
   if (!ac || vol('sfx') <= 0) return;
   resumeAudio();
   const t = ac.currentTime + 0.01;
-  if (kind === 'tap') { pluck(mtof(BASE + 24 + 7), t, 0.05, sfxBus); }
+  if (kind === 'tap') { pluck(mtof(BASE + 24 + 7), t, 0.016, sfxBus, 0.35); }
   else if (kind === 'place') {
     // soft wooden "tok"
     const o = ac.createOscillator(), g = ac.createGain();

@@ -122,7 +122,8 @@ function rollWeather() {
   weather.rainTarget = weather.kind === 'rain' ? 1 : 0;
 }
 export function updateWeather(dt) {
-  if (S.day >= weather.until || weather.until - S.day > 10) rollWeather();
+  if (S.settings.noweather) { weather.kind = 'clear'; weather.coverTarget = 0.22; weather.rainTarget = 0; weather.until = 0; }
+  else if (S.day >= weather.until || weather.until - S.day > 10) rollWeather();
   const k = Math.min(1, dt * 0.25);
   weather.cover += (weather.coverTarget - weather.cover) * k;
   weather.rain += (weather.rainTarget - weather.rain) * k;

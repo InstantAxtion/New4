@@ -4,7 +4,7 @@ import { buildSprites } from './sprites.js';
 import { S, update, save, loadSettings, recomputeTowns } from './game.js';
 import { initRender, frame, cam, clampCam, markDirty } from './render.js';
 import { initInput } from './input.js';
-import { initUI, showTitle, setMode } from './ui.js';
+import { initUI, showTitle, setMode, applyVisuals } from './ui.js';
 import { initTutorial, updateTutorial } from './tutorial.js';
 import './folk.js';
 import './explore.js';
@@ -19,7 +19,7 @@ const $ = (s) => document.querySelector(s);
 const progress = (p, msg) => { $('#loadfill').style.width = `${Math.round(p * 100)}%`; if (msg) $('#loadmsg').textContent = msg; };
 
 async function boot() {
-  loadSettings();
+  loadSettings(); applyVisuals();
   const cap = window.Capacitor;
   if (cap && cap.isNativePlatform && cap.isNativePlatform()) document.body.classList.add('native');
   progress(0.01, 'Sharpening quills…');
