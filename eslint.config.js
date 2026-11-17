@@ -3,6 +3,7 @@
 // undefined names, unused code, duplicate keys, unreachable code and the like.
 import js from '@eslint/js';
 import globals from 'globals';
+import importPlugin from 'eslint-plugin-import';
 
 export default [
   { ignores: ['android/**', 'node_modules/**', 'dist/**', 'web/data/**'] },
@@ -10,7 +11,12 @@ export default [
   {
     files: ['web/js/**/*.js'],
     languageOptions: { ecmaVersion: 2023, sourceType: 'module', globals: { ...globals.browser } },
+    plugins: { import: importPlugin },
     rules: {
+      // every imported name must really be exported by that file, and the file must exist
+      'import/named': 'error',
+      'import/no-unresolved': ['error', { ignore: ['^@capacitor/'] }],
+      'import/export': 'error',
       'no-unused-vars': ['warn', { args: 'none', caughtErrors: 'none', varsIgnorePattern: '^_' }],
       'no-empty': ['warn', { allowEmptyCatch: true }],
       'no-cond-assign': ['error', 'except-parens'],
