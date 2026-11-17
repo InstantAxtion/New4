@@ -23,16 +23,18 @@ test('roads first, demand, abandonment, walls, fires and the budget', async ({ p
     for (let dx = -8; dx <= 8; dx++) if (g.setZone('wall', c.x + dx, c.y + 6)) walls++;
     const stoneUsed = stone - g.S.res.stone;
     // let the town grow, then cut a house off from every road and wait
-    for (let i = 0; i < 400; i++) g.update(g.DAY_SECONDS / 4);
-    let house = null; for (const [i, b] of g.S.buildings) if (b.t === 'house' && b.p >= 1) { house = i; break; }
+    // no raids while we watch (a raid could burn the house we are testing)
+    const calm = () => { g.S.nextRaid = g.S.day + 999; g.S.raids = []; };
+    for (let i = 0; i < 400; i++) { calm(); g.update(g.DAY_SECONDS / 4); }
+    let house = null; for (const [i, b] of g.S.buildings) if (b.t === 'house' && b.p >= 1 && !b.ab && !b.fire) { house = i; break; }
     const hb = g.S.buildings.get(house);
     const keep = new Map(L.roads), keepP = new Set(g.S.proads);
     const nb = [0, 1, 2, 3].map((d) => { const [nx, ny] = L.stepTile(house % 2000, Math.floor(house / 2000), d); return ny * 2000 + nx; });
     for (const j of nb) { L.roads.delete(j); g.S.proads.delete(j); }
-    for (let i = 0; i < 48; i++) { for (const j of nb) { L.roads.delete(j); g.S.proads.delete(j); } g.update(g.DAY_SECONDS / 4); }
+    for (let i = 0; i < 48; i++) { for (const j of nb) { L.roads.delete(j); g.S.proads.delete(j); } calm(); g.update(g.DAY_SECONDS / 4); }
     const abandoned = hb.ab;
     for (const [k, v] of keep) L.roads.set(k, v); for (const k of keepP) g.S.proads.add(k);
-    for (let i = 0; i < 8; i++) g.update(g.DAY_SECONDS / 4);
+    for (let i = 0; i < 8; i++) calm(), g.update(g.DAY_SECONDS / 4);
     const back = hb.ab;
     // a raid that breaks through sets unprotected buildings alight; they burn down to ruins you can rebuild
     const lit = C.raidFires(c, 3);
