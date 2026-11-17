@@ -3,6 +3,7 @@ import { S, on, emit, townById, groundDist2, continentAt, hasTech, loseTown, ann
 import { tileWX, tileWY } from './world.js';
 import { YEAR } from './seasons.js';
 import { kingdoms, realmsChanged } from './kingdoms.js';
+import { wallDefence, raidFires } from './city.js';
 
 
 const dist = (a, b) => Math.sqrt(groundDist2(a.x, a.y, b.x, b.y));
@@ -18,7 +19,7 @@ function townBuildings(t, type) { let n = 0; for (const b of S.buildings.values(
 export const garrisonCap = (t) => 10 * townBuildings(t, 'barracks') + 10 * townBuildings(t, 'fort');
 export function defenceOf(t) {
   const fm = hasTech('fortifications') ? 1.3 : 1;
-  let d = (t.garrison || 0) * soldierPow() + townBuildings(t, 'tower') * 4 * fm + townBuildings(t, 'fort') * 15 * fm + (t.capital ? 6 : 2);
+  let d = (t.garrison || 0) * soldierPow() + townBuildings(t, 'tower') * 4 * fm + townBuildings(t, 'fort') * 15 * fm + wallDefence(t) * fm + (t.capital ? 6 : 2);
   if (S.army && !S.army.march && S.army.at === t.id) d += armyPow();
   return Math.round(d);
 }
@@ -134,8 +135,9 @@ function resolveRaid(raid, t) {
       if (n && r) { r.members.push(n.id); realmsChanged(); }
       emit('toast', `🔥 ${t.name} has been captured by the ${raid.name}! Raise an army to win it back.`);
     } else {
-      (t.chron ||= []).unshift({ d: Math.floor(S.day), s: `Raiders from the ${raid.name} carried off supplies.` });
-      emit('toast', `🔥 Raiders broke through at ${t.name} and carried off ${lost.join(', ') || 'supplies'}. More soldiers, towers or a fort will help.`);
+      const burned = raidFires(t, (raid.str / Math.max(1, def)) * 1.5);
+      (t.chron ||= []).unshift({ d: Math.floor(S.day), s: `Raiders from the ${raid.name} carried off supplies${burned ? ` and set ${burned} building${burned > 1 ? 's' : ''} alight` : ''}.` });
+      emit('toast', `🔥 Raiders broke through at ${t.name}, carried off ${lost.join(', ') || 'supplies'}${burned ? ` and set ${burned} building${burned > 1 ? 's' : ''} on fire` : ''}. Walls, towers and forts protect the buildings near them.`);
     }
   }
   S.nextRaid = S.day + 28 + Math.random() * 30 - S.tier * 2;

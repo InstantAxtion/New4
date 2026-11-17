@@ -27,6 +27,7 @@ web/
       records.js        backups, trophies, history
       kingdoms.js       neighbouring kingdoms and migrations
       war.js            raids, garrisons, the field army
+      city.js           roads first, demand, taxes and budget, land value, needs and abandonment, walls, fires
       seasons.js        calendar, seasons, day and night
     world.js  rivers.js  regions.js  noise.js   the Earth itself
     render.js           camera, the frame loop, the map (overview and tiles), labels
@@ -73,7 +74,7 @@ the same folder with Capacitor.
    chime, the renderer pops the building. Prefer an event over importing another system.
 4. **Hooks break import cycles.** Where `game.js` needs an answer from a module that imports it
    (for example "is this tile a street?"), that module registers a callback (`setStreetCheck`,
-   `setRulerFx`...). Look for `set...` functions in `game.js`.
+   `setRulerFx`, `setCityHooks`...). Look for `set...` functions in `game.js`.
 5. **Rendering reads state; it never changes it.** `render.js` draws from `S` every frame. The only
    state it owns is visual: walkers, particles, the camera.
 6. **The UI is HTML strings.** Panels are built by `openSheet(kind, () => html)` and redrawn when

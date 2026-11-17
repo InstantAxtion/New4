@@ -8,7 +8,9 @@ Pick any spot on the planet, then grow from a hamlet into a kingdom at your own 
   rainforests, taiga, tundra and ice follow their real locations. Every tile knows which country it's in.
 - **Pick any homeland**: the start screen rates the woodland, stone, farmland and coast around the spot you choose.
 - **Mixed building**: paint Housing, Farmland and Workshop zones, and villagers build them over time. Place everything else yourself: Lumber Camp, Woodlot, Pasture, Quarry, Mining Pit, Iron Mine, Shops, Fishing Dock, Watchtower, Market and more.
-  Place key buildings yourself: Lumber Camp, Quarry, Iron Mine, Fishing Dock, Watchtower and Market.
+- **City building, olden-times style**: zones only grow beside a road, and only while the realm wants them (demand bars for homes, farms and workshops). Set the tax rate in the Budget (tap your gold). Homes level up with land value: wells, chapels, parks, markets and water raise it, pits and workshops lower it. Turn on the Land value view to see it.
+- **Needs and abandonment**: buildings cut off from every road, or homes without fresh water from Village tier, show a warning and are abandoned after ten days. Fix the need and families come back.
+- **Town defence**: paint stone walls (a street through a wall becomes a gate). Towers, forts and walls protect what's around them. Raiders who break through set unprotected buildings on fire, and they burn down to ruins you can rebuild for half the cost.
 - **Expansion**: your border grows with your town, and Watchtowers push it further. Found new settlements anywhere on Earth.
 - **Peaceful neighbours**: about 600 villages around the world. Trade with them and send gifts,
   and close friends can join your kingdom.

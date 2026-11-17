@@ -26,7 +26,7 @@ export function showRealm() {
         `<button class="item" data-act="gonb" data-arg="${n.id}"><div><b>${esc(n.leader)} of ${esc(n.name)}</b><div class="meta">${esc(n.req.text)}</div></div><span>➜</span></button>`).join('')}</div></div>` : ''}
       ${contractSection()}${requestsSection()}${royalSection()}${exploreSection()}${caravanSection()}
       <div class="row"><button class="btn small" data-act="progress">🏆 Progress</button>${S.lastReport ? '<button class="btn small" data-act="yearrep">📖 Last year</button>' : ''}</div>
-      <div class="row"><button class="btn small" data-act="history">📈 Realm history</button></div>
+      <div class="row"><button class="btn small" data-act="history">📈 Realm history</button><button class="btn small" data-act="budget">💰 Budget &amp; taxes</button></div>
       <div class="section"><h3>Neighbours in reach</h3>${contacts.length ? `<div class="list">${contacts.slice(0, 12).map((n) =>
         `<button class="item" data-act="gonb" data-arg="${n.id}"><div><b>${esc(n.name)}</b><div class="meta">${Math.floor(n.pop)} folk · has ${n.surplus} · wants ${n.want}</div></div><span>${n.friend >= 100 ? '💛' : '🤝 ' + Math.floor(n.friend)}</span></button>`).join('')}</div>`
         : `<div class="note">No villages within ${CONTACT_RANGE} tiles yet. Explore the map or found settlements near others.</div>`}</div>

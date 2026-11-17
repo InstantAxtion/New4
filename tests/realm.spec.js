@@ -1,12 +1,12 @@
 import { test, expect } from '@playwright/test';
-import { openGame, startRealm, closePanels } from './helpers.js';
+import { zoneTownSrc, openGame, startRealm, closePanels } from './helpers.js';
 
 test('a realm grows, builds roads and survives save and load', async ({ page }) => {
   const errors = await openGame(page);
   await startRealm(page, { tier: 1 });
-  const r = await page.evaluate(async () => {
-    const g = await import('./js/game.js'); const L = await import('./js/life.js'); const c = g.S.towns[0];
-    for (let dy = -7; dy <= 7; dy++) for (let dx = -3; dx <= 3; dx++) if ((dx * 3 + dy) % 4 && Math.abs(dx) + Math.abs(dy) > 3) g.setZone(dy % 3 ? 'housing' : 'farmland', c.x + dx, c.y + dy);
+  const r = await page.evaluate(async (src) => {
+    const g = await import('./js/game.js'); const L = await import('./js/life.js');
+    await (0, eval)(src)(3, 7);
     g.pickResearch('rotation');
     for (let i = 0; i < 1200; i++) g.update(g.DAY_SECONDS / 4);
     L.updateRoads();
@@ -15,7 +15,7 @@ test('a realm grows, builds roads and survives save and load', async ({ page }) 
     const after = { pop: Math.round(g.totalPop()), buildings: g.S.buildings.size, research: g.S.research.done.length };
     let under = 0; for (const [i] of L.roads) { const b = g.S.buildings.get(i); if (b && b.t !== 'townhall' && !g.CROSSINGS.has(b.t)) under++; }
     return { before, after, roads: L.roads.size, under };
-  });
+  }, zoneTownSrc);
   expect(r.before.pop).toBeGreaterThan(20);
   expect(r.after).toEqual(r.before);
   expect(r.roads).toBeGreaterThan(5);

@@ -331,6 +331,10 @@ let streetCheck = () => false;
 let ferryCheck = () => false;
 export function setFerryCheck(f) { ferryCheck = f; }
 export function setStreetCheck(f) { streetCheck = f; }
+// City hooks (registered by city.js and life.js, which import this module):
+let roadNear = () => true, demandOk = () => true, landOk = () => true;
+const wallTool = { can: () => false, place: () => false };
+export function setCityHooks(h) { if (h.wallCan) { wallTool.can = h.wallCan; wallTool.place = h.wallPlace; } if (h.roadNear) roadNear = h.roadNear; if (h.demandOk) demandOk = h.demandOk; if (h.landOk) landOk = h.landOk; }
 export const byRiver = (x, y) => neighbors(x, y).some(([nx, ny]) => ny >= 0 && ny < H && (riverAt(nx, ny) || S.canals.has(idxOf(wrapX(nx), ny))));
 const adjacent = (x, y, pred) => neighbors(x, y).some(([nx, ny]) => ny >= 0 && ny < H && pred(biomeAt(nx, ny)));
 const affordable = (cost) => Object.entries(cost || {}).every(([k, v]) => S.res[k] >= v);
@@ -378,6 +382,7 @@ export function recomputeTowns() {
     const d = DEFS[b.t];
     if (b.p >= 1) {
       t.n++; if (b.t === 'tower') t.towers++;
+      if (b.ab || b.fire) continue; // empty or burning: no homes, no jobs
       t.capRaw += (d.cap || 0) * (b.t === 'house' ? HOUSE_CAP_MULT[(b.lv || 1) - 1] : 1); t.jobs += d.jobs || 0;
     }
   }
@@ -396,6 +401,7 @@ export function canPlace(type, x, y, opt = {}) {
   const i = idxOf(x, y), b = world.biome[i], d = DEFS[type];
   const free = (j) => !taken(j) || (opt.moving !== undefined && anchorOf(j) === opt.moving);
   if (!free(i)) return { ok: false, reason: 'Something is already built here.' };
+  if (S.walls && S.walls.has(i)) return { ok: false, reason: 'A wall stands here.' };
   if (BIG.has(type)) {
     const own0 = ownerOf(x, y);
     for (const [fx, fy] of footprint(x, y).slice(1)) {
@@ -463,9 +469,9 @@ export function canZone(x, y) {
   x = wrapX(x);
   if (y < 1 || y >= H - 1) return false;
   const i = idxOf(x, y), b = world.biome[i];
-  if (taken(i) || !BUILDABLE.has(b) || riverAt(x, y) || streetCheck(i)) return false;
+  if (taken(i) || !BUILDABLE.has(b) || riverAt(x, y) || streetCheck(i) || (S.walls && S.walls.has(i))) return false;
   if (!ownerOf(x, y) || nearNeighbor(x, y)) return false;
-  return true;
+  return roadNear(x, y); // roads first: zones are painted along a road
 }
 // Roads you paint yourself are free; they can't cross buildings, water or rivers, and stay inside your borders.
 export function canRoad(x, y) {
@@ -501,8 +507,9 @@ export function canCanal(x, y) {
 export function setZone(zone, x, y) {
   x = wrapX(x);
   const i = idxOf(x, y);
-  if (zone === 'erase') { const a = S.zones.delete(i), r = S.proads.delete(i), c = S.canals.delete(i); if (a || r || c) { emit('change'); return true; } return false; }
+  if (zone === 'erase') { const a = S.zones.delete(i), r = S.proads.delete(i), c = S.canals.delete(i), w = S.walls ? S.walls.delete(i) : false; if (a || r || c || w) { emit('change'); return true; } return false; }
   if (zone === 'road') { if (!canRoad(x, y)) return false; S.zones.delete(i); S.proads.add(i); emit('change'); return true; }
+  if (zone === 'wall') { if (!wallTool.can(x, y)) return false; return wallTool.place(x, y); }
   if (zone === 'canal') { if (!canCanal(x, y)) return false; S.zones.delete(i); S.proads.delete(i); S.canals.add(i); emit('change'); return true; }
   if (ZONES[zone] && DEFS[ZONES[zone].builds].tier > S.tier) return false;
   if (!canZone(x, y) || S.zones.get(i) === zone || (zone === 'mining' && !rocky(x, y))) return false;
@@ -911,7 +918,7 @@ function step(dd) {
       for (const c of list) {
         if (free <= 0) break;
         const type = ZONES[c.z].builds, def = DEFS[type];
-        if (!affordable(def.cost)) continue;
+        if (!affordable(def.cost) || !demandOk(c.z)) continue; // nobody wants to move in or work here yet
         pay(def.cost); S.zones.delete(c.i);
         S.buildings.set(c.i, { t: type, p: 0, town: t.id, m: yieldMult(type, c.x, c.y), z: 1 });
         free--;
@@ -931,7 +938,7 @@ function step(dd) {
   for (const t of S.towns) { t.served = false; t._p = {}; }
   const cp = caps();
   for (const [i, b] of S.buildings) {
-    if (b.p < 1) continue;
+    if (b.p < 1 || b.ab || b.fire) continue;
     const d = DEFS[b.t];
     const t = townById(b.town);
     // Upkeep: pay a little each day, or idle until it can be paid (nothing ever breaks).
@@ -971,7 +978,7 @@ function step(dd) {
   if (changedIdle) { recomputeTowns(); emit('change'); }
   // Tools wear out slowly; cloth is worn; bread is eaten in place of some food.
   if (S.res.tools > 0) S.res.tools = Math.max(0, S.res.tools - 0.003 * producers * dd);
-  S.res.gold += pop * 0.02 * PACE.prod * dd * gcGold;
+  S.res.gold += pop * 0.02 * ((S.taxRate ?? 0.09) / 0.09) * PACE.prod * dd * gcGold; // taxes
   S.caravans = (S.caravans || []).filter(([a, b]) => townById(a) && townById(b));
   S.res.gold += S.caravans.length * 0.3 * PACE.prod * dd * (hasTalent('roads') ? 2 : 1) * (hasTech('roadbuilding') ? 1.25 : 1);
   stepResearch(dd);
@@ -1024,7 +1031,7 @@ function step(dd) {
     for (const [i, b] of S.buildings) {
       if (b.town !== t.id || b.t !== 'house' || b.p < 1) continue;
       const lv = b.lv || 1;
-      if (lv < 3 && upgradeOk(t, lv + 1) && affordable(UPGRADE_COST[lv])) { cand = [i, b]; if (Math.random() < 0.3) break; }
+      if (lv < 3 && !b.ab && upgradeOk(t, lv + 1) && landOk(i, lv + 1) && affordable(UPGRADE_COST[lv])) { cand = [i, b]; if (Math.random() < 0.3) break; }
     }
     if (!cand) continue;
     const b = cand[1], lv = (b.lv || 1) + 1;
@@ -1058,7 +1065,7 @@ function step(dd) {
 export function newGame(name, x, y) {
   S.started = true; S.name = name || 'Hearthlands'; S.day = 0; S.tier = 0; S.speed = 1;
   S.res = { food: 60, wood: 50, stone: 20, gold: 30, iron: 0, bread: 0, tools: 0, cloth: 0, ale: 0, pottery: 0, glass: 0, spices: 0, books: 0, flour: 0, wool: 0 };
-  S.hints = []; S.golden = false; S.undo = []; S.research = { cur: null, prog: 0, done: [], bank: 0 }; S.talents = []; S.contracts = []; S.yearMark = null; S.lastReport = null; S.realms = null; S.army = null; S.raids = []; S.capV = []; FOUND_COST = FOUND_COST_BASE;
+  S.hints = []; S.golden = false; S.undo = []; S.research = { cur: null, prog: 0, done: [], bank: 0 }; S.talents = []; S.contracts = []; S.taxRate = 0.09; S.walls = new Set(); S.yearMark = null; S.lastReport = null; S.realms = null; S.army = null; S.raids = []; S.capV = []; FOUND_COST = FOUND_COST_BASE;
   S.expeditions = []; S.explored = []; S.journal = []; S.treasures = {}; S.festsHeld = {}; S.requests = []; S.nextReq = 0; S.royal = null; S.hist = []; S.miles = [];
   S.towns = []; S.buildings = new Map(); S.zones = new Map(); S.proads = new Set(); S.canals = new Set(); S.caravans = []; S.occupied = new Map(); S.nextTownId = 1;
   S.questsDone = new Set(); S.stats = { trades: 0, gifts: 0, joins: 0 }; S.routes = [];
@@ -1091,9 +1098,9 @@ export function save() {
   const capital = S.towns.find((t) => t.capital) || S.towns[0];
   const data = {
     v: SAVE_VERSION, name: S.name, day: S.day, speed: S.speed, tier: S.tier, res: S.res, towns: S.towns,
-    buildings: [...S.buildings].map(([i, b]) => [i, b.t, +b.p.toFixed(3), b.town, +(b.m || 1).toFixed(2), b.z ? 1 : 0, b.lv || 1, b.f || 0, Math.round(b.d || 0)]),
+    buildings: [...S.buildings].map(([i, b]) => [i, b.t, +b.p.toFixed(3), b.town, +(b.m || 1).toFixed(2), b.z ? 1 : 0, b.lv || 1, b.f || 0, Math.round(b.d || 0), b.ab || 0, b.fire ? Math.round(b.fire) : 0]),
     zones: [...S.zones], proads: [...S.proads], canals: [...S.canals], caravans: S.caravans || [], nb: S.neighbors.filter((n) => n.friend || n.joined || n.req || (n.log && n.log.length) || n.pop > 70).map((n) => [n.id, n.friend, n.joined ? 1 : 0, +n.pop.toFixed(1), n.req || null, n.log || []]),
-    quests: [...S.questsDone], stats: S.stats, routes: S.routes || [], hints: S.hints || [], golden: S.golden ? 1 : 0, research: S.research, talents: S.talents || [], contracts: S.contracts || [], yearMark: S.yearMark || null, realms: S.realms || null, army: S.army || null, raids: S.raids || [], capV: (S.capV || []).filter((n) => !n.joined), garrison: S.towns.map((t) => [t.id, Math.round((t.garrison || 0) * 10) / 10]),
+    quests: [...S.questsDone], stats: S.stats, routes: S.routes || [], hints: S.hints || [], golden: S.golden ? 1 : 0, research: S.research, talents: S.talents || [], taxRate: S.taxRate ?? 0.09, walls: [...(S.walls || [])], contracts: S.contracts || [], yearMark: S.yearMark || null, realms: S.realms || null, army: S.army || null, raids: S.raids || [], capV: (S.capV || []).filter((n) => !n.joined), garrison: S.towns.map((t) => [t.id, Math.round((t.garrison || 0) * 10) / 10]),
     expeditions: S.expeditions || [], explored: S.explored || [], journal: S.journal || [], treasures: S.treasures || {}, festsHeld: S.festsHeld || {},
     requests: S.requests || [], nextReq: S.nextReq || 0, royal: S.royal || null, hist: S.hist || [], miles: S.miles || [], nextFolk: S.nextFolk || 1, cam: S.cam, nextTownId: S.nextTownId, tutorial: S.tutorial,
     meta: {
@@ -1129,10 +1136,10 @@ export function load(n = currentSlot) {
   S.towns = d.towns; S.routes = d.routes || []; S.nextTownId = d.nextTownId; S.stats = d.stats; S.questsDone = new Set(d.quests);
   S.tutorial = d.tutorial ?? 99; // realms from before the tutorial existed skip it
   for (const g of GOODS) if (S.res[g] === undefined) S.res[g] = 0;
-  S.hints = d.hints || []; S.golden = !!d.golden; S.undo = []; S.research = d.research || { cur: null, prog: 0, done: [], bank: 0 }; S.talents = d.talents || []; S.contracts = d.contracts || []; S.yearMark = d.yearMark || null; S.realms = d.realms || null; S.army = d.army || null; S.raids = d.raids || []; for (const [id, g] of d.garrison || []) { const t = S.towns.find((q) => q.id === id); if (t) t.garrison = g; } FOUND_COST = hasTalent('settler') ? { food: 25, wood: 25, gold: 15 } : FOUND_COST_BASE;
+  S.hints = d.hints || []; S.golden = !!d.golden; S.undo = []; S.research = d.research || { cur: null, prog: 0, done: [], bank: 0 }; S.talents = d.talents || []; S.contracts = d.contracts || []; S.taxRate = d.taxRate ?? 0.09; S.walls = new Set(d.walls || []); S.yearMark = d.yearMark || null; S.realms = d.realms || null; S.army = d.army || null; S.raids = d.raids || []; for (const [id, g] of d.garrison || []) { const t = S.towns.find((q) => q.id === id); if (t) t.garrison = g; } FOUND_COST = hasTalent('settler') ? { food: 25, wood: 25, gold: 15 } : FOUND_COST_BASE;
   S.expeditions = d.expeditions || []; S.explored = d.explored || []; S.journal = d.journal || []; S.treasures = d.treasures || {}; S.festsHeld = d.festsHeld || {};
   S.requests = d.requests || []; S.nextReq = d.nextReq || 0; S.royal = d.royal || null; S.hist = d.hist || []; S.miles = d.miles || []; if (d.nextFolk) S.nextFolk = d.nextFolk;
-  S.buildings = new Map(d.buildings.map(([i, t, p, town, m, z, lv, f, bd]) => [i, { t, p, town, m, z, lv: lv || 1, f: f || 0, d: bd || 0 }])); recomputeOccupied();
+  S.buildings = new Map(d.buildings.map(([i, t, p, town, m, z, lv, f, bd, ab, fire]) => [i, { t, p, town, m, z, lv: lv || 1, f: f || 0, d: bd || 0, ab: ab || 0, fire: fire || 0 }])); recomputeOccupied();
   S.zones = new Map(d.zones); S.proads = new Set(d.proads || []); S.canals = new Set(d.canals || []); S.caravans = d.caravans || [];
   S.neighbors = generateNeighbors(); S.capV = d.capV || []; S.neighbors.push(...S.capV);
   const cap = S.towns.find((t) => t.capital) || S.towns[0];

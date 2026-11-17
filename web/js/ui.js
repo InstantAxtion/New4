@@ -12,6 +12,8 @@ import * as XP from './explore.js';
 import * as ST from './stories.js';
 import * as RC from './records.js';
 import * as WAR from './war.js';
+import * as CITY from './city.js';
+import { showBudget } from './ui/budget.js';
 import { seasonIndex, SEASONS, SEASON_ICONS, nightAt } from './seasons.js';
 
 import { showArmy } from './ui/army.js';
@@ -90,11 +92,13 @@ export function setMode(mode, background = false) {
     const tile = (k, name, img, extra = '') => `<button class="ztile ${mode.zone === k ? 'on' : ''} ${extra}" data-act="zone" data-arg="${k}"><span class="zimg">${img}</span><span class="zname">${name}</span></button>`;
     const zt = (k) => { const z = ZONES[k], locked = DEFS[z.builds].tier > S.tier; return tile(k, z.name, `<img src="${zIcon(z.builds)}" alt="">${locked ? '<i class="zlock">🔒</i>' : ''}<i class="zdot" style="background:${z.color}"></i>`, locked ? 'locked' : ''); };
     const group = (label, items) => `<div class="zgroup"><div class="zglabel">${label}</div><div class="zgitems">${items}</div></div>`;
-    html = `<div class="zinfo">${zoneInfo(mode.zone)}</div>
+    const dm = CITY.demand();
+    const bar = (k, label, col) => `<div class="dbar" title="${label} demand"><span style="height:${Math.max(4, Math.abs(dm[k]) / 2)}%;background:${dm[k] > 0 ? col : '#c8bfb0'}"></span><small>${label}</small></div>`;
+    html = `<div class="zinfo">${zoneInfo(mode.zone)}<div class="demand">${bar('housing', 'H', '#f07a48')}${bar('farmland', 'F', '#d8b830')}${bar('workshop', 'W', '#8a7ef0')}</div></div>
       <div class="zrow"><div class="zscroll">
         ${group('Zones', zt('housing') + zt('farmland') + zt('workshop'))}
-        ${group('Paths', tile('road', 'Road', '<span class="zsw road"></span>') + tile('canal', 'Canal', '<span class="zsw canal"></span>'))}
-        ${group('Tidy', tile('erase', 'Erase', '<span class="zsw erase"></span>'))}
+        ${group('Paths', tile('road', 'Road', '<span class="zsw road"></span>') + tile('canal', 'Canal', '<span class="zsw canal"></span>') + tile('wall', 'Wall', '<span class="zsw wall"></span>'))}
+        ${group('Tidy', tile('erase', 'Erase', '<span class="zsw erase"></span>') + `<button class="ztile ${M.lvView ? 'on' : ''}" data-act="lvview"><span class="zimg"><span class="zsw lv"></span></span><span class="zname">Land value</span></button>`)}
       </div>
       <div class="zact"><button class="pill ${S.undo && S.undo.length ? '' : 'disabled'}" data-act="undo" aria-label="Undo">↶ Undo</button><button class="pill done" data-act="cancelmode">✓ Done</button></div></div>`;
     bar.className = 'zones';
@@ -116,6 +120,7 @@ function buildHUD() {
     + `<div class="res" id="res-pop" title="Villagers">${ICON.pop}<div class="rv"><span class="v">0</span><small class="flat">/0</small></div></div>`;
   $('#goodsbar').innerHTML = GOODS.map((r) => `<div class="res" id="res-${r}" title="${RES_NAMES[r]}">${ICON[r]}<div class="rv"><span class="v">0</span><small class="flat">+0</small></div></div>`).join('');
   $('#speed').innerHTML = [[0, '❚❚', 'Pause'], [1, '▶', 'Play'], [2, '▶▶', 'Double speed']].map(([v, l, a]) => `<button data-speed="${v}" aria-label="${a}">${l}</button>`).join('');
+  $('#res-gold').addEventListener('click', () => { sfx('tap'); showBudget(); });
   $('#speed').addEventListener('click', (e) => {
     const b = e.target.closest('button'); if (!b) return;
     S.speed = +b.dataset.speed; sfx('tap'); updateHUD();
@@ -240,6 +245,11 @@ function act(name, arg, el) {
       break;
     }
     case 'zone': setMode({ kind: 'zone', zone: arg }); break;
+    case 'lvview': M.lvView = !M.lvView; setMode(M.mode); markDirty(); break;
+    case 'taxdn': CITY.setTax((S.taxRate ?? 0.09) - 0.01); refreshSheet(true); break;
+    case 'taxup': CITY.setTax((S.taxRate ?? 0.09) + 0.01); refreshSheet(true); break;
+    case 'budget': showBudget(); break;
+    case 'repair': if (sel && CITY.repair(idxOf(sel.x, sel.y))) { sfx('place'); toast('Builders are restoring it.'); refreshSheet(true); } else sfx('error'); break;
     case 'undo': if (undoStroke()) { sfx('tap'); setMode(M.mode); } break;
     case 'cancelmode': setMode(null); setHover(null); break;
     case 'goto': { const t = townById(+arg); if (t) { closeSheet(); flyTo(t.x, t.y, 56); } break; }
@@ -369,14 +379,14 @@ export function paintAt(tile, erase = false) {
   const zone = erase ? 'erase' : M.mode.zone;
   const key = tile.x + ',' + tile.y + zone; if (key === lastPaint) return; lastPaint = key;
   // Roads: tiles that only touch at a corner get a joining tile, so a painted road is always one connected line.
-  if ((zone === 'road' || zone === 'canal') && lastRoad && !(lastRoad.x === tile.x && lastRoad.y === tile.y)) {
+  if ((zone === 'road' || zone === 'canal' || zone === 'wall') && lastRoad && !(lastRoad.x === tile.x && lastRoad.y === tile.y)) {
     const nb = (t) => [0, 1, 2, 3].map((d) => stepTile(t.x, t.y, d)).map(([x, y]) => ((x % W) + W) % W + ',' + y);
     const a = nb(lastRoad), b = new Set(nb(tile)), me = tile.x + ',' + tile.y;
     if (!a.includes(me)) { const j = a.find((k) => b.has(k)); if (j) { const [jx, jy] = j.split(',').map(Number); remember(jx, jy); setZone(zone, jx, jy); } }
   }
   remember(tile.x, tile.y);
   const ok = setZone(zone, tile.x, tile.y);
-  if (zone === 'road' || zone === 'canal') lastRoad = ok || (zone === 'road' ? S.proads : S.canals).has(idxOf(wrapX(tile.x), tile.y)) ? { x: tile.x, y: tile.y } : null;
+  if (zone === 'road' || zone === 'canal' || zone === 'wall') lastRoad = ok || (zone === 'road' ? S.proads : zone === 'wall' ? (S.walls || new Set()) : S.canals).has(idxOf(wrapX(tile.x), tile.y)) ? { x: tile.x, y: tile.y } : null;
   if (ok) { sfx(zone === 'erase' ? 'tap' : 'place'); haptic(); }
 }
 // Android back gesture: close whatever is open; returns false when nothing was.

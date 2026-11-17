@@ -8,6 +8,7 @@ import * as A from './alive.js';
 import * as X from './explore.js';
 import * as K from './kingdoms.js';
 import { drawWar } from './war.js';
+import * as CITY from './city.js';
 
 import { styleAt } from './regions.js';
 import { nbExtra, SPECS } from './game.js';
@@ -309,6 +310,8 @@ function drawTiles() {
   const isPaved = (i) => { const rt = L.roadTown.get(i); if (rt === -1) return S.tier >= 3; const t = townById(rt); if (!t) return false; if (t.imp && t.imp.paved) return true; return S.tier >= 2 && groundDist2(i % W, Math.floor(i / W), t.x, t.y) <= (S.tier >= 3 ? 16 : 5); }; // a paved town square, growing with the realm
   let anyRoad = false, anyRiver = false, anyBridge = false;
   const riverPaths = [new Path2D(), new Path2D(), new Path2D()], bridgePath = new Path2D(), canalPath = new Path2D(); let anyCanal = false;
+  const wallPath = new Path2D(), gatePath = new Path2D(); let anyWall = false;
+  const lvTint = M.lvView ? [new Path2D(), new Path2D(), new Path2D(), new Path2D()] : null;
   let anyOwn = false;
   for (let y = yA; y <= yB; y++) {
     const off = (y & 1) * 0.5, cy = sy(tileWY(y));
@@ -329,11 +332,17 @@ function drawTiles() {
         { const wv = wear.get(rowBase + wx); if (wv > 25 && tw >= 18 && !L.roads.has(rowBase + wx)) { ctx.fillStyle = `rgba(196,168,118,${Math.min(0.42, (wv - 25) / 250)})`; ctx.beginPath(); ctx.ellipse(cx, cy, hw * 0.42, hh * 0.42, 0, 0, 6.3); ctx.fill(); } }
         if (S.canals.has(rowBase + wx)) { let cm = 0; for (let d = 0; d < 4; d++) { const [nx, ny] = L.stepTile(wx, y, d), ni = ny * W + ((nx % W) + W) % W; if (S.canals.has(ni) || world.river[ni] || world.biome[ni] <= 1) cm |= 1 << d; } L.addRoad(canalPath, cm || 16, cx, cy, hw, hh); anyCanal = true; }
         if (rm) { L.addRoad(isPaved(rowBase + wx) ? pavedPath : roadPath, rm, cx, cy, hw, hh); anyRoad = true; }
+        if (S.walls && S.walls.has(rowBase + wx)) { // town walls join up with their neighbours; a street through one is a gate
+          let wm = 0; for (let d = 0; d < 4; d++) { const [nx, ny] = L.stepTile(wx, y, d), ni = ny * W + ((nx % W) + W) % W; if (S.walls.has(ni)) wm |= 1 << d; }
+          L.addRoad(wallPath, wm || 16, cx, cy, hw, hh); anyWall = true;
+          if (rm) { gatePath.moveTo(cx + tw * 0.09, cy); gatePath.arc(cx, cy, tw * 0.09, 0, 6.283); }
+        }
       }
       if (showOwn && nearTowns.length && b > 2) {
         const o = own(wx, y);
         if (o) {
           anyOwn = true;
+          if (lvTint && tw >= 14) { const v = CITY.landValue(rowBase + wx); diamondPath(lvTint[Math.min(3, Math.floor(v / 25))], cx, cy, hw, hh); }
           diamondPath(tint, cx, cy, hw, hh);
           const o1 = y & 1;
           // edges: up-left, up-right, down-right, down-left
@@ -342,7 +351,7 @@ function drawTiles() {
           if (own(wx + o1, y + 1) !== o) { border.moveTo(cx + hw, cy); border.lineTo(cx, cy + hh); }
           if (own(wx - 1 + o1, y + 1) !== o) { border.moveTo(cx, cy + hh); border.lineTo(cx - hw, cy); }
           if (placing && y <= yB - 6) {
-            const ok = mode.kind === 'zone' ? (mode.zone === 'erase' ? S.zones.has(rowBase + wx) || S.proads.has(rowBase + wx) || S.canals.has(rowBase + wx) : mode.zone === 'road' ? canRoad(wx, y) : mode.zone === 'canal' ? canCanal(wx, y) : canZoneAs(mode.zone, wx, y)) : canPlace(mode.type, wx, y, mopt).ok;
+            const ok = mode.kind === 'zone' ? (mode.zone === 'erase' ? S.zones.has(rowBase + wx) || S.proads.has(rowBase + wx) || S.canals.has(rowBase + wx) || (S.walls && S.walls.has(rowBase + wx)) : mode.zone === 'wall' ? CITY.canWall(wx, y) : mode.zone === 'road' ? canRoad(wx, y) : mode.zone === 'canal' ? canCanal(wx, y) : canZoneAs(mode.zone, wx, y)) : canPlace(mode.type, wx, y, mopt).ok;
             if (ok) { valid.moveTo(cx + Math.max(1.8, tw * 0.042), cy); valid.arc(cx, cy, Math.max(1.8, tw * 0.042), 0, 6.283); }
           }
         }
@@ -365,6 +374,15 @@ function drawTiles() {
     ctx.setLineDash([]); ctx.lineCap = 'butt';
   }
   if (anyRoad) { L.strokeRoads(ctx, roadPath, tw); L.strokeRoads(ctx, pavedPath, tw, true); }
+  if (anyWall) { // stone walls with a walkway and crenels
+    ctx.lineCap = 'square'; ctx.lineJoin = 'miter';
+    ctx.strokeStyle = '#4c443c'; ctx.lineWidth = tw * 0.2; ctx.stroke(wallPath);
+    ctx.strokeStyle = '#a89c8a'; ctx.lineWidth = tw * 0.15; ctx.stroke(wallPath);
+    ctx.setLineDash([tw * 0.05, tw * 0.05]); ctx.strokeStyle = '#d4c8b2'; ctx.lineWidth = tw * 0.07; ctx.stroke(wallPath); ctx.setLineDash([]);
+    ctx.fillStyle = '#6a4a30'; ctx.fill(gatePath); ctx.strokeStyle = '#3a2a1c'; ctx.lineWidth = Math.max(1, tw * 0.02); ctx.stroke(gatePath);
+    ctx.lineCap = 'butt';
+  }
+  if (lvTint) { const cols = ['rgba(200,80,50,0.38)', 'rgba(230,170,60,0.34)', 'rgba(170,200,70,0.34)', 'rgba(70,170,70,0.4)']; lvTint.forEach((p, k) => { ctx.fillStyle = cols[k]; ctx.fill(p); }); }
   if (anyBridge) { // little wooden bridges where the roads cross a river
     ctx.lineCap = 'butt';
     ctx.strokeStyle = '#5a4030'; ctx.lineWidth = tw * 0.24; ctx.stroke(bridgePath);
@@ -404,7 +422,7 @@ function drawTiles() {
     let ok = true;
     if (mode.kind === 'build' || mode.kind === 'move') ok = canPlace(mode.type, hoverTile.x, hoverTile.y, mopt).ok;
     if ((mode.kind === 'build' || mode.kind === 'move') && BIG.has(mode.type)) for (const [fx, fy] of footprint(hoverTile.x, hoverTile.y).slice(1)) outline({ x: fx, y: fy }, ok ? '#b8ffb0' : '#ff9a8a', 2.5);
-    else if (mode.kind === 'zone') ok = mode.zone === 'erase' || (mode.zone === 'road' ? canRoad(hoverTile.x, hoverTile.y) : mode.zone === 'canal' ? canCanal(hoverTile.x, hoverTile.y) : canZoneAs(mode.zone, hoverTile.x, hoverTile.y));
+    else if (mode.kind === 'zone') ok = mode.zone === 'erase' || (mode.zone === 'wall' ? CITY.canWall(hoverTile.x, hoverTile.y) : mode.zone === 'road' ? canRoad(hoverTile.x, hoverTile.y) : mode.zone === 'canal' ? canCanal(hoverTile.x, hoverTile.y) : canZoneAs(mode.zone, hoverTile.x, hoverTile.y));
     else if (mode.kind === 'found') ok = canFound(hoverTile.x, hoverTile.y).ok;
     else if (mode.kind === 'start') ok = canStart(hoverTile.x, hoverTile.y).ok;
     outline(hoverTile, ok ? '#b8ffb0' : '#ff9a8a', 2.5);
@@ -447,7 +465,9 @@ function drawTiles() {
         }
         if (bld.p >= 1 && !A_FLAT.has(bld.t) && tw >= 26) A.longShadow(ctx, cx, cy, s, tw);
         { const sp = buildingSprite(bld, wx, y), ps = popScale(i);
+          if (bld.ab || bld.fire) ctx.filter = bld.ab === 'ruin' ? 'grayscale(1) brightness(0.35)' : bld.fire ? 'brightness(0.75) sepia(0.4)' : 'grayscale(0.8) brightness(0.8)';
           drawSpriteF(sp, cx, cy, s * ps, bld.f);
+          if (bld.ab || bld.fire) { ctx.filter = 'none'; cityMarks(bld, cx, cy, s, tw, wx, y); }
           if (bld.t !== 'house' && (bld.lv || 1) >= 2 && bld.p >= 1 && tw >= 30) levelTrim(sp, cx, cy, s, bld.lv);
           if (bld.t === 'townhall' && bld.p >= 1 && S.tier >= 4 && tw >= 30) statue(cx - tw * 0.42, cy + tw * 0.12, s); }
         if (bld.t === 'house' && bld.p >= 1 && tw >= 30) drawYard(cx, cy, s, hw, hh, S.day - (bld.d || 0), hash2(wx, y, 61));
@@ -460,6 +480,7 @@ function drawTiles() {
           if (SMOKY.has(bld.t) && (bld.t !== 'house' || hash2(wx, y, 54) < 0.55)) A.smoke(ctx, cx + (bld.t === 'house' ? -4 : 3) * s, cy - (bld.t === 'townhall' ? 34 : 22) * s, s, animTime, hash2(wx, y, 55) * 9, rs.snow > 0.3);
           if (bld.t === 'house' && hash2(wx, y, 53) < 0.12) A.laundry(ctx, cx + tw * 0.06, cy + tw * 0.2, s, animTime, hash2(wx, y, 56) * 9);
         }
+        if (bld.need && !bld.ab && tw >= 22) needBubble(bld.need === 'road' ? '🛣' : '💧', cx, cy - tw * 0.6, tw);
         if (bld.idle && tw >= 26) { // resting: upkeep could not be paid
           const bx = cx, by = cy - tw * 0.55, r = Math.max(7, tw * 0.13);
           ctx.fillStyle = 'rgba(255,250,238,0.95)'; ctx.strokeStyle = 'rgba(60,46,36,0.6)'; ctx.lineWidth = 1;
@@ -634,3 +655,26 @@ function drawLabels(tileMode) {
 export * from './render/walkers.js';
 export * from './render/effects.js';
 export * from './render/canvas.js';
+
+// Abandoned, burning and ruined buildings (city.js), and the need bubbles above buildings that lack a road or water.
+function cityMarks(bld, cx, cy, s, tw, wx, y) {
+  if (bld.fire) {
+    for (let k = 0; k < 3; k++) {
+      const fx = cx + (k - 1) * tw * 0.14, fy = cy - tw * 0.18, h = tw * (0.22 + 0.1 * Math.sin(animTime * 9 + k * 2 + wx));
+      ctx.fillStyle = k === 1 ? '#ffd040' : '#f06a20';
+      ctx.beginPath(); ctx.moveTo(fx - tw * 0.06, fy); ctx.quadraticCurveTo(fx, fy - h * 1.4, fx + tw * 0.06, fy); ctx.fill();
+    }
+    A.smoke(ctx, cx, cy - tw * 0.45, s * 1.6, animTime, hash2(wx, y, 55) * 9, false);
+  } else if (bld.ab === 'ruin') {
+    if (hash2(wx, y, 57) < 0.6) A.smoke(ctx, cx, cy - tw * 0.2, s, animTime, hash2(wx, y, 58) * 9, false);
+  } else if (tw >= 22) { // boarded up
+    ctx.strokeStyle = '#7a5a3a'; ctx.lineWidth = Math.max(1, tw * 0.03);
+    ctx.beginPath(); ctx.moveTo(cx - tw * 0.12, cy - tw * 0.1); ctx.lineTo(cx + tw * 0.05, cy - tw * 0.02); ctx.moveTo(cx - tw * 0.12, cy - tw * 0.02); ctx.lineTo(cx + tw * 0.05, cy - tw * 0.1); ctx.stroke();
+  }
+}
+function needBubble(icon, bx, by, tw) {
+  const r = Math.max(7, tw * 0.13);
+  ctx.fillStyle = 'rgba(255,240,220,0.95)'; ctx.strokeStyle = 'rgba(176,74,48,0.85)'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.arc(bx, by, r, 0, 6.3); ctx.fill(); ctx.stroke();
+  ctx.font = `${Math.round(r * 1.2)}px system-ui, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(icon, bx, by + r * 0.05);
+}

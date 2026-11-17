@@ -1,4 +1,5 @@
 // Moved out of ui.js to keep modules small. See ARCHITECTURE.md.
+import * as CITY from '../city.js';
 import { JOBS, SKILLS, ageOf, fullName } from '../folk.js';
 import { growthParts, growthMult, CONTACT_RANGE, DEFS, GIFT_AMOUNT, HOUSE_CAP_MULT, HOUSE_LEVELS, IMPROVEMENTS, IMPROVE_TIER, M, PACE, RES, RES_NAMES, S, SPECS, SPEC_CHANGE_COST, SPEC_TIER, TIERS, TRAITS, UPKEEP, ZONES, affordable, anchorOf, canInvite, charm, continentAt, crewsBusy, crewsOf, harbourTowns, inContact, nbExtra, ownerOf, priceNote, townById, tradeOffers, yardsIn, zonesWaiting } from '../game.js';
 import { markDirty, townStyle } from '../render.js';
@@ -32,6 +33,10 @@ export function showInfo(x, y) {
       const d = DEFS[b.t], t = townById(b.town);
       if (b.t === 'townhall' && t) return townInfo(t, sub);
       let body = '';
+      if (b.fire) body += `<div class="warn">🔥 On fire! Raiders set it alight. It will be a ruin by tomorrow. Towers, forts and walls keep raiders away.</div>`;
+      else if (b.ab === 'ruin') { const rc = CITY.repairCost(b); body += `<div class="warn">🏚 A burnt-out ruin. Rebuild it for half its cost.</div><div class="row">${costChips(rc)}<button class="btn small" data-act="repair" ${Object.entries(rc).every(([k, v]) => S.res[k] >= v) ? '' : 'disabled'}>🔨 Rebuild</button></div>`; }
+      else if (b.ab) body += `<div class="warn">🚪 Abandoned: ${b.ab === 'road' ? 'no road reaches it. Paint a road beside it' : 'no fresh water. Build a well nearby'} and folk will come back.</div>`;
+      else if (b.need) body += `<div class="warn">${b.need === 'road' ? '🛣 Needs a road beside it' : '💧 Needs fresh water: build a well nearby'}. Left ${Math.max(0, Math.ceil(10 - (b.needT || 0)))} more days, it will be abandoned.</div>`;
       if (b.p < 1) body += `<div class="note">Under construction</div><div class="meter"><div style="width:${b.p * 100}%"></div></div>`;
       body += '<div class="kv">';
       if (t) body += `<span>Settlement</span><span>${esc(t.name)}</span>`;
@@ -52,7 +57,8 @@ export function showInfo(x, y) {
       if (d.civic) body += `<div class="note">A civic improvement of ${t ? esc(t.name) : 'your town'}, loved by everyone who lives there.</div>`;
       else body += `<div class="row"><button class="btn small" data-act="demolish">${b.p < 1 ? 'Cancel construction' : 'Demolish'}</button>${b.p >= 1 && !d.civic ? '<button class="btn small" data-act="movebld">↔ Move</button><button class="btn small" data-act="turnbld">⟲ Turn</button>' : ''}</div>`;
       if (b.t === 'house' && t) {
-        const lv = b.lv || 1;
+        const lv = b.lv || 1, lvv = CITY.landValue(i);
+        body = `<div class="kv"><span>Land value</span><span>${lvv}${lv < 3 ? ` (next level needs ${CITY.LV_FOR_LEVEL[lv + 1]})` : ''}</span></div>` + body;
         body = body.replace('<span>Houses</span><span>6 villagers</span>', `<span>Houses</span><span>${Math.round(6 * HOUSE_CAP_MULT[lv - 1])} villagers</span>`);
         return head(HOUSE_LEVELS[lv - 1], sub) + `<div class="note">${STYLES[townStyle(t)].name} homes of ${esc(t.name)}.${lv < 3 ? ` Families improve their homes by themselves as the town grows${lv === 1 ? ' past 40 folk' : ' past 150 folk at City size'}.` : ''}</div>` + body;
       }

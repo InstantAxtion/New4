@@ -423,7 +423,7 @@ export function updateRoads() {
     const hall = idxOf(t.x, t.y), R = Math.max(4, t.radius - 0.5) ** 2; // streets stay inside the town's border
     // Cheapest paths outward from the hall: existing streets are cheapest, then open ground,
     // then zoned-but-unbuilt tiles (streets may claim those). Buildings are never crossed.
-    const passable = (i, x, y) => i === hall || ((!taken(i) || crossing(i)) && world.biome[i] > 2 && !nbExtraHas(i) && groundD2(x, y, t.x, t.y) <= R);
+    const passable = (i, x, y) => i === hall || ((!taken(i) || crossing(i)) && (!S.walls || !S.walls.has(i) || prevRoads.has(i) || S.proads.has(i)) && world.biome[i] > 2 && !nbExtraHas(i) && groundD2(x, y, t.x, t.y) <= R);
     // Main streets: a short straight street out of each side of the hall, kept free from the start,
     // so a town always has a tidy square and its hall is never walled in.
     // they start as a little square round the hall and lengthen as the town fills in

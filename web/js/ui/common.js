@@ -60,20 +60,22 @@ export const ZONE_TEXT = {
   park: 'Lawns, a duck pond and benches. Makes the town happier.',
   road: 'Free roads. Villagers walk faster on them, and they join up with your streets.',
   canal: 'Stone-lined water channels. Boats sail them, and docks and farms count them as a river.',
+  wall: 'Town walls, 3 stone a tile. They add to the town’s defence and protect the buildings beside them from raiders. Where a wall crosses a street it becomes a gate.',
   erase: 'Clear painted zones, roads and canals. Buildings already built stay.',
 };
 
 export function zoneInfo(k) {
   const z = ZONES[k], d = z && DEFS[z.builds], locked = d && d.tier > S.tier;
   const img = z ? `<img src="${zIcon(z.builds)}" alt="">` : `<span class="zsw big ${k}"></span>`;
-  const name = z ? z.name : { road: 'Road', canal: 'Canal', erase: 'Erase' }[k];
+  const name = z ? z.name : { road: 'Road', canal: 'Canal', wall: 'Wall', erase: 'Erase' }[k];
   const facts = [];
   if (d) {
     if (d.cap) facts.push(`🏠 Homes for ${d.cap}`);
     if (d.prod) facts.push(Object.entries(d.prod).map(([r, v]) => `${ICON[r].replace('<svg', '<svg width="14" height="14" style="vertical-align:-2px"')} +${v}/day`).join(' '));
     if (d.homes) facts.push(`🏠 Homes +${Math.round(d.homes * 100)}%`);
     if (d.jobs) facts.push(`👷 ${d.jobs} jobs`);
-  } else if (k === 'road' || k === 'canal') facts.push('Free');
+  } else if (k === 'road' || k === 'canal') facts.push('Free'); else if (k === 'wall') facts.push('3 stone a tile');
+  if (z) facts.unshift('Paint beside a road');
   return `<span class="mimg">${img}</span><div class="mtext"><b>${name}${locked ? ` <em class="lockt">🔒 ${TIERS[d.tier].name}</em>` : ''}</b><small>${ZONE_TEXT[k] || ''}</small>
     <div class="zfacts">${facts.map((f) => `<span>${f}</span>`).join('')}${d ? `<span class="cost">${costChips(d.cost)}<em> each</em></span>` : ''}</div></div>`;
 }
