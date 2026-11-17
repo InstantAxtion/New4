@@ -1,23 +1,24 @@
 // Isometric renderer with an overview (atlas) mode for far zoom levels.
 import { BIOMES, W, H, B, world, wrapX, tileWX, tileWY } from './world.js';
 import { SPR, TB, DECOR_DENSITY, homeArt } from './sprites.js';
-import { on, byRiver, canCanal, canZoneAs, BIG, footprint, S, M, DEFS, ZONES, townById, canPlace, canRoad, canFound, canStart, groundDist2 } from './game.js';
+import { on, canCanal, canZoneAs, BIG, footprint, S, M, DEFS, ZONES, townById, canPlace, canRoad, canFound, canStart, groundDist2 } from './game.js';
 import { hash2 } from './noise.js';
-import { idxOf } from './world.js';
 import * as L from './life.js';
 import * as A from './alive.js';
 import * as X from './explore.js';
 import * as K from './kingdoms.js';
 import { drawWar } from './war.js';
 
-import { petOf, personById, ageOf } from './folk.js';
 import { styleAt } from './regions.js';
 import { nbExtra, SPECS } from './game.js';
+import { diamondPath, drawSprite, drawSpriteF, label } from './render/canvas.js';
+import { ANIM, animate, drawFireworks, drawYard, festive, festiveExtras, levelTrim, lostAnimal, popScale, pops, statue } from './render/effects.js';
+import { bucketWalkers, drawRowWalkers, drawWalkers, stableTowns, updateWalkers, walkers, wear } from './render/walkers.js';
 L.setExtraLookup((i) => nbExtra.has(i));
 const MOOD_FACES = ['🙂', '😊', '😄'];
 
 export const TILE_MODE_TW = 20;
-const A_GENTLE = () => !!S.settings.gentle;
+export const A_GENTLE = () => !!S.settings.gentle;
 const A_FLAT = new Set(['pit', 'pasture', 'park', 'woodlot', 'farm', 'green', 'fountain', 'riceterrace', 'vineyard', 'orchard', 'oasis', 'cacao', 'apiary', 'quarry', 'dock']);
 const SMOKY = new Set(['house', 'townhall', 'tavern', 'bakery', 'smithy', 'brewery', 'workshop']);
 const LIT = new Set(['shops', 'stable', 'house', 'townhall', 'workshop', 'market', 'tower', 'dock', 'library', 'cathedral', 'greatcastle', 'lighthouse', 'lumber', 'harbour', 'fountain',
@@ -25,7 +26,7 @@ const LIT = new Set(['shops', 'stable', 'house', 'townhall', 'workshop', 'market
 export const MAX_TW = 160;
 const OCEAN = '#2e628c';
 
-let canvas, ctx, cw = 0, ch = 0, dpr = 1;
+export let canvas, ctx, cw = 0, ch = 0, dpr = 1;
 export const cam = S.cam;
 export let dirty = true;
 export const markDirty = () => { dirty = true; };
@@ -98,444 +99,9 @@ function stepFlight(dt) {
   if (flight.t >= 1) flight = null;
 }
 
-// --- villagers walking about (visual only) ---
-export const walkers = new Map(); // townId -> array (exported for tests)
-// Each walker is one of the town's named villagers (who is out and about depends on the hour).
-function pickFolk(t) {
-  const f = t.folk; if (!f || !f.length) return 0;
-  return f[Math.floor(Math.random() * f.length)].i;
-}
-// The walker under a screen point, if any (for tapping someone to meet them).
-export function walkerAt(px, py) {
-  const s = cam.tw / TB; let best = null, bd = (14 * Math.max(1, s)) ** 2;
-  for (const [tid, ws] of walkers) for (const w of ws) {
-    const dx = sx(w.X) - px, dy = sy(w.Y) - 5 * s - py, d = dx * dx + dy * dy;
-    if (d < bd) { bd = d; best = { town: tid, pid: w.pid, w }; }
-  }
-  return best;
-}
-const CLOTHES = ['#c0503e', '#4a78a8', '#5a9a5a', '#d9a440', '#8a5aa8', '#e8e0d0', '#7a5634'];
-function townTiles(t) {
-  const arr = [];
-  for (const [i, b] of S.buildings) if (b.town === t.id && b.p >= 1) arr.push(i);
-  return arr;
-}
-const tileCache = new Map(); let tileCacheStamp = -1;
-const stableTowns = new Set();
-const HORSE_COLS = ['#8a5a3a', '#5a3e2c', '#c8a070', '#3c3430', '#e8e0d0'];
-export function invalidateTowns() { tileCacheStamp = -1; }
-// Ground distance between two world points (undo the 2:1 iso squash).
-const gdist = (ax, ay, bx, by) => Math.hypot(bx - ax, (by - ay) * 2);
-// Open ground people may walk across; every other building is solid (people go inside instead).
-const OPEN = new Set(['farm', 'green', 'fountain', 'apiary', 'vineyard', 'riceterrace', 'oasis', 'cacao', 'orchard', 'quarry', 'smithy', 'dock', 'market']);
-function tileSpot(i, nearX) {
-  const x = i % W, y = Math.floor(i / W);
-  const b = S.buildings.get(i), solid = b && !OPEN.has(b.t);
-  // at a solid building, stand by the front door; on open ground, anywhere
-  let X = tileWX(x, y) + (Math.random() - 0.5) * (solid ? 0.18 : 0.35);
-  let Y = tileWY(y) + (solid ? 0.15 + Math.random() * 0.04 : 0.04 + (Math.random() - 0.5) * 0.1);
-  if (X - nearX > W / 2) X -= W; else if (nearX - X > W / 2) X += W; // stay on the same side of the date line
-  return [X, Y];
-}
-// Plan a walk along the iso grid (like following streets): one leg on each axis.
-// Villagers walk the roads: from where they are to the town hall, then out to their next stop.
-const LANE = 0.07;
-function planWalk(w, tiles, t) {
-  let target = tiles[Math.floor(Math.random() * tiles.length)];
-  if (w.age >= 6 && w.age < 16 && L.daylight().n < 0.3 && Math.random() < 0.6) { // off to school
-    if (t._schoolFor !== tiles) { t._schoolFor = tiles; t._school = tiles.find((i) => { const b = S.buildings.get(i); return b && b.t === 'school' && b.p >= 1; }); }
-    if (t._school != null) target = t._school;
-  }
-  const hall = idxOf(t.x, t.y);
-  const tilesPath = [];
-  // follow the town's roads where they exist, else walk the straight way
-  const leg = (from, to, reverse) => {
-    const r = L.routeToHall(t.id, from);
-    let p = r ? r.map((i) => [i % W, Math.floor(i / W)]) : L.lPath(from % W, Math.floor(from / W), to % W, Math.floor(to / W));
-    if (r && !reverse) p.unshift([from % W, Math.floor(from / W)]);
-    if (r && reverse) p.unshift([from % W, Math.floor(from / W)]);
-    if (reverse) p = p.slice().reverse();
-    for (const [x, y] of p) tilesPath.push([x, y]);
-  };
-  const here = w.tile ?? hall;
-  if (here !== hall) leg(here, hall, false);
-  if (target !== hall) leg(target, hall, true);
-  if (!tilesPath.length) tilesPath.push([t.x, t.y]);
-  const pts = [[w.X, w.Y]];
-  let lastX = w.X;
-  for (const [x, y] of tilesPath) {
-    let X = tileWX(x, y) + w.lx;
-    if (X - lastX > W / 2) X -= W; else if (lastX - X > W / 2) X += W;
-    pts.push([X, tileWY(y) + 0.03 + w.ly]); lastX = X;
-  }
-  // a little wander at the destination so people don't stack on one spot
-  const end = pts[pts.length - 1];
-  pts.push([end[0] + (Math.random() - 0.5) * 0.3, end[1] + (Math.random() - 0.5) * 0.08]);
-  w.pts = pts; w.seg = []; w.len = 0;
-  for (let k = 1; k < pts.length; k++) { const d = gdist(pts[k - 1][0], pts[k - 1][1], pts[k][0], pts[k][1]); w.seg.push(d); w.len += d; }
-  w.d = 0; w.k = 0; w.dest = target;
-}
-// Forget everyone walking about (when leaving a realm).
-export function clearTransient() { walkers.clear(); visitors.clear(); tileCacheStamp = -1; dirty = true; }
-// Visitors: market-day wagons from neighbouring villages, and the odd traveller heading for the tavern.
-export const visitors = new Map(); // townId -> array
-function routeVisitor(v, fromTile, toTile, nearX) {
-  const p = L.lPath(fromTile % W, Math.floor(fromTile / W), toTile % W, Math.floor(toTile / W));
-  const pts = []; let lastX = nearX;
-  for (const [x, y] of p) { let X = tileWX(x, y); if (X - lastX > W / 2) X -= W; else if (lastX - X > W / 2) X += W; pts.push([X, tileWY(y) + 0.05]); lastX = X; }
-  if (pts.length < 2) pts.push([pts[0][0] + 0.01, pts[0][1]]);
-  v.pts = pts; v.seg = []; v.len = 0; v.d = 0; v.k = 0;
-  for (let k = 1; k < pts.length; k++) { const d = gdist(pts[k - 1][0], pts[k - 1][1], pts[k][0], pts[k][1]); v.seg.push(d); v.len += d; }
-  v.X = pts[0][0]; v.Y = pts[0][1];
-}
-function edgeTileToward(t, nx, ny) {
-  const X0 = tileWX(t.x, t.y), Y0 = tileWY(t.y);
-  let dX = tileWX(nx, ny) - X0; if (dX > W / 2) dX -= W; else if (dX < -W / 2) dX += W;
-  const dY = (tileWY(ny) - Y0) * 2, len = Math.hypot(dX, dY) || 1, r = Math.max(2, t.radius - 0.8);
-  const tl = tileOfWorld(X0 + (dX / len) * r, Y0 + ((dY / len) * r) / 2);
-  return tl ? tl[1] * W + tl[0] : idxOf(t.x, t.y);
-}
-function updateVisitors(dt, t, tiles) {
-  let vs = visitors.get(t.id); if (!vs) visitors.set(t.id, (vs = []));
-  const market = tiles.find((i) => { const b = S.buildings.get(i); return b && b.t === 'market'; });
-  const tavern = tiles.find((i) => { const b = S.buildings.get(i); return b && b.t === 'tavern'; });
-  if (market != null && t.marketUntil && S.day < t.marketUntil && !vs.some((v) => v.market)) {
-    for (const nid of (t.marketFrom || []).slice(0, 3)) {
-      const n = S.neighbors.find((q) => q.id === nid); if (!n) continue;
-      const start = edgeTileToward(t, n.x, n.y);
-      for (let k = 0; k < 2; k++) {
-        const v = { market: true, kind: k ? 'traveller' : 'wagon', start, dest: market, wait: k * 3 + Math.random() * 2, sp: k ? 0.36 : 0.5, face: 1, ph: Math.random() * 6,
-          c: `hsl(${n.hue},45%,48%)`, rider: !k, cart: !k, cover: !k, moving: false, leaving: false };
-        routeVisitor(v, start, market, tileWX(t.x, t.y)); vs.push(v);
-      }
-    }
-  }
-  if (t.royalVisit && S.day < t.royalVisit.until && !vs.some((v) => v.royal || v.escort)) { // a royal procession comes up the road
-    const n = S.neighbors.find((q) => q.id === t.royalVisit.from), hall = idxOf(t.x, t.y);
-    const start = edgeTileToward(t, n ? n.x : t.x + 20, n ? n.y : t.y);
-    const hue = n ? n.hue : 280;
-    for (let k = 0; k < 3; k++) {
-      const v = { kind: k === 1 ? 'royal' : 'escort', royal: k === 1, escort: k !== 1, start, dest: hall, wait: k * 1.6, sp: 0.42, face: 1, ph: Math.random() * 6,
-        c: `hsl(${hue},50%,45%)`, banner: `hsl(${hue},60%,50%)`, rider: true, cart: k === 1, moving: false, leaving: false };
-      routeVisitor(v, start, hall, tileWX(t.x, t.y)); vs.push(v);
-    }
-  }
-  { // carts haul the goods in from the workplaces to the town hall
-    const haul = vs.filter((v) => v.hauler).length, want = Math.min(3, Math.floor((t.n || 0) / 12));
-    if (haul < want && Math.random() < dt / 12) {
-      const hall = idxOf(t.x, t.y), srcs = tiles.filter((i) => { const b = S.buildings.get(i); return b && b.p >= 1 && DEFS[b.t] && DEFS[b.t].prod && b.t !== 'townhall' && b.t !== 'house' && groundDist2(i % W, Math.floor(i / W), t.x, t.y) > 9; });
-      if (srcs.length) {
-        const from = srcs[Math.floor(Math.random() * srcs.length)], b = S.buildings.get(from), r = Object.keys(DEFS[b.t].prod)[0];
-        const v = { hauler: true, kind: 'hauler', start: from, dest: hall, wait: 0, sp: 0.4, face: 1, ph: Math.random() * 6, c: CLOTHES[Math.floor(Math.random() * CLOTHES.length)], rider: true, cart: true,
-          load: LOAD_COL[r] || ['#c8a070', '#7aa04a'], moving: false, leaving: false };
-        routeVisitor(v, from, hall, tileWX(t.x, t.y)); vs.push(v);
-      }
-    }
-  }
-  if (tavern != null && vs.length < 3 && Math.random() < dt / 45) { // a traveller wanders in for a bed and a meal
-    const n = S.neighbors[Math.floor(Math.random() * S.neighbors.length)];
-    const start = edgeTileToward(t, n ? n.x : t.x + 20, n ? n.y : t.y);
-    const v = { kind: 'traveller', start, dest: tavern, wait: 0, sp: 0.34, face: 1, ph: Math.random() * 6, c: CLOTHES[Math.floor(Math.random() * CLOTHES.length)], moving: false, leaving: false };
-    routeVisitor(v, start, tavern, tileWX(t.x, t.y)); vs.push(v);
-  }
-  for (let j = vs.length - 1; j >= 0; j--) {
-    const v = vs[j];
-    v.moving = false;
-    if (v.wait > 0) { v.wait -= dt; continue; }
-    v.d += dt * v.sp;
-    while (v.k < v.seg.length - 1 && v.d > v.seg[v.k]) { v.d -= v.seg[v.k]; v.k++; }
-    const a = v.pts[v.k], b = v.pts[v.k + 1], f = Math.min(1, v.seg[v.k] ? v.d / v.seg[v.k] : 1);
-    const nx = a[0] + (b[0] - a[0]) * f, ny = a[1] + (b[1] - a[1]) * f;
-    if (Math.abs(nx - v.X) > 1e-4) v.face = nx > v.X ? 1 : -1;
-    v.X = nx; v.Y = ny; v.moving = true; v.ph += dt * 9;
-    if (v.k >= v.seg.length - 1 && f >= 1) {
-      if (v.leaving) { vs.splice(j, 1); continue; }
-      v.leaving = true; v.wait = 8 + Math.random() * 8; // trade, rest, then head home
-      routeVisitor(v, v.dest, v.start, v.X);
-    }
-  }
-}
-function updateWalkers(dt, visibleTowns) {
-  if (tileCacheStamp !== S.buildings.size) {
-    tileCache.clear(); tileCacheStamp = S.buildings.size; stableTowns.clear();
-    for (const b of S.buildings.values()) if (b.t === 'stable' && b.p >= 1) stableTowns.add(b.town);
-  }
-  const pace = S.speed === 2 ? 1.6 : 1; // villagers bustle a little quicker at double speed
-  for (const t of visibleTowns) {
-    if (!tileCache.has(t.id)) tileCache.set(t.id, townTiles(t));
-    const tiles = tileCache.get(t.id);
-    if (tiles.length < 1) continue;
-    let ws = walkers.get(t.id);
-    if (!ws) walkers.set(t.id, (ws = []));
-    const night = L.daylight().n;
-    const want = Math.round(Math.min(28, Math.ceil(t.pop / 2)) * (1 - night * 0.75)); // most folk are home at night
-    while (ws.length < want) {
-      const tile = tiles[Math.floor(Math.random() * tiles.length)];
-      const [X, Y] = tileSpot(tile, tileWX(t.x, t.y));
-      const ride = stableTowns.has(t.id) && Math.random() < 0.28; // with stables, some folk ride or drive a cart
-      const pid = M.follow && M.follow.town === t.id && !ws.some((q) => q.pid === M.follow.pid) ? M.follow.pid : pickFolk(t), person = pid && personById(t, pid), pet = person && petOf(t, person);
-      ws.push({ town0: t.id, job: person ? person.j : null, sk: person ? person.k : 0, age: person ? ageOf(person) : 30, dog: !ride && pet && pet.k === 'dog' ? pet : null, pid, X, Y, tile, pts: null, wait: Math.random() * 3, sp: (0.32 + Math.random() * 0.18) * (ride ? 2.2 : 1), face: 1,
-        rider: ride, cart: ride && Math.random() < 0.35, hc: HORSE_COLS[Math.floor(Math.random() * HORSE_COLS.length)],
-        lx: (Math.random() - 0.5) * LANE, ly: (Math.random() - 0.5) * LANE * 0.4,
-        c: CLOTHES[Math.floor(Math.random() * CLOTHES.length)], carry: person && person.j ? Math.random() < 0.55 : Math.random() < 0.2, ph: Math.random() * 6, moving: false });
-    }
-    if (ws.length > want) { const keep = M.follow && M.follow.town === t.id ? ws.findIndex((q) => q.pid === M.follow.pid) : -1; if (keep >= want) { const tmp = ws[0]; ws[0] = ws[keep]; ws[keep] = tmp; } ws.length = want; }
-    updateVisitors(dt, t, tiles);
-    for (const w of ws) {
-      w.moving = false;
-      if (w.wait > 0) { w.wait -= dt * pace; continue; }
-      if (!w.pts) { planWalk(w, tiles, t); if (w.len < 0.05) { w.pts = null; w.wait = 1; continue; } }
-      const wy0 = Math.round((w.Y - 0.25) / 0.25), wx0 = ((Math.round(w.X - 0.5 - (wy0 & 1) * 0.5) % W) + W) % W, wi = wy0 * W + wx0;
-      const onRoad = L.roads.has(wi);
-      if (!onRoad && !S.buildings.has(wi) && w.pts) wear.set(wi, Math.min(400, (wear.get(wi) || 0) + dt * pace));
-      w.d += dt * w.sp * pace * (onRoad ? 1.35 : 1);
-      while (w.k < w.seg.length - 1 && w.d > w.seg[w.k]) { w.d -= w.seg[w.k]; w.k++; }
-      const a = w.pts[w.k], b = w.pts[w.k + 1], f = Math.min(1, w.seg[w.k] ? w.d / w.seg[w.k] : 1);
-      const nx = a[0] + (b[0] - a[0]) * f, ny = a[1] + (b[1] - a[1]) * f;
-      if (w.k >= w.seg.length - 1 && f >= 1) { w.pts = null; w.tile = w.dest; w.wait = 0.8 + Math.random() * 3; } // arrived: linger a moment
-      if (Math.abs(nx - w.X) > 1e-4) w.face = nx > w.X ? 1 : -1;
-      w.X = nx; w.Y = ny; w.moving = !!w.pts;
-      if (w.moving) w.ph += dt * 9 * pace;
-    }
-  }
-}
-const LOAD_COL = { food: ['#e2cc8a', '#d8b860'], wood: ['#8a5f3c', '#a8784c'], stone: ['#a8a29a', '#8e8880'], iron: ['#7a828c', '#5e6670'], gold: ['#e8c050', '#c8a030'], wool: ['#f4f0e6', '#e8e2d4'], flour: ['#f4ead8', '#e8dcc0'], bread: ['#d8a05a', '#c08840'] };
-// Footpaths: grass wears where villagers often walk off the roads.
-export const wear = new Map();
 setInterval(() => { for (const [k, v] of wear) { if (v <= 1) wear.delete(k); else wear.set(k, v * 0.995); } }, 4000);
-// The tile containing a world point, and how deep inside it the point is (0 = centre, 1 = edge).
-function tileOfWorld(X, Y) {
-  const r0 = Math.round((Y - 0.25) / 0.25);
-  let best = null, bm = Infinity;
-  for (let y = r0 - 1; y <= r0 + 1; y++) {
-    if (y < 0 || y >= H) continue;
-    const off = (y & 1) * 0.5, x = Math.round(X - 0.5 - off);
-    const m = Math.abs(X - (x + 0.5 + off)) / 0.5 + Math.abs(Y - tileWY(y)) / 0.25;
-    if (m < bm) { bm = m; best = [wrapX(x), y, m]; }
-  }
-  return best;
-}
-// Sort walkers into the map rows they stand in, so buildings in front hide them correctly.
-// Anyone deep inside a solid building's tile is indoors, and not drawn at all.
-let walkerRows = new Map();
-function bucketWalkers(visibleTowns) {
-  walkerRows = new Map();
-  for (const t of visibleTowns) {
-    const ws = [...(walkers.get(t.id) || []), ...(visitors.get(t.id) || [])];
-    for (const w of ws) {
-      const tl = tileOfWorld(w.X, w.Y); if (!tl) continue;
-      const b = S.buildings.get(tl[1] * W + tl[0]);
-      if (b && !OPEN.has(b.t) && tl[2] < 0.62) continue; // indoors
-      if (!walkerRows.has(tl[1])) walkerRows.set(tl[1], []);
-      walkerRows.get(tl[1]).push(w);
-    }
-  }
-}
-function drawRowWalkers(y) {
-  const ws = walkerRows.get(y); if (!ws) return;
-  ws.sort((a, b) => a.Y - b.Y);
-  drawWalkerList(ws);
-}
-function drawWalkers(visibleTowns) {
-  for (const t of visibleTowns) { const ws = walkers.get(t.id); if (ws) drawWalkerList(ws); }
-}
-// What a worker carries home: a grain sack, logs, a basket of stone, fish, or a parcel.
-const CARRY = { farm: 'sack', pasture: 'sack', orchard: 'sack', vineyard: 'sack', riceterrace: 'sack', gristmill: 'sack', bakery: 'sack', lumber: 'logs', woodlot: 'logs', quarry: 'stone', pit: 'stone', mine: 'stone', dock: 'fish', shipyard: 'fish', icehut: 'fish' };
-function carryItem(x, y, s, job) {
-  const k = CARRY[job] || 'box';
-  if (k === 'sack') { ctx.fillStyle = '#e2d0a2'; ctx.beginPath(); ctx.ellipse(x + 1.3 * s, y + 1.2 * s, 1.8 * s, 1.6 * s, 0, 0, 6.3); ctx.fill(); ctx.fillStyle = '#c8b080'; ctx.fillRect(x + 0.6 * s, y - 0.6 * s, 1.4 * s, 0.8 * s); }
-  else if (k === 'logs') { ctx.fillStyle = '#8a5f3c'; ctx.fillRect(x - 1 * s, y + 0.2 * s, 4.6 * s, 1.1 * s); ctx.fillRect(x - 0.6 * s, y - 0.9 * s, 4.6 * s, 1.1 * s); ctx.fillStyle = '#d8b07a'; ctx.fillRect(x + 3.4 * s, y + 0.2 * s, 0.5 * s, 1.1 * s); }
-  else if (k === 'stone') { ctx.fillStyle = '#8a6a44'; ctx.fillRect(x, y + 0.4 * s, 2.8 * s, 1.6 * s); ctx.fillStyle = '#a8a29a'; ctx.beginPath(); ctx.arc(x + 0.8 * s, y + 0.4 * s, 0.8 * s, 0, 6.3); ctx.arc(x + 2 * s, y + 0.3 * s, 0.7 * s, 0, 6.3); ctx.fill(); }
-  else if (k === 'fish') { ctx.fillStyle = '#8a6a44'; ctx.fillRect(x, y + 0.6 * s, 2.8 * s, 1.4 * s); ctx.fillStyle = '#b8c8d8'; ctx.beginPath(); ctx.ellipse(x + 1.4 * s, y + 0.4 * s, 1.6 * s, 0.6 * s, 0, 0, 6.3); ctx.fill(); }
-  else { ctx.fillStyle = '#b08a52'; ctx.fillRect(x, y, 2.6 * s, 2.2 * s); }
-}
-// Work clothes: each trade has its hat or apron; journeymen add a belt and masters a golden sash.
-const HATS = { farm: 'straw', pasture: 'straw', orchard: 'straw', vineyard: 'straw', riceterrace: 'cone', cacao: 'straw', oasis: 'wrap', apiary: 'veil',
-  smithy: 'apron', mine: 'helm', pit: 'helm', quarry: 'helm', lumber: 'cap', woodlot: 'cap', bakery: 'chef', brewery: 'apron', weaver: 'apron', potter: 'apron', glassworks: 'apron',
-  market: 'fez', shops: 'fez', spicehouse: 'wrap', school: 'scholar', scriptorium: 'scholar', chapel: 'hood', dock: 'sou', shipyard: 'sou', harbour: 'sou', icehut: 'fur', tavern: 'apron', stable: 'cap', yard: 'cap', tower: 'helm', workshop: 'apron', windmill: 'cap' };
-function outfit(hx, y, s, job, k) {
-  const hy = y - 7.6 * s, kind = HATS[job] || 'cap';
-  if (kind === 'straw') { ctx.fillStyle = '#e8c870'; ctx.beginPath(); ctx.ellipse(hx, hy - 1.2 * s, 2.8 * s, 0.8 * s, 0, 0, 6.3); ctx.fill(); ctx.fillRect(hx - 1.1 * s, hy - 2.5 * s, 2.2 * s, 1.4 * s); }
-  else if (kind === 'cone') { ctx.fillStyle = '#d8c080'; ctx.beginPath(); ctx.moveTo(hx - 3 * s, hy - 1 * s); ctx.lineTo(hx, hy - 3.4 * s); ctx.lineTo(hx + 3 * s, hy - 1 * s); ctx.fill(); }
-  else if (kind === 'helm') { ctx.fillStyle = '#9a9488'; ctx.beginPath(); ctx.arc(hx, hy - 0.6 * s, 1.8 * s, Math.PI, 0); ctx.fill(); ctx.fillStyle = '#ffe080'; ctx.fillRect(hx - 0.4 * s, hy - 2.6 * s, 0.8 * s, 0.8 * s); }
-  else if (kind === 'chef') { ctx.fillStyle = '#fbf8f0'; ctx.fillRect(hx - 1.3 * s, hy - 3.6 * s, 2.6 * s, 2.4 * s); }
-  else if (kind === 'fez') { ctx.fillStyle = '#b8402e'; ctx.fillRect(hx - 1.2 * s, hy - 2.8 * s, 2.4 * s, 1.6 * s); }
-  else if (kind === 'wrap') { ctx.fillStyle = '#f0e6cc'; ctx.beginPath(); ctx.ellipse(hx, hy - 1.4 * s, 1.9 * s, 1.1 * s, 0, 0, 6.3); ctx.fill(); }
-  else if (kind === 'scholar') { ctx.fillStyle = '#2e2a3a'; ctx.fillRect(hx - 2 * s, hy - 2.2 * s, 4 * s, 0.7 * s); ctx.fillRect(hx - 1 * s, hy - 2 * s, 2 * s, 0.9 * s); }
-  else if (kind === 'hood') { ctx.fillStyle = '#6a5a4a'; ctx.beginPath(); ctx.arc(hx, hy - 0.2 * s, 1.9 * s, Math.PI * 1.05, Math.PI * 1.95); ctx.fill(); }
-  else if (kind === 'sou') { ctx.fillStyle = '#e8b830'; ctx.beginPath(); ctx.ellipse(hx, hy - 1.1 * s, 2.3 * s, 0.9 * s, 0, Math.PI, 0); ctx.fill(); }
-  else if (kind === 'fur') { ctx.fillStyle = '#8a6a4a'; ctx.beginPath(); ctx.arc(hx, hy - 0.8 * s, 2 * s, Math.PI, 0); ctx.fill(); }
-  else if (kind === 'veil') { ctx.fillStyle = 'rgba(250,250,240,0.85)'; ctx.fillRect(hx - 2 * s, hy - 2.2 * s, 4 * s, 3 * s); }
-  else if (kind === 'apron') { ctx.fillStyle = 'rgba(245,240,228,0.9)'; ctx.fillRect(hx - 1.4 * s, y - 4.6 * s, 2.6 * s, 3 * s); }
-  else { ctx.fillStyle = '#5a4a3a'; ctx.beginPath(); ctx.arc(hx, hy - 0.7 * s, 1.6 * s, Math.PI, 0); ctx.fill(); }
-  if (k >= 40) { ctx.fillStyle = '#5a3a24'; ctx.fillRect(hx - 1.9 * s, y - 3.4 * s, 3.2 * s, 0.6 * s); } // a good leather belt
-  if (k >= 80) { ctx.strokeStyle = '#e8b830'; ctx.lineWidth = Math.max(0.7, 0.6 * s); ctx.beginPath(); ctx.moveTo(hx - 1.6 * s, y - 5.8 * s); ctx.lineTo(hx + 1.4 * s, y - 2.6 * s); ctx.stroke(); } // master's sash
-}
-const t_school = (w) => { const t = townById(w.town0); return t ? t._school : undefined; };
-function drawWalkerList(ws) {
-  const s = cam.tw / TB;
-  {
-    for (const w of ws) {
-      const x = sx(w.X), y = sy(w.Y);
-      if (x < -20 || x > cw + 20 || y < -20 || y > ch + 20) continue;
-      const step = w.moving ? Math.sin(w.ph) : 0, bob = Math.abs(step) * 0.7 * s;
-      if (w.rider) { // on horseback, or driving a little cart
-        if (w.cart) {
-          const bx = x - w.face * 8 * s;
-          ctx.fillStyle = 'rgba(30,40,20,0.22)'; ctx.beginPath(); ctx.ellipse(bx, y, 4.5 * s, 1.6 * s, 0, 0, 6.3); ctx.fill();
-          ctx.fillStyle = '#9a7048'; ctx.fillRect(bx - 4 * s, y - 5 * s, 8 * s, 3 * s);
-          if (w.cover) { ctx.fillStyle = '#f2ead8'; ctx.beginPath(); ctx.ellipse(bx, y - 5 * s, 4.4 * s, 4.8 * s, 0, Math.PI, 0); ctx.fill(); ctx.strokeStyle = 'rgba(120,100,70,0.6)'; ctx.lineWidth = 0.6 * s; for (const k of [-2, 0, 2]) { ctx.beginPath(); ctx.moveTo(bx + k * s, y - 5 * s); ctx.lineTo(bx + k * s * 0.8, y - 9.6 * s); ctx.stroke(); } }
-          else if (w.royal) { // a gilded carriage with a crown on top
-            ctx.fillStyle = '#5a2a6a'; ctx.fillRect(bx - 4 * s, y - 10 * s, 8 * s, 5.5 * s); ctx.fillStyle = '#e8b830'; ctx.fillRect(bx - 4.4 * s, y - 10.6 * s, 8.8 * s, 1 * s); ctx.fillRect(bx - 4 * s, y - 5.2 * s, 8 * s, 0.7 * s);
-            ctx.fillStyle = '#f5d78a'; ctx.fillRect(bx - 1.6 * s, y - 9 * s, 3.2 * s, 2.4 * s);
-            ctx.fillStyle = '#e8b830'; ctx.beginPath(); ctx.moveTo(bx - 2 * s, y - 10.6 * s); ctx.lineTo(bx - 2 * s, y - 13 * s); ctx.lineTo(bx - 1 * s, y - 11.6 * s); ctx.lineTo(bx, y - 13.4 * s); ctx.lineTo(bx + 1 * s, y - 11.6 * s); ctx.lineTo(bx + 2 * s, y - 13 * s); ctx.lineTo(bx + 2 * s, y - 10.6 * s); ctx.fill();
-          }
-          else { const ld = w.load || ['#c8a070', '#7aa04a']; ctx.fillStyle = ld[0]; ctx.fillRect(bx - 3 * s, y - 7.5 * s, 3 * s, 2.5 * s); ctx.fillStyle = ld[1]; ctx.fillRect(bx + 0.3 * s, y - 7 * s, 2.6 * s, 2 * s); }
-          ctx.fillStyle = '#4a3a2c'; ctx.beginPath(); ctx.arc(bx - 2 * s, y - 1.6 * s, 1.6 * s, 0, 6.3); ctx.arc(bx + 2.4 * s, y - 1.6 * s, 1.6 * s, 0, 6.3); ctx.fill();
-          ctx.strokeStyle = '#5a4030'; ctx.lineWidth = Math.max(0.7, 0.6 * s); ctx.beginPath(); ctx.moveTo(bx + w.face * 4 * s, y - 4 * s); ctx.lineTo(x, y - 4.4 * s); ctx.stroke();
-        }
-        L.drawAnimal(ctx, 'horse', x, y, s * 1.15, w.face, animTime * (w.moving ? 1.6 : 0), w.ph);
-        if (!w.cart) {
-          ctx.fillStyle = w.c; ctx.fillRect(x - 1.5 * s, y - 11.5 * s - bob, 3 * s, 4.2 * s);
-          ctx.fillStyle = '#f0c8a0'; ctx.beginPath(); ctx.arc(x + w.face * 0.3 * s, y - 12.9 * s - bob, 1.5 * s, 0, 6.3); ctx.fill();
-          if (w.banner) { const px = x - w.face * 1.6 * s; ctx.strokeStyle = '#5a4030'; ctx.lineWidth = Math.max(0.7, 0.6 * s); ctx.beginPath(); ctx.moveTo(px, y - 9 * s); ctx.lineTo(px, y - 21 * s); ctx.stroke(); ctx.fillStyle = w.banner; ctx.beginPath(); ctx.moveTo(px, y - 21 * s); ctx.lineTo(px - w.face * 6 * s, y - 19.5 * s); ctx.lineTo(px, y - 17 * s); ctx.fill(); }
-        } else {
-          const bx = x - w.face * 8 * s;
-          ctx.fillStyle = w.c; ctx.fillRect(bx + w.face * 2 * s - 1.4 * s, y - 10.5 * s, 2.8 * s, 3.6 * s);
-          ctx.fillStyle = '#f0c8a0'; ctx.beginPath(); ctx.arc(bx + w.face * 2 * s, y - 11.8 * s, 1.4 * s, 0, 6.3); ctx.fill();
-        }
-        continue;
-      }
-      ctx.fillStyle = 'rgba(30,40,20,0.25)'; ctx.beginPath(); ctx.ellipse(x, y, 2.4 * s, 1.1 * s, 0, 0, 6.3); ctx.fill();
-      // legs
-      ctx.strokeStyle = '#4a3a2c'; ctx.lineWidth = Math.max(0.8, 0.9 * s);
-      ctx.beginPath(); ctx.moveTo(x - 0.6 * s, y - 1.6 * s - bob); ctx.lineTo(x - 0.6 * s + step * 1.1 * s, y);
-      ctx.moveTo(x + 0.6 * s, y - 1.6 * s - bob); ctx.lineTo(x + 0.6 * s - step * 1.1 * s, y); ctx.stroke();
-      ctx.fillStyle = w.c; ctx.fillRect(x - 1.6 * s, y - 6 * s - bob, 3.2 * s, 4.6 * s);
-      ctx.fillStyle = '#f0c8a0'; ctx.beginPath(); ctx.arc(x + w.face * 0.3 * s, y - 7.6 * s - bob, 1.6 * s, 0, 6.3); ctx.fill();
-      if (w.job && cam.tw >= 34) outfit(x + w.face * 0.3 * s, y - bob, s, w.job, w.sk);
-      if (w.age >= 6 && w.age < 16 && w.pts && w.dest === t_school(w)) { ctx.fillStyle = '#8a5a3c'; ctx.fillRect(x - w.face * 2.2 * s - 0.9 * s, y - 5.6 * s - bob, 1.8 * s, 2.4 * s); } // a satchel
-      if (w.carry) carryItem(x + (w.face > 0 ? 0.6 : -3.2) * s, y - 9.5 * s - bob, s, w.job);
-      if (w.kind === 'traveller') { // a wide hat and a pack: clearly from out of town
-        ctx.fillStyle = '#6a4a2a'; ctx.fillRect(x - w.face * 2.6 * s - 1.2 * s, y - 6.4 * s - bob, 2.4 * s, 3.6 * s);
-        ctx.fillStyle = '#7a5a34'; ctx.beginPath(); ctx.ellipse(x + w.face * 0.3 * s, y - 8.8 * s - bob, 2.6 * s, 0.8 * s, 0, 0, 6.3); ctx.fill();
-        ctx.fillRect(x + w.face * 0.3 * s - 1 * s, y - 10 * s - bob, 2 * s, 1.4 * s);
-      }
-      if (!w.kind) {
-        const night = L.daylight().n;
-        if (night > 0.45 && w.moving) { // a little lantern lights the way home
-          const lx = x + w.face * 2.6 * s, ly = y - 5 * s - bob;
-          ctx.fillStyle = '#ffd88a'; ctx.fillRect(lx - 1 * s, ly - 1 * s, 2 * s, 2.2 * s); lights.push([lx, ly, 0.35]);
-        }
-        const db = S.buildings.get(w.dest), em = !A_GENTLE() && A.emoteFor(w, animTime, night, db && db.t === 'tavern');
-        if (em && cam.tw >= 40) A.bubble(ctx, x + 3 * s, y - 13 * s - bob, s * 0.9, em);
-      }
-      if (w.dog) { // the family dog trots along behind
-        const dxp = x - w.face * 6 * s, hop = w.moving ? Math.abs(Math.sin(w.ph * 1.3)) * 0.8 * s : 0;
-        L.drawAnimal(ctx, 'dog', dxp, y + 0.5 * s - hop, s, w.face, animTime * (w.moving ? 1.8 : 0.3), w.pid || 1);
-      }
-    }
-  }
-}
-
-// --- drawing helpers ---
-function drawSpriteF(spr, x, y, s, flip) {
-  if (!flip) return drawSprite(spr, x, y, s);
-  ctx.save(); ctx.translate(x, y); ctx.scale(-1, 1); ctx.drawImage(spr.c, -spr.ax * s, -spr.ay * s, spr.w * s, spr.h * s); ctx.restore();
-}
-// Little moving parts: windmill sails, a water wheel by the river, a swinging tavern sign, smithy sparks.
-const ANIM = new Set(['windmill', 'tavern', 'smithy', 'workshop', 'bakery', 'potter', 'glassworks', 'lumber']);
-function animate(type, cx, cy, s, wx, y) {
-  const t = animTime;
-  if (type === 'windmill') {
-    const hx = cx + 1 * s, hy = cy - 21 * s, a0 = t * 0.9 + hash2(wx, y, 71) * 6;
-    ctx.strokeStyle = '#6a4a30'; ctx.lineWidth = Math.max(0.8, 0.8 * s);
-    for (let k = 0; k < 4; k++) {
-      const a = a0 + k * Math.PI / 2, ex = hx + Math.cos(a) * 15 * s, ey = hy + Math.sin(a) * 15 * s * 0.9;
-      ctx.beginPath(); ctx.moveTo(hx, hy); ctx.lineTo(ex, ey); ctx.stroke();
-      const px = -Math.sin(a), py = Math.cos(a) * 0.9;
-      ctx.fillStyle = 'rgba(244,236,216,0.92)'; ctx.beginPath();
-      ctx.moveTo(hx + Math.cos(a) * 4 * s, hy + Math.sin(a) * 4 * s * 0.9); ctx.lineTo(ex, ey); ctx.lineTo(ex + px * 3.4 * s, ey + py * 3.4 * s); ctx.lineTo(hx + Math.cos(a) * 4 * s + px * 3.4 * s, hy + Math.sin(a) * 4 * s * 0.9 + py * 3.4 * s); ctx.closePath(); ctx.fill();
-    }
-    ctx.fillStyle = '#5a3a24'; ctx.beginPath(); ctx.arc(hx, hy, 1.6 * s, 0, 6.3); ctx.fill();
-  } else if (type === 'tavern') {
-    const px = cx + 11 * s, py = cy - 12 * s, sw = Math.sin(t * 1.6 + wx) * 0.25;
-    ctx.strokeStyle = '#3c3a40'; ctx.lineWidth = Math.max(0.8, 0.7 * s); ctx.beginPath(); ctx.moveTo(px - 5 * s, py); ctx.lineTo(px + 2 * s, py); ctx.stroke();
-    ctx.save(); ctx.translate(px, py); ctx.rotate(sw); ctx.fillStyle = '#8a5a3c'; ctx.fillRect(-2.6 * s, 0.8 * s, 5.2 * s, 4 * s); ctx.fillStyle = '#e8b830'; ctx.fillRect(-1.2 * s, 1.8 * s, 2.4 * s, 2 * s); ctx.restore();
-  } else if (type === 'smithy' || type === 'glassworks' || type === 'potter') {
-    for (let k = 0; k < 4; k++) {
-      const ph = (t * 1.4 + k * 0.27 + hash2(wx, y, 72)) % 1; if (ph > 0.6) continue;
-      ctx.fillStyle = `rgba(255,${170 + k * 15},70,${1 - ph / 0.6})`; ctx.fillRect(cx + (6 + k * 1.6 + ph * 6 * (k % 2 ? 1 : -1)) * s, cy - (4 + ph * 12) * s, 1.1 * s, 1.1 * s);
-    }
-  }
-  if ((type === 'workshop' || type === 'bakery' || type === 'lumber' || type === 'windmill') && byRiver(wx, y)) { // a water wheel turning in the stream
-    const hx = cx - 15 * s, hy = cy - 2 * s, r = 6 * s, a0 = t * 0.8;
-    ctx.strokeStyle = '#6a4a30'; ctx.lineWidth = Math.max(1, 1.1 * s); ctx.beginPath(); ctx.ellipse(hx, hy, r * 0.45, r, 0, 0, 6.3); ctx.stroke();
-    ctx.lineWidth = Math.max(0.7, 0.7 * s); ctx.beginPath();
-    for (let k = 0; k < 8; k++) { const a = a0 + k * Math.PI / 4; ctx.moveTo(hx, hy); ctx.lineTo(hx + Math.cos(a) * r * 0.45, hy + Math.sin(a) * r); } ctx.stroke();
-    ctx.fillStyle = 'rgba(220,236,250,0.7)'; for (let k = 0; k < 3; k++) ctx.fillRect(hx - 1 * s + k * s, hy + r * 0.7 + ((t * 8 + k * 3) % 4) * s * 0.5, 0.8 * s, 0.8 * s);
-  }
-}
-// ---------------- celebrations ----------------
-let fwUntil = 0; const sparks = [];
-export function celebrate(sec = 9) { fwUntil = animTime + sec; dirty = true; }
-function drawFireworks(dt) {
-  if (animTime < fwUntil && Math.random() < dt * 3.2) { // a new rocket bursts over the capital
-    const cap = S.towns.find((t) => t.capital) || S.towns[0];
-    let bx = cw / 2, by = ch * 0.35;
-    if (cap) { const x = sx(tileWX(cap.x, cap.y)), y = sy(tileWY(cap.y)); if (x > 0 && x < cw && y > 0 && y < ch) { bx = x; by = Math.max(80, y - cam.tw * 2); } }
-    const cx = bx + (Math.random() - 0.5) * 220, cy = by + (Math.random() - 0.5) * 120, hue = Math.floor(Math.random() * 360), n = 34;
-    for (let k = 0; k < n; k++) { const a = (k / n) * Math.PI * 2, v = 60 + Math.random() * 70; sparks.push({ x: cx, y: cy, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: 0, hue }); }
-    if (Math.random() < 0.5) emitPop();
-  }
-  if (!sparks.length) return;
-  ctx.save(); ctx.globalCompositeOperation = 'lighter';
-  for (let k = sparks.length - 1; k >= 0; k--) {
-    const p = sparks[k]; p.life += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 60 * dt; p.vx *= 0.985;
-    if (p.life > 1.6) { sparks.splice(k, 1); continue; }
-    ctx.fillStyle = `hsla(${p.hue},90%,${60 + 20 * (1 - p.life)}%,${1 - p.life / 1.6})`; ctx.fillRect(p.x - 1.4, p.y - 1.4, 2.8, 2.8);
-  }
-  ctx.restore(); dirty = true;
-}
-let emitPop = () => {}; export function onFirework(f) { emitPop = f; }
-// a building pops up when it is finished or improved
-const pops = new Map();
 on('built', ({ i }) => pops.set(i, animTime));
 on('upgraded', ({ i }) => pops.set(i, animTime));
-function popScale(i) { const t0 = pops.get(i); if (t0 === undefined) return 1; const a = (animTime - t0) / 0.7; if (a >= 1) { pops.delete(i); return 1; } return 1 + 0.22 * Math.sin(a * Math.PI) * (1 - a * 0.6); }
-// Workplaces that have improved show it: a pennant at level 2, a golden one and a star at level 3
-function statue(x, y, s) { // a statue of the founder in the square
-  ctx.fillStyle = '#b8ae9c'; ctx.fillRect(x - 3 * s, y - 4 * s, 6 * s, 4 * s); ctx.fillStyle = '#d6cebe'; ctx.fillRect(x - 3.6 * s, y - 4.8 * s, 7.2 * s, 1 * s);
-  ctx.fillStyle = '#8a9a8a'; ctx.fillRect(x - 1.3 * s, y - 10 * s, 2.6 * s, 5.2 * s); ctx.beginPath(); ctx.arc(x, y - 11.2 * s, 1.5 * s, 0, 6.3); ctx.fill();
-  ctx.strokeStyle = '#8a9a8a'; ctx.lineWidth = Math.max(0.8, 0.8 * s); ctx.beginPath(); ctx.moveTo(x + 1.2 * s, y - 9 * s); ctx.lineTo(x + 3.4 * s, y - 13 * s); ctx.stroke();
-}
-function levelTrim(spr, cx, cy, s, lv) {
-  const tx = cx + 2 * s, ty = cy - (spr.ay - 6) * s;
-  ctx.strokeStyle = '#5a4030'; ctx.lineWidth = Math.max(0.8, 0.7 * s); ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(tx, ty - 9 * s); ctx.stroke();
-  ctx.fillStyle = lv >= 3 ? '#e8b830' : '#4a78a8'; ctx.beginPath(); ctx.moveTo(tx, ty - 9 * s); ctx.lineTo(tx + 6 * s, ty - 7.5 * s + Math.sin(animTime * 3 + cx) * s * 0.6); ctx.lineTo(tx, ty - 6 * s); ctx.fill();
-  if (lv >= 3) { ctx.fillStyle = '#ffe28a'; ctx.font = `${Math.round(7 * s)}px system-ui`; ctx.textAlign = 'center'; ctx.fillText('★', tx, ty - 10 * s); }
-}
-// As a family settles in, their yard grows: a picket fence, then a vegetable patch, then a garden shed.
-function drawYard(cx, cy, s, hw, hh, age, h) {
-  if (age < 6) return;
-  ctx.strokeStyle = S.tier >= 3 ? '#b8ae9c' : '#efe6d2'; ctx.lineWidth = Math.max(0.8, (S.tier >= 3 ? 1.4 : 0.8) * s); // picket fences become low stone walls in grand towns
-  const a0 = 0.12 + h * 0.1, a1 = a0 + 0.38;
-  ctx.beginPath();
-  for (let k = 0; k <= 6; k++) { const f = a0 + (a1 - a0) * k / 6, x = cx - hw + hw * f, y = cy + hh * f; ctx.moveTo(x, y); ctx.lineTo(x, y - 3.2 * s); }
-  ctx.moveTo(cx - hw + hw * a0, cy + hh * a0 - 2.2 * s); ctx.lineTo(cx - hw + hw * a1, cy + hh * a1 - 2.2 * s);
-  ctx.stroke();
-  if (age >= 18) {
-    const vx = cx + hw * 0.42, vy = cy + hh * 0.42;
-    ctx.fillStyle = '#7a5a3a'; ctx.beginPath(); ctx.ellipse(vx, vy, 5.5 * s, 2.6 * s, 0, 0, 6.3); ctx.fill();
-    for (let k = 0; k < 6; k++) { ctx.fillStyle = k % 3 === 2 ? '#e8743a' : '#6aa040'; ctx.fillRect(vx - 4 * s + k * 1.5 * s, vy - 1.2 * s + (k & 1) * 1.2 * s, 1.1 * s, 1.1 * s); }
-  }
-  if (age >= 40 && h < 0.7) {
-    const bx = cx + hw * 0.68, by = cy + hh * 0.05;
-    ctx.fillStyle = '#8a6a48'; ctx.fillRect(bx - 2.6 * s, by - 4.5 * s, 5.2 * s, 4.5 * s);
-    ctx.fillStyle = '#6a4a30'; ctx.beginPath(); ctx.moveTo(bx - 3.2 * s, by - 4.3 * s); ctx.lineTo(bx, by - 6.6 * s); ctx.lineTo(bx + 3.2 * s, by - 4.3 * s); ctx.fill();
-    ctx.fillStyle = '#4a3020'; ctx.fillRect(bx - 0.8 * s, by - 2.6 * s, 1.6 * s, 2.6 * s);
-  }
-}
 // Grand 2×2 buildings are drawn from their bottom tile, so everything behind them is already down.
 let bigCacheFor = null, bigBottom = new Map();
 function bigBottoms() {
@@ -545,12 +111,6 @@ function bigBottoms() {
   }
   return bigBottom;
 }
-function drawSprite(spr, x, y, s, alpha) {
-  if (alpha !== undefined) ctx.globalAlpha = alpha;
-  ctx.drawImage(spr.c, x - spr.ax * s, y - spr.ay * s, spr.w * s, spr.h * s);
-  if (alpha !== undefined) ctx.globalAlpha = 1;
-}
-function diamondPath(p, x, y, hw, hh) { p.moveTo(x, y - hh); p.lineTo(x + hw, y); p.lineTo(x, y + hh); p.lineTo(x - hw, y); p.closePath(); }
 function buildingSprite(b, x, y) {
   if (b.p < 1) return SPR.build.scaffold[0];
   if (b.t === 'townhall') {
@@ -567,23 +127,12 @@ function buildingSprite(b, x, y) {
 }
 // A town keeps the style of the place it was founded.
 export function townStyle(t) { return t.style || (t.style = styleAt(t.x, t.y)); }
-function label(text, x, y, size = 12, sub) {
-  ctx.font = `600 ${size}px "Trebuchet MS", system-ui, sans-serif`;
-  const w = ctx.measureText(text).width + 14;
-  ctx.fillStyle = 'rgba(40,34,28,0.62)';
-  roundRect(x - w / 2, y - size - 4, w, size + 8, (size + 8) / 2); ctx.fill();
-  ctx.fillStyle = '#fff6e4'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText(text, x, y - size / 2);
-  if (sub) { ctx.font = `500 ${size - 2}px system-ui, sans-serif`; ctx.fillStyle = 'rgba(255,246,228,0.95)'; ctx.fillText(sub, x, y + size / 2 + 2); }
-}
-function roundRect(x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
-
 export let hoverTile = null;
 export const setHover = (t) => { hoverTile = t; dirty = true; };
 
 // --- main draw ---
-let lastT = performance.now(), animTime = 0, ambientT = 0, lastDraw = 0;
-const lights = []; // window glows collected while drawing, lit up at night
+export let lastT = performance.now(), animTime = 0, ambientT = 0, lastDraw = 0;
+export const lights = []; // window glows collected while drawing, lit up at night
 export const getAnimTime = () => animTime;
 export function frame(now) {
   const dt = Math.min(0.1, (now - lastT) / 1000); lastT = now; animTime += dt;
@@ -708,68 +257,6 @@ function sampleScene() {
 }
 let sceneFn = null;
 export function onScene(f) { sceneFn = f; }
-// Bunting and lanterns around the hall during a festival.
-function festive(ctx, cx, cy, s, tw, t) {
-  const cols = ['#c0503e', '#e8c040', '#4a78a8', '#5a9a5a', '#f2b6c6'];
-  for (let ring = 0; ring < 2; ring++) {
-    const R = tw * (0.7 + ring * 0.35);
-    for (let k = 0; k < 14; k++) {
-      const a = (k / 14) * Math.PI * 2 + animTime * 0.05, x = cx + Math.cos(a) * R, y = cy + Math.sin(a) * R * 0.5 - 14 * s;
-      const a2 = ((k + 1) / 14) * Math.PI * 2 + animTime * 0.05, x2 = cx + Math.cos(a2) * R, y2 = cy + Math.sin(a2) * R * 0.5 - 14 * s;
-      ctx.strokeStyle = 'rgba(90,64,48,0.6)'; ctx.lineWidth = 0.6; ctx.beginPath(); ctx.moveTo(x, y); ctx.quadraticCurveTo((x + x2) / 2, (y + y2) / 2 + 3 * s, x2, y2); ctx.stroke();
-      if (t.fest.key === 'lights') { lights.push([x, y + 2 * s, 0.4]); ctx.fillStyle = '#ffcf70'; ctx.beginPath(); ctx.arc(x, y + 2 * s, 1.6 * s, 0, 6.3); ctx.fill(); }
-      else { ctx.fillStyle = cols[(k + ring) % 5]; ctx.beginPath(); ctx.moveTo(x - 1.6 * s, y + 0.6 * s); ctx.lineTo(x + 1.6 * s, y + 0.6 * s); ctx.lineTo(x, y + 4 * s); ctx.closePath(); ctx.fill(); }
-    }
-  }
-  if (t.fest.key === 'blossom' || t.fest.key === 'midsummer') { // a maypole
-    ctx.strokeStyle = '#8a5a3c'; ctx.lineWidth = Math.max(1, s); ctx.beginPath(); ctx.moveTo(cx + tw * 0.55, cy + tw * 0.1); ctx.lineTo(cx + tw * 0.55, cy - tw * 0.5); ctx.stroke();
-    for (let k = 0; k < 4; k++) { ctx.strokeStyle = cols[k]; ctx.beginPath(); ctx.moveTo(cx + tw * 0.55, cy - tw * 0.5); ctx.lineTo(cx + tw * 0.55 + Math.cos(animTime + k * 1.57) * tw * 0.18, cy + tw * 0.1 + Math.sin(animTime + k * 1.57) * tw * 0.06); ctx.stroke(); }
-  }
-}
-function festiveExtras(ctx, cx, cy, s, tw, t) {
-  const cols = ['#c0503e', '#e8c040', '#4a78a8', '#5a9a5a', '#f2b6c6'];
-  const k0 = t.fest.key;
-  if (k0 === 'tournament') { // the lists: a long fence with two knights charging along it
-    const lx = cx - tw * 0.9, ly = cy + tw * 0.55, len = tw * 1.4;
-    ctx.strokeStyle = '#8a5a3c'; ctx.lineWidth = Math.max(1, 1.2 * s); ctx.beginPath(); ctx.moveTo(lx, ly); ctx.lineTo(lx + len, ly + len * 0.5); ctx.stroke();
-    for (let k = 0; k <= 6; k++) { const px = lx + len * k / 6, py = ly + len * 0.5 * k / 6; ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(px, py + 4 * s); ctx.stroke(); }
-    const u = (Math.sin(animTime * 0.9) + 1) / 2;
-    for (const [f, side, col] of [[u, -1, '#c0503e'], [1 - u, 1, '#4a78a8']]) {
-      const px = lx + len * f + side * 3 * s, py = ly + len * 0.5 * f - side * 3 * s, face = (side < 0) === (Math.cos(animTime * 0.9) > 0) ? 1 : -1;
-      L.drawAnimal(ctx, 'horse', px, py, s * 1.25, face, animTime * 2.4, side);
-      ctx.fillStyle = '#b8b8c0'; ctx.fillRect(px - 1.6 * s, py - 12 * s, 3.2 * s, 4.4 * s); ctx.fillStyle = col; ctx.fillRect(px - 1.6 * s, py - 9.6 * s, 3.2 * s, 2 * s);
-      ctx.fillStyle = '#9a9aa4'; ctx.beginPath(); ctx.arc(px, py - 13.2 * s, 1.6 * s, 0, 6.3); ctx.fill();
-      ctx.strokeStyle = '#e8dcc0'; ctx.lineWidth = Math.max(0.8, 0.8 * s); ctx.beginPath(); ctx.moveTo(px, py - 10 * s); ctx.lineTo(px + face * 10 * s, py - 13 * s); ctx.stroke();
-    }
-    for (let k = 0; k < 2; k++) { const px = cx + tw * (0.3 + k * 0.45), py = cy + tw * 0.15; ctx.fillStyle = cols[k * 2]; ctx.beginPath(); ctx.moveTo(px - 5 * s, py); ctx.lineTo(px, py - 9 * s); ctx.lineTo(px + 5 * s, py); ctx.fill(); ctx.fillStyle = '#f4ead8'; ctx.fillRect(px - 4 * s, py - 0.5 * s, 8 * s, 2 * s); }
-  } else if (k0 === 'fair') { // a turning carousel and a tall swing ride
-    const px = cx + tw * 0.62, py = cy + tw * 0.25, R = 7 * s;
-    ctx.fillStyle = 'rgba(30,40,20,0.2)'; ctx.beginPath(); ctx.ellipse(px, py, R * 1.3, R * 0.6, 0, 0, 6.3); ctx.fill();
-    for (let k = 0; k < 6; k++) { const a = animTime * 0.8 + k * 1.047, hx = px + Math.cos(a) * R, hy = py + Math.sin(a) * R * 0.45 - 2 * s - Math.abs(Math.sin(animTime * 2 + k)) * 1.2 * s; ctx.fillStyle = cols[k % 5]; ctx.fillRect(hx - 1.6 * s, hy - 2 * s, 3.2 * s, 2 * s); ctx.strokeStyle = '#e8dcc0'; ctx.lineWidth = 0.5 * s; ctx.beginPath(); ctx.moveTo(hx, hy - 2 * s); ctx.lineTo(hx, py - 11 * s); ctx.stroke(); }
-    ctx.fillStyle = '#c0503e'; ctx.beginPath(); ctx.moveTo(px - R * 1.25, py - 10 * s); ctx.lineTo(px, py - 17 * s); ctx.lineTo(px + R * 1.25, py - 10 * s); ctx.fill();
-    ctx.fillStyle = '#f4ead8'; for (let k = 0; k < 4; k++) { ctx.beginPath(); ctx.moveTo(px - R * 1.25 + k * R * 0.62, py - 10 * s); ctx.lineTo(px, py - 17 * s); ctx.lineTo(px - R * 1.25 + (k + 0.4) * R * 0.62, py - 10 * s); ctx.fill(); }
-    const qx = cx - tw * 0.55, qy = cy + tw * 0.3; ctx.strokeStyle = '#8a5a3c'; ctx.lineWidth = Math.max(1, s); ctx.beginPath(); ctx.moveTo(qx, qy); ctx.lineTo(qx, qy - 20 * s); ctx.stroke();
-    for (let k = 0; k < 5; k++) { const a = animTime * 1.2 + k * 1.256, r = 7 * s, hx = qx + Math.cos(a) * r, hy = qy - 9 * s + Math.sin(a) * r * 0.4; ctx.strokeStyle = 'rgba(80,60,40,0.6)'; ctx.lineWidth = 0.5 * s; ctx.beginPath(); ctx.moveTo(qx, qy - 20 * s); ctx.lineTo(hx, hy); ctx.stroke(); ctx.fillStyle = cols[k]; ctx.fillRect(hx - 1 * s, hy, 2 * s, 1.4 * s); }
-  } else if (k0 === 'wedding') { // a flower arch, the couple, and drifting petals
-    const px = cx + tw * 0.5, py = cy + tw * 0.25;
-    ctx.strokeStyle = '#7aa04a'; ctx.lineWidth = Math.max(1.2, 1.4 * s); ctx.beginPath(); ctx.ellipse(px, py, 6 * s, 9 * s, 0, Math.PI, 0); ctx.stroke();
-    for (let k = 0; k < 9; k++) { const a = Math.PI + k * Math.PI / 8; ctx.fillStyle = cols[(k + 4) % 5]; ctx.beginPath(); ctx.arc(px + Math.cos(a) * 6 * s, py + Math.sin(a) * 9 * s, 1.3 * s, 0, 6.3); ctx.fill(); }
-    ctx.fillStyle = '#f8f6f0'; ctx.beginPath(); ctx.moveTo(px - 3.4 * s, py); ctx.lineTo(px - 0.8 * s, py); ctx.lineTo(px - 1.4 * s, py - 4.5 * s); ctx.lineTo(px - 2.8 * s, py - 4.5 * s); ctx.fill();
-    ctx.fillStyle = '#3a3448'; ctx.fillRect(px + 0.8 * s, py - 4.6 * s, 2.4 * s, 4.6 * s);
-    ctx.fillStyle = '#f0c8a0'; ctx.beginPath(); ctx.arc(px - 2.1 * s, py - 5.8 * s, 1.3 * s, 0, 6.3); ctx.arc(px + 2 * s, py - 5.9 * s, 1.3 * s, 0, 6.3); ctx.fill();
-    for (let k = 0; k < 10; k++) { const ph = k * 1.7, fx = px + Math.sin(animTime * 0.7 + ph) * 14 * s, fy = py - 16 * s + ((animTime * 6 + k * 5) % 24) * s; ctx.fillStyle = cols[k % 5]; ctx.fillRect(fx, fy, 1.2 * s, 1.2 * s); }
-  }
-}
-// A lost animal waiting to be found (tap it!), with a little ? above.
-function lostAnimal(ctx, q, s, tw) {
-  if (tw < 20) return;
-  const x = sx(tileWX(q.x, q.y)), y = sy(tileWY(q.y)) + tw * 0.05;
-  if (x < -30 || x > cw + 30 || y < -30 || y > ch + 30) return;
-  const [ox, , face] = L.wander(animTime * 0.6, q.id, 0.12);
-  const kind = q.animal === 'goat' ? 'goat' : q.animal === 'hen' ? 'chicken' : 'sheep';
-  L.drawAnimal(ctx, kind, x + ox * tw, y, s * 1.4, face, animTime, q.id);
-  A.bubble(ctx, x + ox * tw + 4 * s, y - 16 * s + Math.sin(animTime * 3) * 1.5 * s, s, '?');
-}
 // Explorer parties out on the map, and the landmarks already in the journal.
 function drawExplorers() {
   const tw = cam.tw, s = tw / TB;
@@ -1143,3 +630,8 @@ function drawLabels(tileMode) {
     }
   }
 }
+
+// Public interface: everything the render helpers export is also available from render.js.
+export * from './render/walkers.js';
+export * from './render/effects.js';
+export * from './render/canvas.js';

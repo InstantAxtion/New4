@@ -29,14 +29,32 @@ web/
       war.js            raids, garrisons, the field army
       seasons.js        calendar, seasons, day and night
     world.js  rivers.js  regions.js  noise.js   the Earth itself
-    render.js           draws everything on the canvas
-    sprites.js          all art, drawn in code at start-up
-    ui.js               HUD, panels, menus, modes
+    render.js           camera, the frame loop, the map (overview and tiles), labels
+    render/
+      canvas.js         drawing helpers (sprites, labels, shapes)
+      walkers.js        villagers, visitors, carts and soldiers walking the streets
+      effects.js        fireworks, building pops, festivals, yards, animated details
+    sprites.js          builds all the art at start-up; SPR holds it
+    sprites/
+      kit.js            the drawing kit: isometric boxes, roofs, cones, windows...
+      terrain.js        ground tiles, trees, hills and mountains
+      homes.js          regional homes (STYLES) and their variants
+      buildings.js      every other building
+      creatures.js      animals, boats, zone markers and small things
+    ui.js               HUD, sheets, mode bars, the act() switch, map taps and painting
+    ui/
+      common.js         shared helpers: $, esc, icons, cost chips, sheet headers, zone info
+      build.js  research.js  army.js  progress.js  people.js  realm.js  town.js  settings.js  title.js
+                        one file per panel or screen
     input.js            touch, mouse, pen and keyboard
     audio.js            music and sound, all generated
     tutorial.js         Pip's first-time guide
 tests/                  browser tests (Playwright)
+scripts/                tools for refactoring (moving code between modules, pruning imports)
 ```
+
+`ui.js`, `render.js` and `sprites.js` re-export everything from their folders, so other modules can keep
+importing from them. New code may import from the specific file directly.
 
 There is no build step: the browser loads `web/` directly as ES modules, and the Android app wraps
 the same folder with Capacitor.
@@ -110,6 +128,13 @@ optional fields need no migration (`load()` fills in defaults). Never edit a shi
 | `npm run check` | Both of the above |
 
 Every push runs lint and tests on GitHub Actions, and the Android APK is only built if they pass.
+
+## Keeping modules small
+When a file grows past roughly 600 lines, split it. `scripts/split-module.py` moves groups of top-level
+functions into new modules and wires up the imports and exports. It refuses to move code that writes
+shared `let` state owned by another module (ES module imports are read-only), so give that state a small
+setter first. Then run `npx eslint web/js -f json > lint.json && python3 scripts/prune-imports.py lint.json`
+to remove imports that are no longer used, and finish with `npm run check`.
 
 ## Conventions
 

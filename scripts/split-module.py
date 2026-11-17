@@ -219,10 +219,12 @@ for k, l in enumerate(lines):
     if any(s <= k < e for s, e in moved_ranges): continue
     out.append(l)
 res = '\n'.join(out)
+done_lines = set()
 for nm in needs_export_from_src:
     b = name_block[nm]
     first = lines[b[0]]
-    if first.startswith('export '): continue
+    if first.startswith('export ') or b[0] in done_lines: continue
+    done_lines.add(b[0])
     res = res.replace('\n' + first, '\nexport ' + first, 1) if ('\n' + first) in res else res.replace(first, 'export ' + first, 1)
 imp_lines = [f"import {{ {', '.join(sorted(v))} }} from '{rel(src_name, m)}';" for m, v in sorted(src_imports_from_new.items())]
 # put them after the last import line
