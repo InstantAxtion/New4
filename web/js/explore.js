@@ -1,6 +1,6 @@
 // Explorers and their journal, highways between towns, the shipyard, and rare finds.
-import { W, H, B, world, tileWX, tileWY, idxOf, wrapX, tileLat } from './world.js';
-import { S, on, emit, townById, groundDist2, affordable, continentAt, hasStables, count, setFerryCheck, hasTalent } from './game.js';
+import { W, H, world, tileWX, tileWY, idxOf, wrapX } from './world.js';
+import { S, on, emit, townById, groundDist2, affordable, continentAt, hasStables, setFerryCheck, hasTalent } from './game.js';
 import { hash2 } from './noise.js';
 import * as L from './life.js';
 import { YEAR } from './seasons.js';

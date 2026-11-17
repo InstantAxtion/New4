@@ -1,7 +1,7 @@
 // Isometric renderer with an overview (atlas) mode for far zoom levels.
-import { BIOMES, W, H, B, world, wrapX, tileWX, tileWY, biomeAt, isWater } from './world.js';
+import { BIOMES, W, H, B, world, wrapX, tileWX, tileWY } from './world.js';
 import { SPR, TB, DECOR_DENSITY, homeArt } from './sprites.js';
-import { on, byRiver, canCanal, canZoneAs, BIG, footprint, S, M, DEFS, ZONES, townById, canPlace, canZone, canRoad, canFound, canStart, ownerOf, groundDist2, CONTACT_RANGE, inContact } from './game.js';
+import { on, byRiver, canCanal, canZoneAs, BIG, footprint, S, M, DEFS, ZONES, townById, canPlace, canRoad, canFound, canStart, groundDist2 } from './game.js';
 import { hash2 } from './noise.js';
 import { idxOf } from './world.js';
 import * as L from './life.js';
@@ -9,7 +9,7 @@ import * as A from './alive.js';
 import * as X from './explore.js';
 import * as K from './kingdoms.js';
 import { drawWar } from './war.js';
-import * as ST from './stories.js';
+
 import { petOf, personById, ageOf } from './folk.js';
 import { styleAt } from './regions.js';
 import { nbExtra, SPECS } from './game.js';
@@ -819,7 +819,7 @@ function drawTiles() {
   };
 
   // Pass 1: ground
-  const tint = new Path2D(), border = new Path2D(), valid = new Path2D(), invalid = new Path2D(), roadPath = new Path2D(), pavedPath = new Path2D();
+  const tint = new Path2D(), border = new Path2D(), valid = new Path2D(), roadPath = new Path2D(), pavedPath = new Path2D();
   const isPaved = (i) => { const rt = L.roadTown.get(i); if (rt === -1) return S.tier >= 3; const t = townById(rt); if (!t) return false; if (t.imp && t.imp.paved) return true; return S.tier >= 2 && groundDist2(i % W, Math.floor(i / W), t.x, t.y) <= (S.tier >= 3 ? 16 : 5); }; // a paved town square, growing with the realm
   let anyRoad = false, anyRiver = false, anyBridge = false;
   const riverPaths = [new Path2D(), new Path2D(), new Path2D()], bridgePath = new Path2D(), canalPath = new Path2D(); let anyCanal = false;

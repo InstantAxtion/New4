@@ -1,7 +1,7 @@
 // Festivals, small requests from villagers, and the royal family.
-import { W, H, B, world, idxOf, wrapX, tileLat } from './world.js';
-import { S, on, emit, townById, affordable, ownerOf, canZone, count, setRulerFx, totalPop, TIERS } from './game.js';
-import { YEAR, seasonIndex, SEASONS } from './seasons.js';
+import { W, H, world, wrapX, tileLat } from './world.js';
+import { S, on, emit, townById, affordable, count, setRulerFx, totalPop, TIERS } from './game.js';
+import { YEAR, seasonIndex } from './seasons.js';
 import { ageOf, fullName, personById } from './folk.js';
 
 // ---------------- festivals ----------------

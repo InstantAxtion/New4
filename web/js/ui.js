@@ -2,9 +2,9 @@
 import { world, BIOMES, B, describeTile, idxOf, wrapX, tileWX, tileWY, tileLat, W } from './world.js';
 import {
   S, M, RES, RES_NAMES, TIERS, DEFS, MANUAL, WONDERS, ZONES, FOUND_COST, GIFT_AMOUNT, CONTACT_RANGE,
-  on, emit, totalPop, totalCap, townById, hasWonder, wonderStarted, count, ownerOf, canPlace, placeBuilding, setZone,
-  demolish, canFound, foundTown, inContact, tradeOffers, doTrade, gift, canInvite, invite, activeQuests, QUESTS,
-  caps, CHAPTERS, currentChapter, acceptContract, declineContract, sendContract, RESEARCH, ERAS, hasTech, canResearch, pickResearch, knowledgeRate, TALENTS, hasTalent, talentsFree, takeTalent, CARAVAN_COST, maxCaravans, caravanPairs, startCaravan, stopCaravan, prestige, prestigeRank, priceNote, anchorOf, moveBuilding, turnBuilding, BIG, footprint, newGame, currentSlot as CUR, PACE, crewsOf, crewsBusy, zonesWaiting, yardsIn, UPKEEP, SPECS, SPEC_TIER, SPEC_CHANGE_COST, setSpec, GOODS, EVERYDAY, GOODS_BUILDINGS, SPECIALTIES, ALL_WONDERS, MOODS, moodOf, townStyleOf, TRAITS, IMPROVEMENTS, IMPROVE_TIER, charm, improve, continentAt, realmContinents, harbourTowns, routeOptions, openRoute, ROUTE_COST, ROUTE_DAYS, routesDone, maxTowns, fulfil, nbExtra, HOUSE_LEVELS, HOUSE_CAP_MULT, save, hasSave, load, resetSave, slotInfo, setSlot, deleteSlot, SLOT_COUNT, saveSettings, surveyStart, canStart, affordable, groundDist2, DAY_SECONDS,
+  on, emit, totalPop, totalCap, townById, hasWonder, wonderStarted, count, ownerOf, placeBuilding, setZone,
+  demolish, foundTown, inContact, tradeOffers, doTrade, gift, canInvite, invite, activeQuests, 
+  caps, CHAPTERS, currentChapter, acceptContract, declineContract, sendContract, RESEARCH, ERAS, hasTech, canResearch, pickResearch, knowledgeRate, TALENTS, hasTalent, talentsFree, takeTalent, CARAVAN_COST, maxCaravans, caravanPairs, startCaravan, stopCaravan, prestige, prestigeRank, priceNote, anchorOf, moveBuilding, turnBuilding, newGame, currentSlot as CUR, PACE, crewsOf, crewsBusy, zonesWaiting, yardsIn, UPKEEP, SPECS, SPEC_TIER, SPEC_CHANGE_COST, setSpec, GOODS, EVERYDAY, GOODS_BUILDINGS, SPECIALTIES, ALL_WONDERS, MOODS, moodOf, townStyleOf, TRAITS, IMPROVEMENTS, IMPROVE_TIER, charm, improve, continentAt, realmContinents, harbourTowns, routeOptions, openRoute, ROUTE_COST, ROUTE_DAYS, maxTowns, fulfil, nbExtra, HOUSE_LEVELS, HOUSE_CAP_MULT, save, load, resetSave, slotInfo, setSlot, deleteSlot, SLOT_COUNT, saveSettings, surveyStart, canStart, affordable,
 } from './game.js';
 import { SPR, spriteIcon, homeArt } from './sprites.js';
 import { panBy, cam, markDirty, flyTo, centerOn, clampCam, screenSize, TILE_MODE_TW, sx, sy, pickTile, setHover, celebrate, onFirework } from './render.js';
@@ -455,7 +455,6 @@ function showRealm() {
   openSheet('realm', () => {
     const p = totalPop(), next = TIERS[S.tier + 1];
     const prog = next ? Math.min(1, (p - TIERS[S.tier].pop) / (next.pop - TIERS[S.tier].pop)) : 1;
-    const f = canFound(0, 0);
     const foundLocked = S.tier < 1 || S.towns.length >= maxTowns();
     const contacts = S.neighbors.filter((n) => !n.joined && inContact(n)).sort((a, b) => b.friend - a.friend);
     ST.ensureRoyals();

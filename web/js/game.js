@@ -3,94 +3,18 @@ import { W, H, B, BIOMES, world, idxOf, wrapX, tileWX, tileWY, neighbors, biomeA
 import { mulberry32, hash2 } from './noise.js';
 import { farmSeason, seasonIndex } from './seasons.js';
 import { styleAt } from './regions.js';
+import { RES, RES_NAMES, GOODS, ALL_RES } from './data/resources.js';
+import { TIERS, PRESTIGE_RANKS } from './data/tiers.js';
+import { DEFS, UPKEEP } from './data/buildings.js';
+import { ZONES } from './data/zones.js';
+import { RESEARCH, ERAS } from './data/research.js';
+import { TALENTS } from './data/talents.js';
+import { CHAPTERS } from './data/chapters.js';
+// Content tables live in ./data; they are re-exported here so every module can keep importing from game.js.
+export { RES, RES_NAMES, GOODS, ALL_RES, TIERS, PRESTIGE_RANKS, DEFS, UPKEEP, ZONES, RESEARCH, ERAS, TALENTS, CHAPTERS };
 
-export const RES = ['food', 'wood', 'stone', 'gold', 'iron'];
-export const RES_NAMES = { food: 'Food', wood: 'Wood', stone: 'Stone', gold: 'Gold', iron: 'Iron', bread: 'Bread', tools: 'Tools', cloth: 'Cloth', ale: 'Ale & wine', pottery: 'Pottery', glass: 'Glass', spices: 'Spices', books: 'Books', flour: 'Flour', wool: 'Wool' };
-// Goods are made from basic resources in simple one-step workshops.
-export const GOODS = ['bread', 'tools', 'cloth', 'ale', 'pottery', 'glass', 'spices', 'books', 'flour', 'wool'];
-export const ALL_RES = [...RES, ...GOODS];
 
-export const TIERS = [
-  { name: 'Hamlet', pop: 0, maxTowns: 1, radiusCap: 6 },
-  { name: 'Village', pop: 25, maxTowns: 2, radiusCap: 8 },
-  { name: 'Town', pop: 80, maxTowns: 4, radiusCap: 10 },
-  { name: 'City', pop: 200, maxTowns: 7, radiusCap: 13 },
-  { name: 'Kingdom', pop: 500, maxTowns: 12, radiusCap: 16 },
-  { name: 'Empire', pop: 1200, maxTowns: 16, radiusCap: 18 },
-];
 
-export const DEFS = {
-  townhall: { name: 'Town Hall', cap: 8, prod: { gold: 0.3 }, time: 2, hidden: true },
-  house: { name: 'Cottages', zone: 'housing', cost: { wood: 8 }, cap: 6, time: 2, tier: 0 },
-  farm: { name: 'Farm Fields', zone: 'farmland', cost: { wood: 6 }, prod: { food: 1.4 }, jobs: 2, time: 1.5, tier: 0 },
-  workshop: { name: 'Workshop', zone: 'workshop', cost: { wood: 12, stone: 6 }, prod: { gold: 0.8 }, jobs: 3, time: 3, tier: 1 },
-  pasture: { name: 'Pasture', zone: 'pasture', cost: { wood: 5 }, prod: { food: 0.7, wool: 0.15 }, jobs: 1, time: 1.2, tier: 0 },
-  woodlot: { name: 'Woodlot', zone: 'woodlot', cost: { food: 4 }, prod: { wood: 0.55 }, jobs: 1, time: 1.5, tier: 0 },
-  park: { name: 'Park', zone: 'park', cost: { wood: 6, stone: 4 }, time: 1.2, tier: 0, mood: 1 },
-  pit: { name: 'Mining Pit', zone: 'mining', cost: { wood: 10 }, prod: { stone: 0.45, iron: 0.08 }, jobs: 2, time: 2, tier: 1 },
-  shops: { name: 'Shops', zone: 'shops', cost: { wood: 14, stone: 8 }, prod: { gold: 0.7 }, jobs: 2, time: 3, tier: 2 },
-  lumber: { name: 'Lumber Camp', cost: { wood: 10 }, prod: { wood: 1.5 }, jobs: 2, time: 2, tier: 0, desc: 'Build on or beside woodland, taiga or jungle.' },
-  dock: { name: 'Fishing Dock', cost: { wood: 12 }, prod: { food: 1.6 }, jobs: 2, time: 2, tier: 0, desc: 'Build on land touching the water.' },
-  quarry: { name: 'Quarry', cost: { wood: 15 }, prod: { stone: 1 }, jobs: 3, time: 3, tier: 0, desc: 'Works anywhere; full output near hills, mountains or rocky ground, half elsewhere.' },
-  mine: { name: 'Iron Mine', cost: { wood: 20, stone: 15 }, prod: { iron: 0.6 }, jobs: 3, time: 4, tier: 1, desc: 'Build on hills or beside mountains.' },
-  tower: { name: 'Watchtower', cost: { wood: 20, stone: 25 }, jobs: 1, time: 4, tier: 1, radius: 3, desc: 'Pushes the town border outward.' },
-  shipyard: { name: 'Shipyard', cost: { wood: 50, stone: 20 }, prod: { food: 0.8 }, jobs: 3, time: 5, tier: 1, desc: 'On a shore or riverbank. A fishing fleet (+food, docks here +25%) and ferries that carry settlers across short stretches of sea.' },
-  harbour: { name: 'Harbour', cost: { wood: 80, stone: 60, gold: 40 }, prod: { gold: 1 }, jobs: 4, time: 8, tier: 2, desc: 'On the coast. Settlers and traders sail from here to other continents.' },
-  green: { name: 'Town Green', hidden: true, civic: true, time: 1 },
-  barracks: { name: 'Barracks', cost: { wood: 40, stone: 30 }, jobs: 1, time: 3, tier: 1, cat: 'military', desc: 'Trains soldiers for this town’s garrison (up to 10 each), for a little gold and food.' },
-  fort: { name: 'Stone Fort', research: 'fortifications', cost: { stone: 120, wood: 40, iron: 20 }, jobs: 2, time: 6, tier: 2, cat: 'military', desc: 'A strong keep: +15 defence and room for 10 more soldiers in this town.' },
-  stonebridge: { name: 'Stone Bridge', cost: { stone: 40, wood: 10 }, prod: { gold: 0.15 }, time: 4, tier: 1, cat: 'everyday', desc: 'Built across a river. Roads cross it, and travellers pay a coin or two.' },
-  tunnel: { name: 'Mountain Tunnel', cost: { stone: 60, wood: 30, iron: 10 }, time: 6, tier: 2, cat: 'everyday', desc: 'Dug into a mountain inside your borders, so roads can pass straight through the range.' },
-  fountain: { name: 'Fountain Square', hidden: true, civic: true, time: 1 },
-  market: { name: 'Market', cost: { wood: 40, stone: 30, gold: 20 }, prod: { gold: 1.5 }, jobs: 3, time: 5, tier: 2, desc: 'Earns gold and sweetens every trade.' },
-  // ---- everyday buildings (lift a town's mood) ----
-  well: { name: 'Well', cost: { stone: 15 }, time: 2, tier: 0, mood: 1, cat: 'everyday', desc: 'Fresh water close to home.' },
-  apiary: { name: 'Apiary', cost: { wood: 15 }, prod: { food: 0.5 }, jobs: 1, time: 2, tier: 0, mood: 1, cat: 'everyday', desc: 'Bees, honey and wildflowers.' },
-  windmill: { name: 'Windmill', cost: { wood: 30, stone: 10 }, jobs: 1, time: 3, tier: 1, mood: 1, cat: 'everyday', desc: "Grinds grain: +15% food from this town's farms." },
-  chapel: { name: 'Chapel', cost: { wood: 30, stone: 30 }, jobs: 1, time: 4, tier: 1, mood: 2, cat: 'everyday', desc: 'A quiet place for the whole town.' },
-  tavern: { name: 'Tavern', cost: { wood: 40, stone: 10 }, use: { ale: 0.2 }, jobs: 2, time: 4, tier: 1, mood: 1, cat: 'everyday', desc: 'Warm and lively. Even merrier when it can serve ale or wine.' },
-  yard: { name: "Builder's Yard", cost: { wood: 40, stone: 20 }, jobs: 2, time: 3, tier: 0, cat: 'everyday', desc: '+2 builder crews for this town, so more zoned tiles go up at once, and building here is 25% faster (up to two yards).' },
-  stable: { name: 'Stables', cost: { wood: 40, stone: 15, food: 30 }, jobs: 2, time: 4, tier: 1, cat: 'everyday', desc: 'Horses! Riders and carts speed about town, settlers set out faster, traders bring more, and horses help plough the fields.' },
-  school: { name: 'School', cost: { wood: 40, stone: 30, gold: 20 }, jobs: 2, time: 5, tier: 2, mood: 1, cat: 'everyday', desc: 'Villagers learn their trades faster.' },
-  // ---- goods workshops ----
-  bakery: { name: 'Bakery', cost: { wood: 30, stone: 15 }, use: { food: 1.2 }, prod: { bread: 1.6 }, jobs: 2, time: 3, tier: 1, cat: 'goods', desc: 'Turns food into bread, which feeds folk well and lifts their mood.' },
-  brewery: { name: 'Brewery', cost: { wood: 30, stone: 10 }, use: { food: 0.8 }, prod: { ale: 0.6 }, jobs: 2, time: 3, tier: 1, cat: 'goods', desc: 'Brews ale for the taverns.' },
-  weaver: { name: 'Weaver', cost: { wood: 25 }, use: { food: 0.3 }, prod: { cloth: 0.5 }, jobs: 2, time: 3, tier: 1, cat: 'goods', desc: 'Weaves cloth. Fine clothes make folk happier.' },
-  gristmill: { name: 'Grist Mill', research: 'milling', cost: { wood: 30, stone: 15 }, use: { food: 1 }, prod: { flour: 0.9 }, jobs: 2, time: 3, tier: 1, cat: 'goods', desc: 'Grinds grain into flour. Bakers make far more bread from flour.' },
-  granary: { name: 'Granary', cost: { wood: 25, stone: 10 }, time: 2, tier: 0, cat: 'everyday', store: { food: 600 }, desc: 'Holds 600 more food, so good harvests are never wasted.' },
-  warehouse: { name: 'Warehouse', research: 'storehouses', cost: { wood: 40, stone: 30 }, time: 3, tier: 1, cat: 'everyday', store: { wood: 500, stone: 500, iron: 200, goods: 200 }, desc: 'Holds 500 more wood and stone, plus iron and goods.' },
-  potter: { name: 'Potter', research: 'kilns', cost: { wood: 20, stone: 10 }, use: { stone: 0.3 }, prod: { pottery: 0.5 }, jobs: 2, time: 3, tier: 1, cat: 'goods', desc: 'Shapes clay into pots and jugs. Homes with pottery are happier.' },
-  glassworks: { name: 'Glassworks', research: 'glassmaking', cost: { wood: 30, stone: 30 }, use: { wood: 0.4, stone: 0.2 }, prod: { glass: 0.4 }, jobs: 2, time: 4, tier: 2, cat: 'goods', desc: 'Glass windows: towns hold 5% more people while glass is in store.' },
-  spicehouse: { name: 'Spice House', research: 'spicetrade', cost: { wood: 25, stone: 15, gold: 20 }, use: { gold: 0.25 }, prod: { spices: 0.4 }, jobs: 2, time: 3, tier: 2, cat: 'goods', desc: 'Buys spices from far-off traders. Spiced food lifts every town, and neighbours pay more in trades.' },
-  scriptorium: { name: 'Scriptorium', research: 'scholarship', cost: { wood: 30, stone: 30, gold: 30 }, use: { cloth: 0.08, gold: 0.15 }, prod: { books: 0.3 }, jobs: 2, time: 5, tier: 3, cat: 'goods', desc: 'Copies books. Villagers learn faster and towns are happier.' },
-  smithy: { name: 'Smithy', cost: { wood: 30, stone: 30 }, use: { iron: 0.3, wood: 0.5 }, prod: { tools: 0.4 }, jobs: 3, time: 4, tier: 2, cat: 'goods', desc: 'Forges tools: building goes faster and every trade works a little better.' },
-  // ---- regional specialties (only towns of that style can build them) ----
-  vineyard: { name: 'Vineyard', style: 'mediterranean', cost: { wood: 25 }, prod: { ale: 0.8 }, jobs: 2, time: 3, tier: 1, mood: 1, cat: 'special', desc: 'Mediterranean towns: sun-warmed grapes and wine.' },
-  riceterrace: { name: 'Rice Terraces', style: 'eastasian', cost: { wood: 15, stone: 15 }, prod: { food: 2 }, jobs: 3, time: 3, tier: 1, cat: 'special', desc: 'Curved-eave towns: rich harvests, best on hills.' },
-  icehut: { name: 'Ice-fishing Hut', style: 'nordic', cost: { wood: 15 }, prod: { food: 1.5 }, jobs: 2, time: 2, tier: 1, cat: 'special', noSeason: true, desc: 'Nordic towns: fishing all year round, even in deep winter. Touch the water.' },
-  oasis: { name: 'Oasis Garden', style: 'desert', cost: { wood: 20, stone: 10 }, prod: { food: 1.2 }, jobs: 2, time: 3, tier: 1, mood: 1, cat: 'special', desc: 'Adobe towns: palms, dates and cool shade.' },
-  cacao: { name: 'Cacao Grove', style: 'tropical', cost: { wood: 20 }, prod: { gold: 1 }, jobs: 2, time: 3, tier: 1, mood: 1, cat: 'special', desc: 'Tropical towns: cacao, much loved by traders.' },
-  orchard: { name: 'Orchard', style: 'temperate', cost: { wood: 20 }, prod: { food: 1.1, ale: 0.2 }, jobs: 2, time: 3, tier: 1, mood: 1, cat: 'special', desc: 'Timber-framed towns: apples and cider.' },
-  library: { name: 'Grand Library', wonder: true, cost: { wood: 300, stone: 200, gold: 300 }, time: 30, tier: 2, desc: '+10% to all production.' },
-  gardens: { name: 'Royal Gardens', wonder: true, cost: { food: 300, wood: 200, gold: 150 }, time: 25, tier: 2, desc: '+25% food from every source.' },
-  lighthouse: { name: 'Great Lighthouse', wonder: true, cost: { stone: 300, wood: 200, iron: 80 }, time: 30, tier: 2, desc: 'Coastal. +50% fishing and better trades.' },
-  greatcastle: { name: 'Great Castle', wonder: true, cost: { stone: 400, iron: 100, gold: 200 }, time: 40, tier: 3, desc: '+4 border for every town, +20% gold.' },
-  cathedral: { name: 'Cathedral', wonder: true, cost: { stone: 500, gold: 300, iron: 50 }, time: 40, tier: 3, desc: '+30% housing everywhere.' },
-  // ---- regional wonders ----
-  monastery: { name: 'Cliff Monastery', wonder: true, cost: { stone: 400, wood: 200, gold: 200 }, time: 40, tier: 3, desc: 'Beside mountains. +1 mood in every town.' },
-  bridge: { name: 'Great Bridge', wonder: true, cost: { stone: 500, iron: 120, tools: 40 }, time: 45, tier: 3, desc: 'On a shore. +15% gold, and neighbours visit more often.' },
-  observatory: { name: 'Observatory', wonder: true, cost: { stone: 300, gold: 300, tools: 30 }, time: 40, tier: 3, desc: 'On desert, steppe or hills. Villagers learn faster; +5% to everything.' },
-  dome: { name: 'Botanical Dome', wonder: true, cost: { stone: 300, gold: 250, cloth: 40 }, time: 40, tier: 3, desc: 'On green land. +1 mood everywhere and +10% food.' },
-};
-// Daily upkeep for bigger buildings. If it can't be paid the building idles (never breaks).
-export const UPKEEP = {
-  shipyard: { wood: 0.08 },
-  tower: { wood: 0.05 }, harbour: { wood: 0.15, gold: 0.1 }, market: { wood: 0.08 },
-  chapel: { gold: 0.05 }, tavern: { food: 0.1 }, school: { gold: 0.1 }, stable: { food: 0.15 }, windmill: { wood: 0.03 },
-  bakery: { wood: 0.04 }, brewery: { wood: 0.04 }, weaver: { wood: 0.03 }, smithy: { stone: 0.04 },
-  library: { gold: 0.3 }, gardens: { food: 0.3 }, lighthouse: { wood: 0.2 }, greatcastle: { stone: 0.3 }, cathedral: { gold: 0.3 },
-  monastery: { food: 0.2 }, bridge: { stone: 0.2 }, observatory: { gold: 0.3 }, dome: { wood: 0.2 },
-};
 // Each town may master one trade: +30% for it, -10% for its other work.
 export const SPECS = {
   farming: { name: 'Farming', icon: '🌾', desc: 'Fields, fishing, orchards and the like.' },
@@ -266,27 +190,18 @@ export const taken = (i) => S.buildings.has(i) || S.occupied.has(i) || S.canals.
 export const CROSSINGS = new Set(['stonebridge', 'tunnel']);
 export const crossing = (i) => { const b = S.buildings.get(i); return !!b && CROSSINGS.has(b.t) && b.p >= 1; };
 export const anchorOf = (i) => (S.occupied.has(i) ? S.occupied.get(i) : i);
-export const ZONES = {
-  housing: { name: 'Housing', builds: 'house', color: '#f07a48' },
-  farmland: { name: 'Farmland', builds: 'farm', color: '#e6cf3a' },
-  pasture: { name: 'Pasture', builds: 'pasture', color: '#7cc464' },
-  woodlot: { name: 'Woodlot', builds: 'woodlot', color: '#2f8a5a' },
-  park: { name: 'Park', builds: 'park', color: '#e88ac0' },
-  workshop: { name: 'Workshops', builds: 'workshop', color: '#8a7ef0' },
-  mining: { name: 'Mining', builds: 'pit', color: '#a08a70' },
-  shops: { name: 'Shops', builds: 'shops', color: '#40a8d8' },
-};
 
 const BUILDABLE = new Set([B.GRASS, B.FOREST, B.JUNGLE, B.DESERT, B.SAVANNA, B.TUNDRA, B.TAIGA, B.HILLS, B.STEPPE]);
 const FARM_MULT = { [B.GRASS]: 1.15, [B.STEPPE]: 0.95, [B.SAVANNA]: 0.9, [B.FOREST]: 0.9, [B.JUNGLE]: 0.8, [B.HILLS]: 0.75, [B.TAIGA]: 0.6, [B.TUNDRA]: 0.4, [B.DESERT]: 0.35 };
 const WOODS = new Set([B.FOREST, B.JUNGLE, B.TAIGA]);
 
 // ---------------- events ----------------
-const listeners = {};
-export const on = (e, f) => (listeners[e] ||= []).push(f);
-export const emit = (e, d) => (listeners[e] || []).forEach((f) => f(d));
+export { on, emit, off } from './core/events.js';
+import { SAVE_VERSION, migrate, isSave } from './core/migrations.js';
+import { emit } from './core/events.js';
 
 // ---------------- state ----------------
+/** @type {import('./core/types.js').GameState} */
 export const S = {
   started: false, name: 'Hearthlands', day: 0, speed: 1, tier: 0,
   res: { food: 0, wood: 0, stone: 0, gold: 0, iron: 0, bread: 0, tools: 0, cloth: 0, ale: 0 },
@@ -319,7 +234,6 @@ function rawPrestige() {
   const friends = S.neighbors.filter((n) => n.friend >= 60 || n.joined).length;
   return Math.round(totalPop() * 2 + S.towns.length * 60 + w * 400 + (S.explored || []).length * 40 + friends * 25 + S.questsDone.size * 15 + (S.stats.coronations || 0) * 100 + (S.festsHeld ? Object.keys(S.festsHeld).length * 30 : 0) + (S.golden ? 1000 : 0));
 }
-export const PRESTIGE_RANKS = [[0, 'Humble'], [500, 'Known'], [1500, 'Respected'], [4000, 'Renowned'], [9000, 'Famed'], [18000, 'Legendary']];
 export const prestigeRank = (p) => PRESTIGE_RANKS.filter(([v]) => p >= v).pop()[1];
 // A trade's own skill: from 0.9x for raw beginners to 1.3x for a town of masters.
 // What research and talents add to each building's work.
@@ -659,55 +573,6 @@ export function canFound(x, y) {
 export const FOUND_COST_BASE = { food: 50, wood: 50, gold: 30 };
 export let FOUND_COST = FOUND_COST_BASE;
 
-// ---------------- research tree ----------------
-// Knowledge comes from schools, scriptoria, the library and the observatory; it fills whichever project you pick.
-export const RESEARCH = [
-  { id: 'rotation', era: 0, icon: '🌾', name: 'Crop Rotation', cost: 30, req: [], desc: '+10% food from fields and orchards.' },
-  { id: 'carpentry', era: 0, icon: '🪚', name: 'Carpentry', cost: 30, req: [], desc: 'Everything is built 15% faster.' },
-  { id: 'tools', era: 0, icon: '⚒️', name: 'Better Tools', cost: 30, req: [], desc: '+5% to all work.' },
-  { id: 'plough', era: 1, icon: '🐂', name: 'Heavy Plough', cost: 70, req: ['rotation'], desc: '+10% food from fields and pastures.' },
-  { id: 'herbal', era: 1, icon: '🌿', name: 'Herbal Lore', cost: 70, req: ['rotation'], desc: 'Families settle 15% faster.' },
-  { id: 'masonry', era: 1, icon: '🧱', name: 'Masonry', cost: 70, req: ['carpentry'], desc: '+20% stone from quarries and pits.' },
-  { id: 'waterwheel', era: 1, icon: '💧', name: 'Water Wheels', cost: 70, req: ['tools'], desc: '+10% from workshops, mills and goods makers.' },
-  { id: 'irrigation', era: 2, icon: '🚿', name: 'Irrigation', cost: 140, req: ['plough'], desc: '+10% more food from fields.' },
-  { id: 'navigation', era: 2, icon: '🧭', name: 'Navigation', cost: 140, req: ['herbal'], desc: '+20% fishing and better trades.' },
-  { id: 'architecture', era: 2, icon: '📐', name: 'Architecture', cost: 140, req: ['masonry'], desc: 'Homes hold 10% more people.' },
-  { id: 'guilds', era: 2, icon: '🏛️', name: 'Guilds', cost: 140, req: ['waterwheel'], desc: '+15% gold, and skills grow 20% faster.' },
-  { id: 'cartography', era: 3, icon: '🗺️', name: 'Cartography', cost: 260, req: ['navigation'], desc: 'Every town’s border reaches 2 tiles further.' },
-  { id: 'engineering', era: 3, icon: '⚙️', name: 'Engineering', cost: 260, req: ['architecture'], desc: 'Build 25% faster; +15% stone and iron.' },
-  { id: 'printing', era: 3, icon: '📜', name: 'Printing Press', cost: 260, req: ['guilds'], desc: 'Skills grow 40% faster.' },
-  { id: 'banking', era: 3, icon: '💰', name: 'Banking', cost: 260, req: ['guilds'], desc: '+20% gold.' },
-  // more ideas, several of which open up new buildings
-  { id: 'milling', era: 0, icon: '🌀', name: 'Milling', cost: 30, req: [], desc: 'Unlocks the Grist Mill: grain into flour for richer bread.', unlocks: ['gristmill'] },
-  { id: 'husbandry', era: 0, icon: '🐑', name: 'Animal Husbandry', cost: 30, req: [], desc: '+15% from pastures.' },
-  { id: 'nets', era: 0, icon: '🎣', name: 'Better Nets', cost: 30, req: [], desc: '+10% from fishing docks.' },
-  { id: 'storehouses', era: 1, icon: '📦', name: 'Storehouses', cost: 70, req: ['carpentry'], desc: 'Unlocks the Warehouse; every store holds 20% more.', unlocks: ['warehouse'] },
-  { id: 'kilns', era: 1, icon: '🏺', name: 'Kilns', cost: 70, req: ['tools'], desc: 'Unlocks the Potter; +15% pottery.', unlocks: ['potter'] },
-  { id: 'shearing', era: 1, icon: '✂️', name: 'Shearing', cost: 70, req: ['husbandry'], desc: '+30% wool from pastures.' },
-  { id: 'brewing', era: 1, icon: '🍺', name: 'Brewing', cost: 70, req: ['milling'], desc: '+15% ale and wine.' },
-  { id: 'forestry', era: 1, icon: '🌲', name: 'Forestry', cost: 70, req: ['tools'], desc: '+15% from lumber camps and woodlots.' },
-  { id: 'roadbuilding', era: 1, icon: '🛤️', name: 'Road Building', cost: 70, req: ['carpentry'], desc: 'Caravans and highways bring 25% more gold.' },
-  { id: 'glassmaking', era: 2, icon: '🪟', name: 'Glassmaking', cost: 140, req: ['kilns'], desc: 'Unlocks the Glassworks; +10% glass.', unlocks: ['glassworks'] },
-  { id: 'spicetrade', era: 2, icon: '🌶️', name: 'Spice Trade', cost: 140, req: ['navigation'], desc: 'Unlocks the Spice House.', unlocks: ['spicehouse'] },
-  { id: 'medicine', era: 2, icon: '⚕️', name: 'Medicine', cost: 140, req: ['herbal'], desc: 'Families settle 10% faster again.' },
-  { id: 'deepmining', era: 2, icon: '⛏️', name: 'Deep Mining', cost: 140, req: ['masonry'], desc: '+15% iron and stone from mines and pits.' },
-  { id: 'surveying', era: 2, icon: '📏', name: 'Surveying', cost: 140, req: ['roadbuilding'], desc: 'Every town’s border reaches 1 tile further.' },
-  { id: 'scholarship', era: 3, icon: '🎓', name: 'Scholarship', cost: 260, req: ['guilds'], desc: 'Unlocks the Scriptorium; +20% knowledge.', unlocks: ['scriptorium'] },
-  { id: 'shipbuilding', era: 3, icon: '⛵', name: 'Shipbuilding', cost: 260, req: ['navigation'], desc: '+20% from shipyards and harbours.' },
-  { id: 'stonework', era: 3, icon: '🗿', name: 'Fine Stonework', cost: 260, req: ['deepmining'], desc: 'Wonders go up 20% faster.' },
-  { id: 'theatre', era: 3, icon: '🎭', name: 'Theatre', cost: 260, req: ['medicine'], desc: 'Towns are a little happier.' },
-  { id: 'diplomacy', era: 3, icon: '🤝', name: 'Diplomacy', cost: 260, req: ['spicetrade'], desc: 'Gifts make 25% more friends; contracts pay 20% more.' },
-  { id: 'astronomy', era: 4, icon: '🔭', name: 'Astronomy', cost: 400, req: ['scholarship'], desc: '+25% knowledge.' },
-  { id: 'grandmarkets', era: 4, icon: '🏪', name: 'Grand Markets', cost: 400, req: ['banking'], desc: '+15% gold from markets and shops.' },
-  { id: 'greatbuilders', era: 4, icon: '🏗️', name: 'Great Builders', cost: 400, req: ['stonework', 'engineering'], desc: 'Wonders go up another 25% faster.' },
-  { id: 'universities', era: 4, icon: '🏫', name: 'Universities', cost: 400, req: ['printing'], desc: 'Skills grow 30% faster.' },
-  { id: 'drill', era: 1, icon: '🛡️', name: 'Drill', cost: 70, req: ['tools'], desc: 'Soldiers fight 20% better.' },
-  { id: 'fortifications', era: 2, icon: '🏰', name: 'Fortifications', cost: 140, req: ['drill', 'masonry'], desc: 'Unlocks the Stone Fort; towers and forts defend 30% better.', unlocks: ['fort'] },
-  { id: 'tactics', era: 3, icon: '⚔️', name: 'Tactics', cost: 260, req: ['fortifications'], desc: 'Your field army fights 25% better and marches faster.' },
-  { id: 'harmony', era: 5, icon: '☀️', name: 'Golden Harmony', cost: 600, req: ['printing', 'banking', 'engineering'], desc: 'Every town is a little happier (+1 mood).' },
-  { id: 'enlightenment', era: 5, icon: '✨', name: 'Enlightenment', cost: 800, req: ['astronomy', 'universities', 'grandmarkets'], desc: '+10% to everything your realm makes.' },
-];
-export const ERAS = ['Early days', 'Growing', 'Flourishing', 'Renowned', 'Golden', 'Legend'];
 // The ruler's traits (set by the royal family module).
 let rulerFx = () => null; export function setRulerFx(f) { rulerFx = f; }
 export const rulerMult = (k) => { const fx = rulerFx(); return fx && fx[k] ? 1 + fx[k] : 1; };
@@ -732,15 +597,6 @@ function stepResearch(dd) {
   const r = RESEARCH.find((q) => q.id === R.cur);
   if (r && R.prog >= r.cost) { R.done.push(r.id); R.prog = 0; R.cur = null; recomputeTowns(); emit('researched', r); }
 }
-// ---------------- realm talents ----------------
-// A point each time the realm grows a tier, and more as its prestige spreads.
-export const TALENTS = [
-  { branch: 'Steward', icon: '🌾', nodes: [['bounty', 'Bountiful Harvests', '+15% food.'], ['feast', 'Full Tables', 'Towns grow 20% faster while the stores hold plenty of food.'], ['granary', 'Great Granaries', 'Fields keep giving a little in winter (+25% winter harvest).']] },
-  { branch: 'Builder', icon: '🔨', nodes: [['quick', 'Quick Hands', 'Build 20% faster.'], ['crews', 'Extra Crews', '+1 builder crew in every town.'], ['grand', 'Grand Designs', 'Wonders go up 40% faster.']] },
-  { branch: 'Merchant', icon: '💰', nodes: [['coin', 'Sharp Ledgers', '+10% gold.'], ['friends', 'Warm Welcome', 'Gifts make 50% more friendship.'], ['roads', 'Busy Roads', 'Caravans earn twice as much.']] },
-  { branch: 'Patron', icon: '🎓', nodes: [['teach', 'Patron of Learning', 'Skills and knowledge grow 15% faster.'], ['joy', 'Merry Realm', 'Every town is a little happier.'], ['fame', 'Far-famed', '+25% prestige.']] },
-  { branch: 'Explorer', icon: '🧭', nodes: [['scout', 'Pathfinders', 'Explorers travel 30% faster.'], ['border', 'Wide Lands', 'Every border reaches 2 tiles further.'], ['settler', 'Eager Settlers', 'New settlements cost half as much.']] },
-];
 export const hasTalent = (id) => !!(S.talents && S.talents.includes(id));
 export function talentPoints() { let base = 0; for (const b of S.buildings.values()) if (b.p >= 1 && DEFS[b.t] && DEFS[b.t].wonder) base++; return S.tier + Math.floor(Math.min(40000, rawPrestige()) / 2500) + base; }
 export const talentsFree = () => talentPoints() - (S.talents || []).length;
@@ -1010,16 +866,6 @@ export const QUESTS = [
   Q('research10', 'Learn ten ideas', () => !!(S.research && S.research.done.length >= 10), { gold: 200 }),
   Q('research25', 'Learn twenty-five ideas', () => !!(S.research && S.research.done.length >= 25), { gold: 500 }),
 ];
-// Goals come in chapters, each with its own reward at the end.
-export const CHAPTERS = [
-  { id: 'c1', icon: '🌱', name: 'A Humble Start', goals: ['farm1', 'house1', 'lumber', 'pop15', 'quarry', 'well', 'granary'], reward: { gold: 40, wood: 40 } },
-  { id: 'c2', icon: '🏘️', name: 'Village Life', goals: ['trade', 'village', 'happy', 'research1', 'yard', 'wedding', 'specialty'], reward: { gold: 80, food: 80 } },
-  { id: 'c3', icon: '🌳', name: 'Growing Roots', goals: ['spec', 'bread', 'stable', 'tower', 'found', 'mine', 'gift', 'talent1'], reward: { gold: 120, stone: 80 } },
-  { id: 'c4', icon: '🏪', name: 'A Market Town', goals: ['town', 'workshop3', 'market', 'tools', 'flour', 'level2', 'contract1', 'fame1'], reward: { gold: 200, iron: 40 } },
-  { id: 'c5', icon: '⭐', name: 'Joy and Mastery', goals: ['joyful', 'master', 'join', 'harbour', 'charm1', 'research10'], reward: { gold: 300 } },
-  { id: 'c6', icon: '🏛️', name: 'City of Wonders', goals: ['wonder1', 'city', 'newwonder', 'route1', 'cont3', 'research25'], reward: { gold: 500, iron: 80 } },
-  { id: 'c7', icon: '👑', name: 'Kingdom and Beyond', goals: ['kingdom', 'charm5', 'routes5', 'wonders', 'cont6', 'empire'], reward: { gold: 1500 } },
-];
 export const currentChapter = () => CHAPTERS.find((c) => c.goals.some((g) => !S.questsDone.has(g))) || null;
 export const activeQuests = () => { const c = currentChapter(); return c ? c.goals.filter((g) => !S.questsDone.has(g)).map((g) => QUESTS.find((q) => q.id === g)).filter(Boolean).slice(0, 3) : []; };
 
@@ -1266,7 +1112,7 @@ export function save() {
   if (!S.started) return;
   const capital = S.towns.find((t) => t.capital) || S.towns[0];
   const data = {
-    v: 1, name: S.name, day: S.day, speed: S.speed, tier: S.tier, res: S.res, towns: S.towns,
+    v: SAVE_VERSION, name: S.name, day: S.day, speed: S.speed, tier: S.tier, res: S.res, towns: S.towns,
     buildings: [...S.buildings].map(([i, b]) => [i, b.t, +b.p.toFixed(3), b.town, +(b.m || 1).toFixed(2), b.z ? 1 : 0, b.lv || 1, b.f || 0, Math.round(b.d || 0)]),
     zones: [...S.zones], proads: [...S.proads], canals: [...S.canals], caravans: S.caravans || [], nb: S.neighbors.filter((n) => n.friend || n.joined || n.req || (n.log && n.log.length) || n.pop > 70).map((n) => [n.id, n.friend, n.joined ? 1 : 0, +n.pop.toFixed(1), n.req || null, n.log || []]),
     quests: [...S.questsDone], stats: S.stats, routes: S.routes || [], hints: S.hints || [], golden: S.golden ? 1 : 0, research: S.research, talents: S.talents || [], contracts: S.contracts || [], yearMark: S.yearMark || null, realms: S.realms || null, army: S.army || null, raids: S.raids || [], capV: (S.capV || []).filter((n) => !n.joined), garrison: S.towns.map((t) => [t.id, Math.round((t.garrison || 0) * 10) / 10]),
@@ -1287,7 +1133,7 @@ export function slotInfo() {
   for (let n = 1; n <= SLOT_COUNT; n++) {
     let d = null;
     try { d = JSON.parse(localStorage.getItem(slotKey(n))); } catch (e) { d = null; }
-    out.push(d && d.v === 1 ? { slot: n, name: d.name, tier: d.tier, day: d.day, pop: d.meta ? d.meta.pop : null, place: d.meta ? d.meta.place : '', savedAt: d.meta ? d.meta.savedAt : 0 } : null);
+    out.push(isSave(d) ? { slot: n, name: d.name, tier: d.tier, day: d.day, pop: d.meta ? d.meta.pop : null, place: d.meta ? d.meta.place : '', savedAt: d.meta ? d.meta.savedAt : 0 } : null);
   }
   return out;
 }
@@ -1296,7 +1142,8 @@ export function load(n = currentSlot) {
   migrateLegacy();
   let d;
   try { d = JSON.parse(localStorage.getItem(slotKey(n))); } catch (e) { return false; }
-  if (!d || d.v !== 1) return false;
+  d = migrate(d);
+  if (!isSave(d)) return false;
   currentSlot = n;
   S.started = true; S.name = d.name; S.day = d.day;
   S.speed = d.speed === 2 ? 2 : d.speed ? 1 : 0; // pause, play or double speed

@@ -1,7 +1,7 @@
 // Boot sequence and main loop.
 import { generateWorld } from './world.js';
 import { buildSprites } from './sprites.js';
-import { S, update, save, loadSettings, recomputeTowns, townStyleOf, on, count } from './game.js';
+import { S, update, save, loadSettings, townStyleOf, on, count } from './game.js';
 import { initRender, frame, cam, clampCam, markDirty } from './render.js';
 import { initInput } from './input.js';
 import { initUI, showTitle, setMode, applyVisuals } from './ui.js';

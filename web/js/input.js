@@ -1,6 +1,6 @@
 // Touch / mouse / keyboard camera control and map interaction.
 import { cam, clampCam, markDirty, toWorld, pickTile, setHover, cancelFlight, screenSize } from './render.js';
-import { M, S } from './game.js';
+import { M } from './game.js';
 import { handleTap, paintAt, endPaint } from './ui.js';
 
 const pointers = new Map();

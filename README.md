@@ -76,9 +76,16 @@ Pick any spot on the planet, then grow from a hamlet into a kingdom at your own 
 
 ## Play in a browser
 ```
-npx http-server web -p 8080
+npm install
+npm run dev
 ```
 Then open http://localhost:8080. It's plain HTML and JS with no build step.
+
+## Developing
+- `npm run lint` checks the code with ESLint, and `npm test` plays the game in a real browser (Playwright).
+  `npm run check` runs both, and GitHub Actions runs them on every push before building the APK.
+- See **[ARCHITECTURE.md](ARCHITECTURE.md)** for how the game fits together, and step-by-step recipes for
+  adding buildings, zones, research, talents, whole new systems, and save changes.
 
 ## Android APK
 Every push runs `.github/workflows/android.yml`, which wraps `web/` with Capacitor and builds a debug APK.
@@ -95,24 +102,15 @@ cd android && ./gradlew assembleDebug
 ```
 
 ## Code map
-| File | Purpose |
+The full map is in [ARCHITECTURE.md](ARCHITECTURE.md). In short:
+
+| Folder / file | Purpose |
 | --- | --- |
-| `web/js/world.js` | Real-Earth generation: rasterises countries, places mountains, deserts and rainforests, assigns biomes |
-| `web/js/game.js` | State, buildings, economy, towns, neighbours, quests, saving |
-| `web/js/render.js` | Isometric tile renderer plus atlas overview at far zoom, borders, villagers |
-| `web/js/sprites.js` | All art, drawn in code |
-| `web/js/ui.js` | HUD, menus, modes and the start flow |
-| `web/js/seasons.js` | Seasons per hemisphere, day and night |
-| `web/js/regions.js` | Which building style a place uses |
-| `web/js/alive.js` | Scenes, emotes, water, wildlife, light, weather, night, travellers |
-| `web/js/explore.js` | Explorers and journal, highways, shipyard, rare finds |
-| `web/js/stories.js` | Festivals, villager requests, the royal family |
-| `web/js/records.js` | Backups, trophies, realm history and charts |
-| `web/js/rivers.js` | The real rivers' courses |
-| `web/js/folk.js` | Villagers' lives: names, families, jobs, skills, life events, chronicle |
-| `web/js/life.js` | Weather, clouds, birds, animals, boats, roads, night lighting |
-| `web/js/tutorial.js` | Pip the messenger bird's first-time guide |
-| `web/js/audio.js` | Generative music, nature sounds, sound effects, haptics |
+| `web/js/data/` | Content tables: resources, tiers, buildings, zones, research, talents, goal chapters |
+| `web/js/core/` | Event bus, save versions and migrations, type notes |
+| `web/js/game.js` | State, rules, simulation, saving |
+| `web/js/*.js` | Systems (villagers, roads and weather, exploration, stories, kingdoms, war), rendering, art, UI, input, audio |
+| `tests/` | Browser tests |
 | `android-overrides/MainActivity.java` | Full screen and Back gesture handling, copied into the Android project at build time |
 
 Map data: Natural Earth (public domain) via [world-atlas](https://github.com/topojson/world-atlas).

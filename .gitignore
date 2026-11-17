@@ -2,3 +2,5 @@ node_modules/
 android/
 *.apk
 .DS_Store
+test-results/
+playwright-report/

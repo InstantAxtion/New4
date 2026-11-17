@@ -4,7 +4,11 @@
   "private": true,
   "description": "A relaxing kingdom builder on a multi-million tile real Earth.",
   "scripts": {
+    "dev": "npx --yes http-server web -p 8080 -c-1",
     "serve": "npx --yes http-server web -p 8080 -c-1",
+    "lint": "eslint .",
+    "test": "playwright test",
+    "check": "npm run lint && npm test",
     "android:add": "cap add android",
     "android:sync": "cap sync android",
     "android:assets": "capacitor-assets generate --android",
@@ -17,6 +21,11 @@
   },
   "devDependencies": {
     "@capacitor/assets": "^4.0.0",
-    "@capacitor/cli": "^8.0.0"
-  }
+    "@capacitor/cli": "^8.0.0",
+    "@eslint/js": "^9.39.5",
+    "@playwright/test": "^1.63.0",
+    "eslint": "^9.39.5",
+    "globals": "^16.5.0"
+  },
+  "type": "module"
 }

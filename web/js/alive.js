@@ -1,13 +1,12 @@
 // The living world: little scenes, emotes, smoke and laundry, water life, wildlife,
 // light through the day, richer weather, night magic and lived-in neighbour villages.
 import { W, H, B, world, tileWX, tileWY, tileLat, idxOf, wrapX } from './world.js';
-import { S, on, townById } from './game.js';
+import { S, on } from './game.js';
 import { hash2 } from './noise.js';
 import * as L from './life.js';
 import * as SE from './seasons.js';
 
 const gentle = () => !!S.settings.gentle;
-const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
 
 // ---------------- scene spots per town (recomputed when the realm changes) ----------------
 let scenes = new Map(); // row y -> [scene]

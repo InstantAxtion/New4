@@ -1,6 +1,7 @@
 // Realm backups, lifetime achievements, and the realm's history (charts + milestones).
-import { S, on, emit, slotInfo, totalPop, count, hasWonder, WONDERS, ALL_WONDERS, realmContinents, routesDone, TIERS } from './game.js';
+import { S, on, emit, totalPop, count, hasWonder, WONDERS, ALL_WONDERS, realmContinents, routesDone, TIERS } from './game.js';
 import { YEAR } from './seasons.js';
+import { isSave } from './core/migrations.js';
 
 // ---------------- backups ----------------
 const slotKey = (n) => `hearthlands-slot-${n}`;
@@ -12,7 +13,7 @@ export function parseBackup(text) {
   text = (text || '').trim();
   let raw = text;
   if (text.startsWith('HEARTH1:')) { try { raw = decodeURIComponent(escape(atob(text.slice(8).replace(/\s+/g, '')))); } catch (e) { return null; } }
-  try { const d = JSON.parse(raw); return d && d.v === 1 && d.towns ? raw : null; } catch (e) { return null; }
+  try { const d = JSON.parse(raw); return isSave(d) ? raw : null; } catch (e) { return null; }
 }
 export function importInto(n, raw) { try { localStorage.setItem(slotKey(n), raw); return true; } catch (e) { return false; } }
 export async function saveBackupFile(n) {

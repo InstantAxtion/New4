@@ -1,9 +1,9 @@
 // Kingdoms that grow and conquer each other, raids on your towns, garrisons and your field army.
-import { S, on, emit, townById, groundDist2, continentAt, hasTech, loseTown, annexVillage, TIERS, RES_NAMES } from './game.js';
-import { W, tileWX, tileWY } from './world.js';
+import { S, on, emit, townById, groundDist2, continentAt, hasTech, loseTown, annexVillage, RES_NAMES } from './game.js';
+import { tileWX, tileWY } from './world.js';
 import { YEAR } from './seasons.js';
 import { kingdoms, realmsChanged } from './kingdoms.js';
-import * as L from './life.js';
+
 
 const dist = (a, b) => Math.sqrt(groundDist2(a.x, a.y, b.x, b.y));
 const nbById = (id) => S.neighbors.find((n) => n.id === id);
