@@ -4,10 +4,10 @@ import {
   S, M, RES, RES_NAMES, TIERS, DEFS, MANUAL, WONDERS, ZONES, FOUND_COST, GIFT_AMOUNT, CONTACT_RANGE,
   on, emit, totalPop, totalCap, townById, hasWonder, wonderStarted, count, ownerOf, canPlace, placeBuilding, setZone,
   demolish, canFound, foundTown, inContact, tradeOffers, doTrade, gift, canInvite, invite, activeQuests, QUESTS,
-  RESEARCH, ERAS, hasTech, canResearch, pickResearch, knowledgeRate, TALENTS, hasTalent, talentsFree, takeTalent, CARAVAN_COST, maxCaravans, caravanPairs, startCaravan, stopCaravan, prestige, prestigeRank, priceNote, anchorOf, moveBuilding, turnBuilding, BIG, footprint, newGame, currentSlot as CUR, PACE, crewsOf, crewsBusy, zonesWaiting, yardsIn, UPKEEP, SPECS, SPEC_TIER, SPEC_CHANGE_COST, setSpec, GOODS, EVERYDAY, GOODS_BUILDINGS, SPECIALTIES, ALL_WONDERS, MOODS, moodOf, townStyleOf, TRAITS, IMPROVEMENTS, IMPROVE_TIER, charm, improve, continentAt, realmContinents, harbourTowns, routeOptions, openRoute, ROUTE_COST, ROUTE_DAYS, routesDone, maxTowns, fulfil, nbExtra, HOUSE_LEVELS, HOUSE_CAP_MULT, save, hasSave, load, resetSave, slotInfo, setSlot, deleteSlot, SLOT_COUNT, saveSettings, surveyStart, canStart, affordable, groundDist2, DAY_SECONDS,
+  caps, CHAPTERS, currentChapter, acceptContract, declineContract, sendContract, RESEARCH, ERAS, hasTech, canResearch, pickResearch, knowledgeRate, TALENTS, hasTalent, talentsFree, takeTalent, CARAVAN_COST, maxCaravans, caravanPairs, startCaravan, stopCaravan, prestige, prestigeRank, priceNote, anchorOf, moveBuilding, turnBuilding, BIG, footprint, newGame, currentSlot as CUR, PACE, crewsOf, crewsBusy, zonesWaiting, yardsIn, UPKEEP, SPECS, SPEC_TIER, SPEC_CHANGE_COST, setSpec, GOODS, EVERYDAY, GOODS_BUILDINGS, SPECIALTIES, ALL_WONDERS, MOODS, moodOf, townStyleOf, TRAITS, IMPROVEMENTS, IMPROVE_TIER, charm, improve, continentAt, realmContinents, harbourTowns, routeOptions, openRoute, ROUTE_COST, ROUTE_DAYS, routesDone, maxTowns, fulfil, nbExtra, HOUSE_LEVELS, HOUSE_CAP_MULT, save, hasSave, load, resetSave, slotInfo, setSlot, deleteSlot, SLOT_COUNT, saveSettings, surveyStart, canStart, affordable, groundDist2, DAY_SECONDS,
 } from './game.js';
 import { SPR, spriteIcon, homeArt } from './sprites.js';
-import { panBy, cam, markDirty, flyTo, centerOn, clampCam, screenSize, TILE_MODE_TW, sx, sy, pickTile, setHover } from './render.js';
+import { panBy, cam, markDirty, flyTo, centerOn, clampCam, screenSize, TILE_MODE_TW, sx, sy, pickTile, setHover, celebrate, onFirework } from './render.js';
 import { initAudio, sfx, haptic, applySettings, resumeAudio, VOLUMES, vol } from './audio.js';
 import { tutorialActive, hint } from './tutorial.js';
 import { ageOf, fullName, personById, JOBS, thought, petOf, SKILLS, SKILL_HELP, GENERAL_SKILL } from './folk.js';
@@ -38,6 +38,8 @@ export const ICON = {
   glass: '<svg viewBox="0 0 24 24"><path d="M7 3h10l-1 17H8Z" fill="#a8dcef" fill-opacity=".8" stroke="#4a8aa8" stroke-width="1"/><path d="M9 6l1 11" stroke="#fff" stroke-width="1.2" opacity=".8"/></svg>',
   spices: '<svg viewBox="0 0 24 24"><path d="M4 14c0 4 4 6 8 6s8-2 8-6Z" fill="#8a5a3c" stroke="#5a3a20" stroke-width="1"/><path d="M5 14c1-4 4-6 7-6s6 2 7 6Z" fill="#d8742a"/><circle cx="10" cy="11" r="1" fill="#f0b030"/><circle cx="14" cy="10.5" r="1" fill="#a83a1a"/></svg>',
   books: '<svg viewBox="0 0 24 24"><rect x="4" y="5" width="5" height="15" fill="#a03030" stroke="#601818"/><rect x="9.5" y="7" width="5" height="13" fill="#305a90" stroke="#183060"/><rect x="15" y="4" width="5" height="16" fill="#3a7a3a" stroke="#1a4a1a" transform="rotate(8 17 12)"/></svg>',
+  flour: '<svg viewBox="0 0 24 24"><path d="M6 8c0-2 2-3 6-3s6 1 6 3l1 10c0 2-3 3-7 3s-7-1-7-3Z" fill="#f2ead8" stroke="#b8a888" stroke-width="1"/><path d="M8 6.5h8" stroke="#b8a888" stroke-width="1.2"/><path d="M10 13h4M12 11v4" stroke="#d8b860" stroke-width="1.2"/></svg>',
+  wool: '<svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="7" fill="#f4f0e6" stroke="#b8b0a0" stroke-width="1"/><path d="M6 11c3 2 9 2 12 0M6.5 15c3 2 8 2 11 0M9 7c2 3 2 9 0 12" stroke="#c8c0b0" stroke-width=".9" fill="none"/></svg>',
   pop: '<svg viewBox="0 0 24 24"><circle cx="8" cy="8" r="3" fill="#e0b088"/><path d="M3 19c0-4 2-6 5-6s5 2 5 6Z" fill="#4a78a8"/><circle cx="16" cy="9" r="2.6" fill="#e0b088"/><path d="M12 19c.5-3.5 2-5 4-5s4 1.5 4.5 5Z" fill="#c0503e"/></svg>',
 };
 const fmt = (n) => (n >= 10000 ? (n / 1000).toFixed(0) + 'k' : n >= 1000 ? (n / 1000).toFixed(1) + 'k' : Math.floor(n).toString());
@@ -112,6 +114,7 @@ export function openSheet(kind, render) {
 }
 export function closeSheet() {
   sheetKind = null; sheetRender = null;
+  if (pendingSheet) { const f = pendingSheet; pendingSheet = null; setTimeout(() => { if (!sheetKind) f(); }, 400); }
   $('#sheet').classList.add('hidden');
   document.body.classList.remove('sheet-open');
   if (M.selected && (!M.mode)) { M.selected = null; markDirty(); }
@@ -195,6 +198,7 @@ function buildHUD() {
     setMode(null);
     ({ build: showBuild, realm: showRealm, menu: showMenu, research: showResearch })[tab]();
   });
+  $('#pring').addEventListener('click', () => { sfx('tap'); if (sheetKind === 'progress') closeSheet(); else { setMode(null); showProgress(); } });
   $('#zoomctl').addEventListener('click', (e) => {
     const b = e.target.closest('button'); if (!b) return;
     sfx('tap');
@@ -215,11 +219,13 @@ function highlightBottom() {
   });
 }
 const lastRes = {}; let lastDot = 0;
-const LATE_GOODS = { pottery: 'potter', glass: 'glassworks', spices: 'spicehouse', books: 'scriptorium' };
+const LATE_GOODS = { pottery: 'potter', glass: 'glassworks', spices: 'spicehouse', books: 'scriptorium', flour: 'gristmill', wool: 'pasture' };
 export function updateHUD() {
   if (!S.started) return;
   $('#realmname').textContent = S.name;
   $('#tierbadge').textContent = TIERS[S.tier].name;
+  { const p = totalPop(), next = TIERS[S.tier + 1], f = next ? Math.max(0, Math.min(1, (p - TIERS[S.tier].pop) / (next.pop - TIERS[S.tier].pop))) : 1, ring = $('#pring');
+    if (ring) { ring.style.setProperty('--p', f); ring.title = next ? `${Math.floor(p)} / ${next.pop} villagers to ${next.name}` : 'Highest tier'; } }
   if (performance.now() - lastDot > 3000) { lastDot = performance.now(); const rb = $('#bottombar [data-tab=research]'); if (rb) rb.classList.toggle('dot', !(S.research && S.research.cur) || talentsFree() > 0); }
   $('#goodsbar').classList.toggle('hidden', !(S.tier >= 1 || GOODS.some((g) => S.res[g] > 0)));
   for (const r of [...RES, ...GOODS]) {
@@ -231,6 +237,7 @@ export function updateHUD() {
     const sm = el.querySelector('small');
     sm.textContent = (rate >= 0 ? '+' : '') + rate.toFixed(1);
     sm.className = rate > 0.05 ? 'up' : rate < -0.05 ? 'down' : 'flat';
+    { const cap = caps()[r]; const full = cap !== Infinity && S.res[r] >= cap * 0.97; el.classList.toggle('full', full); if (full) { sm.textContent = 'full'; } el.title = `${RES_NAMES[r]}${cap !== Infinity ? ` · holds ${cap}` : ''}`; }
     if (lastRes[r] !== undefined && v - lastRes[r] >= 10) { el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); }
     lastRes[r] = v;
   }
@@ -252,12 +259,14 @@ function renderQuests(force) {
   const done = S.questsDone.size;
   if (seenGoals < 0) seenGoals = done;
   const fresh = done - seenGoals;
-  const sig = qs.map((q) => q.id).join(',') + '|' + fresh;
+  const sig = qs.map((q) => q.id).join(',') + '|' + fresh + '|' + done;
   if (sig === questSig && !force) return;
   questSig = sig;
   const open = $('#quests').classList.contains('open');
   $('#quests').innerHTML = `<button class="qbtn" aria-label="Goals">📜<span class="qbadge ${fresh > 0 && !open ? 'on' : ''}">${fresh > 0 ? fresh : ''}</span></button>
-    <div class="qpanel"><h3>Gentle goals <span>${done}/${QUESTS.length}</span></h3><ul>${qs.map((q) =>
+    <div class="qpanel">${(() => { const c = currentChapter(); if (!c) return '<h3>Every chapter complete</h3>'; const n = c.goals.filter((g) => S.questsDone.has(g)).length;
+      return `<h3>${c.icon} Chapter ${CHAPTERS.indexOf(c) + 1}: ${c.name} <span>${n}/${c.goals.length}</span></h3><div class="meter" style="margin:4px 0"><div style="width:${(n / c.goals.length) * 100}%"></div></div><div class="reward">Chapter reward: ${Object.entries(c.reward).map(([k, v]) => `${v} ${RES_NAMES[k].toLowerCase()}`).join(', ')}</div>`; })()}
+    <ul>${qs.map((q) =>
     `<li><div>${esc(q.text)}<span class="reward">Reward: ${Object.entries(q.reward).map(([k, v]) => `${v} ${RES_NAMES[k].toLowerCase()}`).join(', ')}</span></div></li>`).join('') || '<li>Every goal complete. Your realm is a wonder.</li>'}</ul></div>`;
 }
 
@@ -269,10 +278,10 @@ function showBuild() {
     const list = buildTab === 'buildings' ? [...MANUAL, ...GOODS_BUILDINGS, ...SPECIALTIES.filter((k) => styles.has(DEFS[k].style))]
       : buildTab === 'everyday' ? EVERYDAY : ALL_WONDERS;
     const cards = list.map((t) => {
-      const d = DEFS[t], locked = d.tier > S.tier, built = d.wonder && wonderStarted(t);
+      const d = DEFS[t], needR = d.research && !hasTech(d.research), locked = d.tier > S.tier || needR, built = d.wonder && wonderStarted(t);
       return `<button class="card ${locked || built ? 'locked' : ''}" data-act="pick" data-arg="${t}">
         ${d.style ? '<span class="spec">Specialty</span>' : ''}
-        ${locked ? `<span class="lock">${TIERS[d.tier].name}</span>` : built ? '<span class="lock">Built</span>' : ''}
+        ${d.tier > S.tier ? `<span class="lock">${TIERS[d.tier].name}</span>` : needR ? `<span class="lock">🔬 ${(RESEARCH.find((r) => r.id === d.research) || {}).name}</span>` : built ? '<span class="lock">Built</span>' : ''}
         <img src="${bIcon(t)}" alt=""><b>${d.name}</b><div class="cost">${costChips(d.cost)}</div>
         <p>${d.desc || ''}${d.use ? ` Uses ${Object.entries(d.use).map(([k, v]) => `${v}/day ${RES_NAMES[k].toLowerCase()}`).join(', ')}.` : ''}${d.prod ? ` Makes ${Object.entries(d.prod).map(([k, v]) => `${v}/day ${RES_NAMES[k].toLowerCase()}`).join(', ')}.` : ''}${d.mood ? ` Mood +${d.mood}.` : ''}${UPKEEP[t] ? ` Upkeep ${Object.entries(UPKEEP[t]).map(([k, v]) => `${v}/day ${RES_NAMES[k].toLowerCase()}`).join(', ')}.` : ''}${d.jobs ? ` Needs ${d.jobs} worker${d.jobs > 1 ? 's' : ''}.` : ''}</p></button>`;
     }).join('');
@@ -342,6 +351,51 @@ export function showPerson(townId, pid) {
   openSheet('person', () => personCard(t, personById(t, pid)));
 }
 
+// ---------------- progress page, year report and tier celebration ----------------
+function showProgress() {
+  openSheet('progress', () => {
+    const p = totalPop(), next = TIERS[S.tier + 1], prog = next ? Math.min(1, (p - TIERS[S.tier].pop) / (next.pop - TIERS[S.tier].pop)) : 1;
+    const ch = currentChapter(), chDone = CHAPTERS.filter((c) => S.questsDone.has(c.id)).length;
+    const rDone = S.research ? S.research.done.length : 0, tro = RC.trophies(), troN = Object.keys(tro).length;
+    const pr = prestige(), wonders = ALL_WONDERS.filter(hasWonder).length, famous = S.towns.filter((t) => t.fame);
+    const bar = (label, v, sub) => `<div class="pbar"><div class="skrow"><b>${label}</b><span>${sub}</span></div><div class="meter"><div style="width:${Math.min(100, v * 100)}%"></div></div></div>`;
+    return head('Progress', esc(S.name))
+      + `<div class="section">${bar(`🏰 ${TIERS[S.tier].name}`, prog, next ? `${Math.floor(p)} / ${next.pop} to ${next.name}` : 'The highest tier')}
+        ${bar('📜 Chapters', chDone / CHAPTERS.length, ch ? `Now: ${ch.icon} ${ch.name}` : 'All complete')}
+        ${bar('📚 Research', rDone / RESEARCH.length, `${rDone} of ${RESEARCH.length} ideas`)}
+        ${bar('🏆 Trophies', troN / RC.TROPHIES.length, `${troN} of ${RC.TROPHIES.length}`)}
+        ${bar('🏛️ Wonders', wonders / ALL_WONDERS.length, `${wonders} of ${ALL_WONDERS.length}`)}</div>
+      <div class="kv"><span>Prestige</span><span>⭐ ${pr.toLocaleString()} · ${prestigeRank(pr)}</span><span>Talents</span><span>${(S.talents || []).length} taken${talentsFree() > 0 ? ` · ${talentsFree()} to spend` : ''}</span>
+        <span>Settlements</span><span>${S.towns.length} of ${maxTowns()}</span><span>Famous towns</span><span>${famous.length ? famous.map((t) => `${esc(t.name)} (${esc(t.fame.title)})`).join(', ') : 'None yet'}</span></div>
+      <div class="row"><button class="btn small" data-act="history">📈 Realm history</button>${S.lastReport ? '<button class="btn small" data-act="yearrep">📖 Last year</button>' : ''}</div>`;
+  });
+}
+function showYear(r) {
+  openSheet('year', () => head(`📖 The year ${r.year} in review`, esc(S.name))
+    + `<div class="yearcard">
+      <div class="ystat"><b>${r.pop[1]}</b><small>villagers${r.pop[1] - r.pop[0] ? ` (${r.pop[1] - r.pop[0] > 0 ? '+' : ''}${r.pop[1] - r.pop[0]})` : ''}</small></div>
+      <div class="ystat"><b>${r.births}</b><small>babies born</small></div>
+      <div class="ystat"><b>${r.weddings}</b><small>weddings</small></div>
+      <div class="ystat"><b>${r.built}</b><small>buildings raised</small></div>
+      <div class="ystat"><b>${r.research}</b><small>ideas learned</small></div>
+      <div class="ystat"><b>${r.gold >= 0 ? '+' : ''}${r.gold}</b><small>gold</small></div></div>
+      ${r.best ? `<div class="note">🌟 Best-growing town: <b>${esc(r.best[0])}</b>, with ${r.best[1]} new villagers.</div>` : ''}
+      ${r.mile.length ? `<div class="section"><h3>Highlights</h3><div class="note">${r.mile.map(esc).join('<br>')}</div></div>` : ''}
+      <div class="note">Here's to another gentle year in your ${r.tier.toLowerCase()}.</div>`);
+}
+let pendingSheet = null, lastBuiltSfx = 0;
+function showWhenFree(fn) { if (!sheetKind && !(M.mode && M.mode.kind !== 'start') && !tutorialActive()) fn(); else pendingSheet = fn; }
+function tierCard(t) {
+  const T = TIERS[t];
+  const builds = Object.entries(DEFS).filter(([k, d]) => d.tier === t && !d.hidden && !d.civic).map(([k]) => k);
+  const zones = Object.entries(ZONES).filter(([, z]) => DEFS[z.builds].tier === t);
+  openSheet('tierup', () => `<div class="tierhero"><div class="tierburst">✨</div><h2>Your realm is now ${/^[AEIOU]/.test(T.name) ? 'an' : 'a'} ${T.name}!</h2><div class="sub">${Math.floor(totalPop())} villagers call it home.</div></div>
+    <div class="section"><h3>Now unlocked</h3><div class="unlocks">
+      ${zones.map(([, z]) => `<div class="ul"><img src="${zIcon(z.builds)}" alt=""><span>${z.name} zone</span></div>`).join('')}
+      ${builds.map((k) => `<div class="ul"><img src="${bIcon(k)}" alt=""><span>${DEFS[k].name}</span></div>`).join('')}</div>
+      <div class="note">You can now hold up to ${maxTowns()} settlements, and each town's border can grow to ${T.radiusCap} tiles.</div></div>
+    <div class="row"><button class="btn primary" data-act="close" style="flex:1">Wonderful!</button></div>`);
+}
 // ---------------- research & talents ----------------
 let progTab = 'research';
 function showResearch() {
@@ -363,7 +417,7 @@ function researchTree() {
       const done = hasTech(r.id), avail = canResearch(r), on = R.cur === r.id;
       const st = done ? 'done' : on ? 'cur' : avail ? 'avail' : 'locked';
       const needs = r.req.filter((q) => !hasTech(q)).map((q) => RESEARCH.find((x) => x.id === q).name);
-      return `<button class="rnode ${st}" data-act="research" data-arg="${r.id}"><div class="rhead"><span class="ric">${r.icon}</span><b>${r.name}</b></div><small>${r.desc}</small>
+      return `<button class="rnode ${st}" data-act="research" data-arg="${r.id}"><div class="rhead"><span class="ric">${r.icon}</span><b>${r.name}</b></div><small>${r.desc}</small>${r.unlocks ? `<div class="runl">${r.unlocks.map((u) => `<img src="${bIcon(u)}" alt="">`).join('')}</div>` : ''}
         <div class="rfoot">${done ? '✓ Learned' : on ? `Studying · ${Math.floor((R.prog / r.cost) * 100)}%` : avail ? `📚 ${r.cost}` : `🔒 Needs ${needs.join(', ')}`}</div></button>`;
     }).join('')}</div>`;
   }).join('<div class="erarrow">›</div>');
@@ -396,7 +450,8 @@ function showRealm() {
         ${foundLocked ? `<div class="note">${S.tier < 1 ? 'Unlocks when your realm becomes a Village.' : `A ${TIERS[S.tier].name} can hold ${maxTowns()} settlements.${S.tier >= 4 ? ' Each sea route makes room for one more.' : ''}`}</div>` : '<div class="note">Settlers can travel anywhere on Earth. Settle near neighbours to befriend them.</div>'}</div>
       ${contacts.some((n) => n.req) ? `<div class="section"><h3>✉ Letters</h3><div class="list">${contacts.filter((n) => n.req).map((n) =>
         `<button class="item" data-act="gonb" data-arg="${n.id}"><div><b>${esc(n.leader)} of ${esc(n.name)}</b><div class="meta">${esc(n.req.text)}</div></div><span>➜</span></button>`).join('')}</div></div>` : ''}
-      ${requestsSection()}${royalSection()}${exploreSection()}${caravanSection()}
+      ${contractSection()}${requestsSection()}${royalSection()}${exploreSection()}${caravanSection()}
+      <div class="row"><button class="btn small" data-act="progress">🏆 Progress</button>${S.lastReport ? '<button class="btn small" data-act="yearrep">📖 Last year</button>' : ''}</div>
       <div class="row"><button class="btn small" data-act="history">📈 Realm history</button></div>
       <div class="section"><h3>Neighbours in reach</h3>${contacts.length ? `<div class="list">${contacts.slice(0, 12).map((n) =>
         `<button class="item" data-act="gonb" data-arg="${n.id}"><div><b>${esc(n.name)}</b><div class="meta">${Math.floor(n.pop)} folk · has ${n.surplus} · wants ${n.want}</div></div><span>${n.friend >= 100 ? '💛' : '🤝 ' + Math.floor(n.friend)}</span></button>`).join('')}</div>`
@@ -432,7 +487,26 @@ function royalSection() {
   const ms = S.royal.members.filter((m) => m.role !== 'gone');
   return `<div class="section"><h3>👑 The royal family</h3><div class="list">${ms.map((m) =>
     `<div class="item" style="justify-content:flex-start;gap:12px">${ST.portrait(m, 46)}<div><b>${esc(ST.titleOf(m))} ${esc(m.n)}</b><div class="meta">${m.role === 'ruler' ? 'Rules the realm' : m.role === 'consort' ? 'Royal consort' : m.role === 'heir' ? 'Heir' : 'Enjoying a quiet retirement'} · ${ST.rAge(m)} years old</div></div></div>`).join('')}</div>
+    ${rulerTraitsHTML()}
     ${(S.royal.log || []).length ? `<div class="note">${S.royal.log.slice(0, 3).map((e) => `• ${esc(e.s)}`).join('<br>')}</div>` : ''}</div>`;
+}
+function rulerTraitsHTML() {
+  const r = ST.ruler(); if (!r) return '';
+  const tr = (k) => { const t = ST.RULER_TRAITS[k]; return `<span class="trait">${t.icon} <b>${t.name}</b> <small>${t.desc}</small></span>`; };
+  const heir = S.royal.members.find((m) => m.role === 'heir' && m.traits);
+  return `<div class="traits"><div class="tlabel">The ruler's gifts</div>${(r.traits || []).map(tr).join('')}
+    ${r.offers ? `<div class="tlabel" style="margin-top:8px">Choose a new gift</div><div class="list">${r.offers.map((k) => { const t = ST.RULER_TRAITS[k]; return `<button class="item" data-act="trait" data-arg="${k}"><div><b>${t.icon} ${t.name}</b><div class="meta">${t.desc}</div></div><span>Choose</span></button>`; }).join('')}</div>`
+      : `<div class="note">A new gift comes after ${(r.traits || []).length < 2 ? '4' : (r.traits || []).length < 3 ? '10' : '—'} years of reign${(r.traits || []).length >= 3 ? ' (all gifts chosen)' : ''}.</div>`}
+    ${heir ? `<div class="note">Heir ${esc(heir.n)} was born ${ST.RULER_TRAITS[heir.traits[0]].name.toLowerCase()}.</div>` : ''}</div>`;
+}
+function contractSection() {
+  const cs = S.contracts || []; if (!cs.length) return '';
+  return `<div class="section"><h3>📜 Contracts</h3><div class="note">Long deliveries for friendly neighbours. Send a load whenever you can spare it; there's no harm if a contract runs out.</div><div class="list">${cs.map((c) => {
+    const left = Math.max(0, Math.ceil(c.until - S.day)), pct = Math.round((c.sent / c.total) * 100);
+    if (c.state === 'offer') return `<div class="item"><div><b>${esc(c.name)}: ${c.total} ${RES_NAMES[c.res].toLowerCase()}</b><div class="meta">Over a year · reward ${c.reward.gold} gold and lasting friendship</div></div><div class="row" style="margin:0"><button class="btn small leaf" data-act="caccept" data-arg="${c.id}">Accept</button><button class="btn small" data-act="cdecline" data-arg="${c.id}">✕</button></div></div>`;
+    if (c.state === 'done') return `<div class="item"><div><b>✅ ${esc(c.name)}</b><div class="meta">Fulfilled! ${c.reward.gold} gold received.</div></div></div>`;
+    return `<div class="item"><div style="flex:1"><b>${esc(c.name)}: ${c.sent}/${c.total} ${RES_NAMES[c.res].toLowerCase()}</b><div class="meter"><div style="width:${pct}%"></div></div><div class="meta">${left} days left · reward ${c.reward.gold} gold</div></div><button class="btn small primary ${S.res[c.res] >= 5 ? '' : 'disabled'}" data-act="csend" data-arg="${c.id}">Send</button></div>`;
+  }).join('')}</div></div>`;
 }
 function exploreSection() {
   const ex = S.expeditions || [], jr = S.journal || [];
@@ -621,7 +695,7 @@ function statsSection(t) {
 }
 function townInfo(t, sub) {
   const next = TIERS[S.tier + 1];
-  return head(`${esc(t.name)}${t.capital ? ' 👑' : ''}`, sub)
+  return head(`${esc(t.name)}${t.capital ? ' 👑' : ''}`, (t.fame ? `<b style="color:var(--accent-dark)">★ ${esc(t.fame.title)}</b> (+10% ${RES_NAMES[t.fame.r].toLowerCase()}) · ` : '') + sub)
     + `<div class="kv"><span>Villagers</span><span>${Math.floor(t.pop)} / ${t.cap}</span><span>Buildings</span><span>${t.n}</span>
       <span>Builders</span><span>${crewsBusy(t)} of ${crewsOf(t)} crews at work${zonesWaiting(t) ? ` · ${zonesWaiting(t)} zoned tiles waiting` : ''}${yardsIn(t) ? '' : ' (a Builder\'s Yard adds 2)'}</span>
       <span>Border</span><span>${t.radius.toFixed(1)} tiles</span><span>Founded</span><span>Year ${Math.floor(t.founded / 48) + 1}</span></div>
@@ -715,6 +789,12 @@ function act(name, arg, el) {
     case 'ptab': progTab = arg; refreshSheet(true); break;
     case 'research': { const r = RESEARCH.find((q) => q.id === arg); if (r && hasTech(r.id)) toast(`${r.name}: ${r.desc}`); else if (pickResearch(arg)) { sfx('tap'); refreshSheet(true); } else if (r) { sfx('error'); toast('Learn what it needs first.'); } break; }
     case 'talent': if (takeTalent(arg)) { sfx('quest'); haptic('medium'); refreshSheet(true); } else sfx('error'); break;
+    case 'trait': if (ST.chooseTrait(arg)) { sfx('quest'); haptic('medium'); refreshSheet(true); } break;
+    case 'caccept': if (acceptContract(+arg)) { sfx('quest'); refreshSheet(true); } break;
+    case 'cdecline': declineContract(+arg); refreshSheet(true); break;
+    case 'csend': if (sendContract(+arg)) { sfx('coin'); haptic(); refreshSheet(true); } else sfx('error'); break;
+    case 'progress': showProgress(); break;
+    case 'yearrep': if (S.lastReport) showYear(S.lastReport); break;
     case 'movebld': if (sel) { const i = idxOf(sel.x, sel.y), b = S.buildings.get(i); if (b) { closeSheet(); setMode({ kind: 'move', from: i, type: b.t }); toast(`Tap where the ${DEFS[b.t].name} should go.`); } } break;
     case 'turnbld': if (sel && turnBuilding(idxOf(sel.x, sel.y))) { sfx('tap'); markDirty(); } break;
     case 'flip': if (M.mode) { M.mode.flip = !M.mode.flip; setMode(M.mode); markDirty(); } break;
@@ -1035,7 +1115,12 @@ export function initUI() {
   };
   on('tick', refresh); on('change', refresh);
   on('built', ({ b }) => { if (DEFS[b.t].wonder) { toast(`The ${DEFS[b.t].name} is complete!`, true); sfx('tier'); } else sfx('built'); markDirty(); });
-  on('tier', (t) => { toast(`Your realm is now ${/^[AEIOU]/.test(TIERS[t].name) ? 'an' : 'a'} ${TIERS[t].name}!`, true); sfx('tier'); haptic('medium'); });
+  on('tier', (t) => { toast(`Your realm is now ${/^[AEIOU]/.test(TIERS[t].name) ? 'an' : 'a'} ${TIERS[t].name}!`, true); sfx('fanfare'); haptic('heavy'); celebrate(); showWhenFree(() => tierCard(t)); });
+  on('built', ({ x, y }) => { const px = sx(tileWX(x, y)), py = sy(tileWY(y)), { cw, ch } = screenSize(); if (cam.tw >= 14 && px > 0 && px < cw && py > 0 && py < ch && performance.now() - lastBuiltSfx > 600) { lastBuiltSfx = performance.now(); sfx('built'); } });
+  onFirework(() => sfx('pop'));
+  on('chapter', (c) => { toast(`${c.icon} Chapter complete: ${c.name}! Reward: ${Object.entries(c.reward).map(([k, v]) => `${v} ${RES_NAMES[k].toLowerCase()}`).join(', ')}`, true); sfx('quest'); haptic('medium'); renderQuests(true); });
+  on('fame', (t) => toast(`★ ${t.name} is now known far and wide as a ${t.fame.title}! (+10% ${RES_NAMES[t.fame.r].toLowerCase()} there)`, true));
+  on('yearreport', (r) => showWhenFree(() => showYear(r)));
   on('researched', (r) => { toast(`${r.icon} Your scholars have learned ${r.name}! ${r.desc}`, true); sfx('quest'); });
   on('golden', () => toast('🌟 A golden age begins! Everything your realm makes is 10% richer.', true));
   on('quest', (q) => { setTimeout(() => { toast(`Goal complete: ${q.text}`); sfx('quest'); }, 300); questSig = ''; });

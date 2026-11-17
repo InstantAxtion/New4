@@ -62,6 +62,14 @@ function pad(freq, t, dur, vol = 0.08) {
     o.connect(f); f.connect(g); g.connect(musicBus); o.start(t); o.stop(t + dur + 0.1);
   }
 }
+// A short burst of filtered noise: a thud, a tap, a firework pop.
+function noiseHit(t, freq, len, vol) {
+  const n = Math.floor(ac.sampleRate * len), buf = ac.createBuffer(1, n, ac.sampleRate), d = buf.getChannelData(0);
+  for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 3);
+  const src = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain();
+  src.buffer = buf; f.type = 'bandpass'; f.frequency.value = freq; f.Q.value = 1.2; g.gain.value = vol;
+  src.connect(f); f.connect(g); g.connect(sfxBus); src.start(t);
+}
 function pluck(freq, t, vol = 0.12, bus = musicBus, len = 2.2) {
   const o = ac.createOscillator(), o2 = ac.createOscillator(), g = ac.createGain();
   o.type = 'sine'; o.frequency.value = freq; o2.type = 'sine'; o2.frequency.value = freq * 2.005;
@@ -263,13 +271,26 @@ export function sfx(kind) {
   const t = ac.currentTime + 0.01;
   if (kind === 'tap') { pluck(mtof(BASE + 24 + 7), t, 0.016, sfxBus, 0.35); }
   else if (kind === 'place') {
-    // soft wooden "tok"
+    // a soft wooden "tok" with a little thud of earth and a bright note
     const o = ac.createOscillator(), g = ac.createGain();
     o.type = 'sine'; o.frequency.setValueAtTime(320, t); o.frequency.exponentialRampToValueAtTime(140, t + 0.12);
     g.gain.setValueAtTime(0.35, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
     o.connect(g); g.connect(sfxBus); o.start(t); o.stop(t + 0.2);
-    pluck(mtof(BASE + 19), t + 0.02, 0.06, sfxBus);
-  } else if (kind === 'built') { pluck(mtof(BASE + 24), t, 0.06, sfxBus); pluck(mtof(BASE + 28), t + 0.08, 0.05, sfxBus); }
+    noiseHit(t, 600, 0.12, 0.08);
+    pluck(mtof(BASE + 19), t + 0.02, 0.05, sfxBus, 0.8); pluck(mtof(BASE + 26), t + 0.07, 0.03, sfxBus, 0.8);
+  } else if (kind === 'built') { // two hammer taps, then a happy little chord
+    [0, 0.14].forEach((d) => noiseHit(t + d, 1800, 0.05, 0.1));
+    [0, 4, 7, 12].forEach((n, i) => pluck(mtof(BASE + 24 + n), t + 0.3 + i * 0.06, 0.045, sfxBus, 1.2));
+  } else if (kind === 'fanfare') { // a little brass-like fanfare for a new tier
+    const notes = [[0, 0, 0.18], [7, 0.2, 0.18], [12, 0.4, 0.3], [7, 0.75, 0.14], [12, 0.9, 0.14], [16, 1.05, 0.7]];
+    for (const [n, d, len] of notes) {
+      const o = ac.createOscillator(), f = ac.createBiquadFilter(), g = ac.createGain();
+      o.type = 'sawtooth'; o.frequency.value = mtof(BASE + 12 + n); f.type = 'lowpass'; f.frequency.value = 1800;
+      g.gain.setValueAtTime(0, t + d); g.gain.linearRampToValueAtTime(0.05, t + d + 0.03); g.gain.setValueAtTime(0.05, t + d + len * 0.7); g.gain.exponentialRampToValueAtTime(0.0005, t + d + len + 0.25);
+      o.connect(f); f.connect(g); g.connect(sfxBus); o.start(t + d); o.stop(t + d + len + 0.3);
+    }
+    [0, 4, 7].forEach((n) => pluck(mtof(BASE + n), t + 1.05, 0.05, sfxBus, 2.5));
+  } else if (kind === 'pop') { noiseHit(t, 900 + Math.random() * 900, 0.18, 0.14); pluck(mtof(BASE + 31 + Math.floor(Math.random() * 5)), t + 0.05, 0.02, sfxBus, 0.6); }
   else if (kind === 'quest') { [0, 4, 7, 12].forEach((n, i) => pluck(mtof(BASE + 12 + n), t + i * 0.09, 0.08, sfxBus)); }
   else if (kind === 'tier') { [0, 4, 7, 12, 16, 19, 24].forEach((n, i) => pluck(mtof(BASE + n), t + i * 0.11, 0.09, sfxBus)); }
   else if (kind === 'coin') { pluck(mtof(BASE + 31), t, 0.06, sfxBus); pluck(mtof(BASE + 36), t + 0.07, 0.05, sfxBus); }

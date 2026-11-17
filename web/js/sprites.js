@@ -630,6 +630,34 @@ function buildingSprites() {
     const [cx, cy] = P(0.7, 0.85); g.fillStyle = '#5a4a3c'; g.fillRect(cx - 4, cy - 4, 8, 3.5); g.fillStyle = v ? '#8a96a6' : '#b0a090'; g.beginPath(); g.ellipse(cx, cy - 4, 3.5, 1.4, 0, 0, 7); g.fill();
     g.fillStyle = '#2a2a2a'; g.beginPath(); g.arc(cx - 2.5, cy, 1.1, 0, 7); g.arc(cx + 2.5, cy, 1.1, 0, 7); g.fill();
   }));
+  // Grist mill: a stone mill house with a big wheel and flour sacks
+  S.gristmill = [frame((g) => {
+    shadow(g, 22, 10);
+    box(g, 0.25, 0.22, 0.75, 0.68, 13, '#c8beac'); gable(g, 0.25, 0.22, 0.75, 0.68, 13, 8, '#7a5a3a');
+    windows(g, 0.3, 0.7, 0.68, 9, 2, '#f5d78a');
+    const [hx, hy] = P(0.14, 0.45, 7); g.strokeStyle = '#6a4a30'; g.lineWidth = 1.4; g.beginPath(); g.ellipse(hx, hy, 3.6, 8, 0, 0, 7); g.stroke();
+    g.lineWidth = 0.7; g.beginPath(); for (let k = 0; k < 8; k++) { const a = k * Math.PI / 4; g.moveTo(hx, hy); g.lineTo(hx + Math.cos(a) * 3.6, hy + Math.sin(a) * 8); } g.stroke();
+    for (let k = 0; k < 3; k++) { const [x, y] = P(0.55 + k * 0.1, 0.88); g.fillStyle = '#f2ead8'; g.beginPath(); g.ellipse(x, y - 2, 2, 2.4, 0, 0, 7); g.fill(); g.fillStyle = '#d8ccb0'; g.fillRect(x - 1, y - 4.6, 2, 1); }
+  })];
+  // Granary: a round thatched store on staddle stones
+  S.granary = [frame((g) => {
+    shadow(g, 18, 8);
+    for (const [u, v] of [[0.32, 0.5], [0.68, 0.5], [0.5, 0.32], [0.5, 0.68]]) { const [x, y] = P(u, v); g.fillStyle = '#9a9488'; g.fillRect(x - 1, y - 4, 2, 4); g.beginPath(); g.ellipse(x, y - 4, 2.4, 1, 0, 0, 7); g.fill(); }
+    cyl(g, 0.5, 0.5, 4, 11, 10, '#c8a070');
+    g.strokeStyle = 'rgba(110,80,50,0.5)'; g.lineWidth = 0.6; g.beginPath(); const [x0, y0] = P(0.5, 0.5, 4); for (let k = -3; k <= 3; k++) { g.moveTo(x0 + k * 3, y0 + 1); g.lineTo(x0 + k * 3, y0 - 9); } g.stroke();
+    cone(g, 0.5, 0.5, 14, 13, 12, '#d8b860');
+    g.fillStyle = '#6a4a30'; g.fillRect(x0 - 1.6, y0 - 7, 3.2, 5);
+    for (let k = 0; k < 2; k++) { const [x, y] = P(0.82 + k * 0.06, 0.82); g.fillStyle = '#e2d0a2'; g.beginPath(); g.ellipse(x, y - 2, 2, 2.4, 0, 0, 7); g.fill(); }
+  })];
+  // Warehouse: a long timber store with big doors and barrels
+  S.warehouse = [frame((g) => {
+    shadow(g, 24, 11);
+    box(g, 0.12, 0.25, 0.88, 0.7, 11, '#a88a64'); gable(g, 0.12, 0.25, 0.88, 0.7, 11, 9, '#6a5a4a');
+    g.strokeStyle = 'rgba(70,50,30,0.5)'; g.lineWidth = 0.6; g.beginPath(); for (let k = 1; k < 8; k++) { g.moveTo(...P(0.12 + k * 0.095, 0.7, 0)); g.lineTo(...P(0.12 + k * 0.095, 0.7, 11)); } g.stroke();
+    const [dx, dy] = P(0.5, 0.7, 0); g.fillStyle = '#4a3424'; g.fillRect(dx - 5, dy - 8, 10, 8); g.strokeStyle = '#8a6a44'; g.lineWidth = 0.7; g.beginPath(); g.moveTo(dx - 5, dy - 8); g.lineTo(dx + 5, dy); g.moveTo(dx + 5, dy - 8); g.lineTo(dx - 5, dy); g.stroke();
+    windows(g, 0.88, 0.88, 0.48, 8, 1, '#3c3a40');
+    cyl(g, 0.92, 0.82, 0, 2, 3.6, '#8a5f3c'); cyl(g, 0.84, 0.88, 0, 2, 3.6, '#9a6a44'); box(g, 0.05, 0.8, 0.14, 0.9, 3, '#a07a50');
+  })];
   // Goods workshops added later: potter, glassworks, spice house, scriptorium
   S.potter = [frame((g) => {
     shadow(g, 20, 9);

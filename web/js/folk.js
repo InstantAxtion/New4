@@ -1,9 +1,9 @@
 // Villagers with lives: names, ages, families, jobs, skills and gentle life events.
 // The population number stays the source of truth; this module keeps a named person for each villager.
-import { S, DEFS, on, emit, townById, hasWonder, townStyleOf, hasTech, hasTalent } from './game.js';
+import { S, DEFS, on, emit, townById, hasWonder, townStyleOf, hasTech, hasTalent, rulerMult } from './game.js';
 import { idxOf } from './world.js';
 import { YEAR } from './seasons.js';
-const researchLearn = () => (hasTech('guilds') ? 1.2 : 1) * (hasTech('printing') ? 1.4 : 1) * (hasTalent('teach') ? 1.15 : 1);
+const researchLearn = () => (hasTech('guilds') ? 1.2 : 1) * (hasTech('printing') ? 1.4 : 1) * (hasTech('universities') ? 1.3 : 1) * (hasTalent('teach') ? 1.15 : 1) * rulerMult('learn');
 
 // Name pools by building style (common given names and family names, for flavour).
 const NAMES = {

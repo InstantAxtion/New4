@@ -1,6 +1,6 @@
 // Festivals, small requests from villagers, and the royal family.
 import { W, H, B, world, idxOf, wrapX, tileLat } from './world.js';
-import { S, on, emit, townById, affordable, ownerOf, canZone, count } from './game.js';
+import { S, on, emit, townById, affordable, ownerOf, canZone, count, setRulerFx, totalPop, TIERS } from './game.js';
 import { YEAR, seasonIndex, SEASONS } from './seasons.js';
 import { ageOf, fullName, personById } from './folk.js';
 
@@ -172,7 +172,37 @@ const TITLES = [['Lord', 'Lady'], ['Baron', 'Baroness'], ['Count', 'Countess'], 
 const HEIR_TITLES = [['young Lord', 'young Lady'], ['young Lord', 'young Lady'], ['Viscount', 'Viscountess'], ['Marquess', 'Marchioness'], ['Prince', 'Princess'], ['Crown Prince', 'Crown Princess']];
 const pickName = (g) => ROYAL[g][Math.floor(Math.random() * ROYAL[g].length)];
 let rid = 1;
-function royal(g, age, role) { return { i: rid++, n: pickName(g), g, b: S.day - age * YEAR - Math.random() * YEAR, role, hair: ['#3c2a20', '#8a5a2c', '#d8b060', '#a04a2c', '#2a2a2a'][Math.floor(Math.random() * 5)], skin: ['#f0c8a0', '#e0a878', '#c08858', '#8a5a3a'][Math.floor(Math.random() * 4)] }; }
+// ---------------- ruler traits ----------------
+// Each ruler is born with one gift and learns more as their reign goes on; you choose which.
+export const RULER_TRAITS = {
+  wise: { icon: '🦉', name: 'Wise', desc: '+15% knowledge.', fx: { know: 0.15 } },
+  builder: { icon: '🔨', name: 'Master Builder', desc: 'Everything is built 15% faster.', fx: { build: 0.15 } },
+  diplomat: { icon: '🕊️', name: 'Diplomat', desc: 'Gifts make 25% more friends.', fx: { friend: 0.25 } },
+  shrewd: { icon: '💰', name: 'Shrewd', desc: '+10% gold.', fx: { gold: 0.1 } },
+  green: { icon: '🌾', name: 'Green-fingered', desc: '+10% food.', fx: { food: 0.1 } },
+  beloved: { icon: '❤️', name: 'Beloved', desc: 'Every town a little happier.', fx: { mood: 0.5 } },
+  scholarly: { icon: '📖', name: 'Scholarly', desc: 'Villagers learn their trades 15% faster.', fx: { learn: 0.15 } },
+  patron: { icon: '🎨', name: 'Patron of the Arts', desc: 'A little happier towns and a little more knowledge.', fx: { mood: 0.3, know: 0.05 } },
+};
+const TRAIT_KEYS = Object.keys(RULER_TRAITS);
+export function rulerFxNow() {
+  const r = ruler(); if (!r || !r.traits) return null;
+  const fx = {}; for (const k of r.traits) for (const [a, v] of Object.entries(RULER_TRAITS[k].fx)) fx[a] = (fx[a] || 0) + v;
+  return fx;
+}
+setRulerFx(rulerFxNow);
+function stepTraits() {
+  const r = ruler(); if (!r) return;
+  r.traits ||= [TRAIT_KEYS[Math.floor(Math.random() * TRAIT_KEYS.length)]];
+  r.crowned ??= S.day;
+  const reignY = (S.day - r.crowned) / YEAR, slots = 1 + (reignY >= 4 ? 1 : 0) + (reignY >= 10 ? 1 : 0);
+  if (r.traits.length < slots && !r.offers) {
+    r.offers = TRAIT_KEYS.filter((k) => !r.traits.includes(k)).sort(() => Math.random() - 0.5).slice(0, 3);
+    emit('toast', `👑 ${titleOf(r)} ${r.n} has grown into the crown. Choose a new trait in the Realm panel.`);
+  }
+}
+export function chooseTrait(k) { const r = ruler(); if (!r || !r.offers || !r.offers.includes(k)) return false; r.traits.push(k); r.offers = null; emit('change'); return true; }
+function royal(g, age, role) { return { traits: [TRAIT_KEYS[Math.floor(Math.random() * TRAIT_KEYS.length)]], i: rid++, n: pickName(g), g, b: S.day - age * YEAR - Math.random() * YEAR, role, hair: ['#3c2a20', '#8a5a2c', '#d8b060', '#a04a2c', '#2a2a2a'][Math.floor(Math.random() * 5)], skin: ['#f0c8a0', '#e0a878', '#c08858', '#8a5a3a'][Math.floor(Math.random() * 4)] }; }
 export function ensureRoyals() {
   if (S.royal && S.royal.members) return;
   const g = Math.random() < 0.5 ? 'f' : 'm';
@@ -192,6 +222,7 @@ function rchron(text) {
 }
 function stepRoyals() {
   ensureRoyals();
+  stepTraits();
   const ms = S.royal.members, r = ruler(); if (!r) return;
   const consort = ms.find((m) => m.role === 'consort');
   if (!consort && rAge(r) >= 22 && rAge(r) < 50 && Math.random() < 0.01) {
@@ -211,7 +242,7 @@ function stepRoyals() {
     const heir = heirs.filter((h) => rAge(h) >= 18).sort((a, b) => a.b - b.b)[0];
     if (heir) {
       r.role = 'retired'; if (consort) consort.role = 'retired';
-      heir.role = 'ruler'; S.royal.reign++;
+      heir.role = 'ruler'; heir.crowned = S.day; heir.offers = null; heir.traits = (heir.traits || []).slice(0, 1); S.royal.reign++;
       S.royal.names ||= {}; S.royal.names[heir.n] = (S.royal.names[heir.n] || 0) + 1;
       for (const m of ms) if (m.role === 'retired' && rAge(m) > 72) m.role = 'gone';
       S.royal.members = ms.filter((m) => m.role !== 'gone');
@@ -236,3 +267,25 @@ on('stepped', (dd) => {
   stepRequests(dd);
   if ((S._royalT = (S._royalT || 0) + dd) >= 1) { S._royalT = 0; stepRoyals(); }
 });
+
+// ---------------- the year in review ----------------
+// Each new year, a cosy card of what happened: births, weddings, building, the best-growing town.
+on('built', () => { S.stats.builtTotal = (S.stats.builtTotal || 0) + 1; });
+on('stepped', () => {
+  if (!S.started) return;
+  const y = Math.floor(S.day / YEAR);
+  if (!S.yearMark || S.yearMark.day > S.day) { S.yearMark = snapshot(); return; }
+  if (y > Math.floor(S.yearMark.day / YEAR)) {
+    const a = S.yearMark, b = snapshot();
+    const best = S.towns.map((t) => [t, t.pop - (a.towns[t.id] || 0)]).sort((p, q) => q[1] - p[1])[0];
+    const report = { year: y, pop: [a.pop, b.pop], births: b.births - a.births, weddings: b.weddings - a.weddings, built: b.built - a.built,
+      research: b.research - a.research, best: best && best[1] > 0 ? [best[0].name, Math.round(best[1])] : null, tier: TIERS[S.tier].name,
+      gold: Math.round(b.gold - a.gold), mile: (S.miles || []).filter((m) => m.d >= a.day).slice(-3).map((m) => m.icon + ' ' + m.s) };
+    S.yearMark = b; S.lastReport = report;
+    emit('yearreport', report);
+  }
+});
+function snapshot() {
+  const towns = {}; for (const t of S.towns) towns[t.id] = t.pop;
+  return { day: S.day, pop: Math.round(totalPop()), births: S.stats.births || 0, weddings: S.stats.weddings || 0, built: S.stats.builtTotal || 0, research: S.research ? S.research.done.length : 0, gold: S.res.gold, towns };
+}

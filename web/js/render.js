@@ -1,7 +1,7 @@
 // Isometric renderer with an overview (atlas) mode for far zoom levels.
 import { BIOMES, W, H, B, world, wrapX, tileWX, tileWY, biomeAt, isWater } from './world.js';
 import { SPR, TB, DECOR_DENSITY, homeArt } from './sprites.js';
-import { byRiver, canCanal, canZoneAs, BIG, footprint, S, M, DEFS, ZONES, townById, canPlace, canZone, canRoad, canFound, canStart, ownerOf, groundDist2, CONTACT_RANGE, inContact } from './game.js';
+import { on, byRiver, canCanal, canZoneAs, BIG, footprint, S, M, DEFS, ZONES, townById, canPlace, canZone, canRoad, canFound, canStart, ownerOf, groundDist2, CONTACT_RANGE, inContact } from './game.js';
 import { hash2 } from './noise.js';
 import { idxOf } from './world.js';
 import * as L from './life.js';
@@ -219,6 +219,18 @@ function updateVisitors(dt, t, tiles) {
       routeVisitor(v, start, hall, tileWX(t.x, t.y)); vs.push(v);
     }
   }
+  { // carts haul the goods in from the workplaces to the town hall
+    const haul = vs.filter((v) => v.hauler).length, want = Math.min(3, Math.floor((t.n || 0) / 12));
+    if (haul < want && Math.random() < dt / 12) {
+      const hall = idxOf(t.x, t.y), srcs = tiles.filter((i) => { const b = S.buildings.get(i); return b && b.p >= 1 && DEFS[b.t] && DEFS[b.t].prod && b.t !== 'townhall' && b.t !== 'house' && groundDist2(i % W, Math.floor(i / W), t.x, t.y) > 9; });
+      if (srcs.length) {
+        const from = srcs[Math.floor(Math.random() * srcs.length)], b = S.buildings.get(from), r = Object.keys(DEFS[b.t].prod)[0];
+        const v = { hauler: true, kind: 'hauler', start: from, dest: hall, wait: 0, sp: 0.4, face: 1, ph: Math.random() * 6, c: CLOTHES[Math.floor(Math.random() * CLOTHES.length)], rider: true, cart: true,
+          load: LOAD_COL[r] || ['#c8a070', '#7aa04a'], moving: false, leaving: false };
+        routeVisitor(v, from, hall, tileWX(t.x, t.y)); vs.push(v);
+      }
+    }
+  }
   if (tavern != null && vs.length < 3 && Math.random() < dt / 45) { // a traveller wanders in for a bed and a meal
     const n = S.neighbors[Math.floor(Math.random() * S.neighbors.length)];
     const start = edgeTileToward(t, n ? n.x : t.x + 20, n ? n.y : t.y);
@@ -264,7 +276,7 @@ function updateWalkers(dt, visibleTowns) {
       ws.push({ town0: t.id, job: person ? person.j : null, sk: person ? person.k : 0, age: person ? ageOf(person) : 30, dog: !ride && pet && pet.k === 'dog' ? pet : null, pid, X, Y, tile, pts: null, wait: Math.random() * 3, sp: (0.32 + Math.random() * 0.18) * (ride ? 2.2 : 1), face: 1,
         rider: ride, cart: ride && Math.random() < 0.35, hc: HORSE_COLS[Math.floor(Math.random() * HORSE_COLS.length)],
         lx: (Math.random() - 0.5) * LANE, ly: (Math.random() - 0.5) * LANE * 0.4,
-        c: CLOTHES[Math.floor(Math.random() * CLOTHES.length)], carry: Math.random() < 0.3, ph: Math.random() * 6, moving: false });
+        c: CLOTHES[Math.floor(Math.random() * CLOTHES.length)], carry: person && person.j ? Math.random() < 0.55 : Math.random() < 0.2, ph: Math.random() * 6, moving: false });
     }
     if (ws.length > want) { const keep = M.follow && M.follow.town === t.id ? ws.findIndex((q) => q.pid === M.follow.pid) : -1; if (keep >= want) { const tmp = ws[0]; ws[0] = ws[keep]; ws[keep] = tmp; } ws.length = want; }
     updateVisitors(dt, t, tiles);
@@ -286,6 +298,7 @@ function updateWalkers(dt, visibleTowns) {
     }
   }
 }
+const LOAD_COL = { food: ['#e2cc8a', '#d8b860'], wood: ['#8a5f3c', '#a8784c'], stone: ['#a8a29a', '#8e8880'], iron: ['#7a828c', '#5e6670'], gold: ['#e8c050', '#c8a030'], wool: ['#f4f0e6', '#e8e2d4'], flour: ['#f4ead8', '#e8dcc0'], bread: ['#d8a05a', '#c08840'] };
 // Footpaths: grass wears where villagers often walk off the roads.
 export const wear = new Map();
 setInterval(() => { for (const [k, v] of wear) { if (v <= 1) wear.delete(k); else wear.set(k, v * 0.995); } }, 4000);
@@ -324,6 +337,16 @@ function drawRowWalkers(y) {
 }
 function drawWalkers(visibleTowns) {
   for (const t of visibleTowns) { const ws = walkers.get(t.id); if (ws) drawWalkerList(ws); }
+}
+// What a worker carries home: a grain sack, logs, a basket of stone, fish, or a parcel.
+const CARRY = { farm: 'sack', pasture: 'sack', orchard: 'sack', vineyard: 'sack', riceterrace: 'sack', gristmill: 'sack', bakery: 'sack', lumber: 'logs', woodlot: 'logs', quarry: 'stone', pit: 'stone', mine: 'stone', dock: 'fish', shipyard: 'fish', icehut: 'fish' };
+function carryItem(x, y, s, job) {
+  const k = CARRY[job] || 'box';
+  if (k === 'sack') { ctx.fillStyle = '#e2d0a2'; ctx.beginPath(); ctx.ellipse(x + 1.3 * s, y + 1.2 * s, 1.8 * s, 1.6 * s, 0, 0, 6.3); ctx.fill(); ctx.fillStyle = '#c8b080'; ctx.fillRect(x + 0.6 * s, y - 0.6 * s, 1.4 * s, 0.8 * s); }
+  else if (k === 'logs') { ctx.fillStyle = '#8a5f3c'; ctx.fillRect(x - 1 * s, y + 0.2 * s, 4.6 * s, 1.1 * s); ctx.fillRect(x - 0.6 * s, y - 0.9 * s, 4.6 * s, 1.1 * s); ctx.fillStyle = '#d8b07a'; ctx.fillRect(x + 3.4 * s, y + 0.2 * s, 0.5 * s, 1.1 * s); }
+  else if (k === 'stone') { ctx.fillStyle = '#8a6a44'; ctx.fillRect(x, y + 0.4 * s, 2.8 * s, 1.6 * s); ctx.fillStyle = '#a8a29a'; ctx.beginPath(); ctx.arc(x + 0.8 * s, y + 0.4 * s, 0.8 * s, 0, 6.3); ctx.arc(x + 2 * s, y + 0.3 * s, 0.7 * s, 0, 6.3); ctx.fill(); }
+  else if (k === 'fish') { ctx.fillStyle = '#8a6a44'; ctx.fillRect(x, y + 0.6 * s, 2.8 * s, 1.4 * s); ctx.fillStyle = '#b8c8d8'; ctx.beginPath(); ctx.ellipse(x + 1.4 * s, y + 0.4 * s, 1.6 * s, 0.6 * s, 0, 0, 6.3); ctx.fill(); }
+  else { ctx.fillStyle = '#b08a52'; ctx.fillRect(x, y, 2.6 * s, 2.2 * s); }
 }
 // Work clothes: each trade has its hat or apron; journeymen add a belt and masters a golden sash.
 const HATS = { farm: 'straw', pasture: 'straw', orchard: 'straw', vineyard: 'straw', riceterrace: 'cone', cacao: 'straw', oasis: 'wrap', apiary: 'veil',
@@ -366,7 +389,7 @@ function drawWalkerList(ws) {
             ctx.fillStyle = '#f5d78a'; ctx.fillRect(bx - 1.6 * s, y - 9 * s, 3.2 * s, 2.4 * s);
             ctx.fillStyle = '#e8b830'; ctx.beginPath(); ctx.moveTo(bx - 2 * s, y - 10.6 * s); ctx.lineTo(bx - 2 * s, y - 13 * s); ctx.lineTo(bx - 1 * s, y - 11.6 * s); ctx.lineTo(bx, y - 13.4 * s); ctx.lineTo(bx + 1 * s, y - 11.6 * s); ctx.lineTo(bx + 2 * s, y - 13 * s); ctx.lineTo(bx + 2 * s, y - 10.6 * s); ctx.fill();
           }
-          else { ctx.fillStyle = '#c8a070'; ctx.fillRect(bx - 3 * s, y - 7.5 * s, 3 * s, 2.5 * s); ctx.fillStyle = '#7aa04a'; ctx.fillRect(bx + 0.3 * s, y - 7 * s, 2.6 * s, 2 * s); }
+          else { const ld = w.load || ['#c8a070', '#7aa04a']; ctx.fillStyle = ld[0]; ctx.fillRect(bx - 3 * s, y - 7.5 * s, 3 * s, 2.5 * s); ctx.fillStyle = ld[1]; ctx.fillRect(bx + 0.3 * s, y - 7 * s, 2.6 * s, 2 * s); }
           ctx.fillStyle = '#4a3a2c'; ctx.beginPath(); ctx.arc(bx - 2 * s, y - 1.6 * s, 1.6 * s, 0, 6.3); ctx.arc(bx + 2.4 * s, y - 1.6 * s, 1.6 * s, 0, 6.3); ctx.fill();
           ctx.strokeStyle = '#5a4030'; ctx.lineWidth = Math.max(0.7, 0.6 * s); ctx.beginPath(); ctx.moveTo(bx + w.face * 4 * s, y - 4 * s); ctx.lineTo(x, y - 4.4 * s); ctx.stroke();
         }
@@ -391,7 +414,7 @@ function drawWalkerList(ws) {
       ctx.fillStyle = '#f0c8a0'; ctx.beginPath(); ctx.arc(x + w.face * 0.3 * s, y - 7.6 * s - bob, 1.6 * s, 0, 6.3); ctx.fill();
       if (w.job && cam.tw >= 34) outfit(x + w.face * 0.3 * s, y - bob, s, w.job, w.sk);
       if (w.age >= 6 && w.age < 16 && w.pts && w.dest === t_school(w)) { ctx.fillStyle = '#8a5a3c'; ctx.fillRect(x - w.face * 2.2 * s - 0.9 * s, y - 5.6 * s - bob, 1.8 * s, 2.4 * s); } // a satchel
-      if (w.carry) { ctx.fillStyle = '#b08a52'; ctx.fillRect(x + (w.face > 0 ? 0.6 : -3.2) * s, y - 9.5 * s - bob, 2.6 * s, 2.2 * s); }
+      if (w.carry) carryItem(x + (w.face > 0 ? 0.6 : -3.2) * s, y - 9.5 * s - bob, s, w.job);
       if (w.kind === 'traveller') { // a wide hat and a pack: clearly from out of town
         ctx.fillStyle = '#6a4a2a'; ctx.fillRect(x - w.face * 2.6 * s - 1.2 * s, y - 6.4 * s - bob, 2.4 * s, 3.6 * s);
         ctx.fillStyle = '#7a5a34'; ctx.beginPath(); ctx.ellipse(x + w.face * 0.3 * s, y - 8.8 * s - bob, 2.6 * s, 0.8 * s, 0, 0, 6.3); ctx.fill();
@@ -452,10 +475,49 @@ function animate(type, cx, cy, s, wx, y) {
     ctx.fillStyle = 'rgba(220,236,250,0.7)'; for (let k = 0; k < 3; k++) ctx.fillRect(hx - 1 * s + k * s, hy + r * 0.7 + ((t * 8 + k * 3) % 4) * s * 0.5, 0.8 * s, 0.8 * s);
   }
 }
+// ---------------- celebrations ----------------
+let fwUntil = 0; const sparks = [];
+export function celebrate(sec = 9) { fwUntil = animTime + sec; dirty = true; }
+function drawFireworks(dt) {
+  if (animTime < fwUntil && Math.random() < dt * 3.2) { // a new rocket bursts over the capital
+    const cap = S.towns.find((t) => t.capital) || S.towns[0];
+    let bx = cw / 2, by = ch * 0.35;
+    if (cap) { const x = sx(tileWX(cap.x, cap.y)), y = sy(tileWY(cap.y)); if (x > 0 && x < cw && y > 0 && y < ch) { bx = x; by = Math.max(80, y - cam.tw * 2); } }
+    const cx = bx + (Math.random() - 0.5) * 220, cy = by + (Math.random() - 0.5) * 120, hue = Math.floor(Math.random() * 360), n = 34;
+    for (let k = 0; k < n; k++) { const a = (k / n) * Math.PI * 2, v = 60 + Math.random() * 70; sparks.push({ x: cx, y: cy, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: 0, hue }); }
+    if (Math.random() < 0.5) emitPop();
+  }
+  if (!sparks.length) return;
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  for (let k = sparks.length - 1; k >= 0; k--) {
+    const p = sparks[k]; p.life += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 60 * dt; p.vx *= 0.985;
+    if (p.life > 1.6) { sparks.splice(k, 1); continue; }
+    ctx.fillStyle = `hsla(${p.hue},90%,${60 + 20 * (1 - p.life)}%,${1 - p.life / 1.6})`; ctx.fillRect(p.x - 1.4, p.y - 1.4, 2.8, 2.8);
+  }
+  ctx.restore(); dirty = true;
+}
+let emitPop = () => {}; export function onFirework(f) { emitPop = f; }
+// a building pops up when it is finished or improved
+const pops = new Map();
+on('built', ({ i }) => pops.set(i, animTime));
+on('upgraded', ({ i }) => pops.set(i, animTime));
+function popScale(i) { const t0 = pops.get(i); if (t0 === undefined) return 1; const a = (animTime - t0) / 0.7; if (a >= 1) { pops.delete(i); return 1; } return 1 + 0.22 * Math.sin(a * Math.PI) * (1 - a * 0.6); }
+// Workplaces that have improved show it: a pennant at level 2, a golden one and a star at level 3
+function statue(x, y, s) { // a statue of the founder in the square
+  ctx.fillStyle = '#b8ae9c'; ctx.fillRect(x - 3 * s, y - 4 * s, 6 * s, 4 * s); ctx.fillStyle = '#d6cebe'; ctx.fillRect(x - 3.6 * s, y - 4.8 * s, 7.2 * s, 1 * s);
+  ctx.fillStyle = '#8a9a8a'; ctx.fillRect(x - 1.3 * s, y - 10 * s, 2.6 * s, 5.2 * s); ctx.beginPath(); ctx.arc(x, y - 11.2 * s, 1.5 * s, 0, 6.3); ctx.fill();
+  ctx.strokeStyle = '#8a9a8a'; ctx.lineWidth = Math.max(0.8, 0.8 * s); ctx.beginPath(); ctx.moveTo(x + 1.2 * s, y - 9 * s); ctx.lineTo(x + 3.4 * s, y - 13 * s); ctx.stroke();
+}
+function levelTrim(spr, cx, cy, s, lv) {
+  const tx = cx + 2 * s, ty = cy - (spr.ay - 6) * s;
+  ctx.strokeStyle = '#5a4030'; ctx.lineWidth = Math.max(0.8, 0.7 * s); ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(tx, ty - 9 * s); ctx.stroke();
+  ctx.fillStyle = lv >= 3 ? '#e8b830' : '#4a78a8'; ctx.beginPath(); ctx.moveTo(tx, ty - 9 * s); ctx.lineTo(tx + 6 * s, ty - 7.5 * s + Math.sin(animTime * 3 + cx) * s * 0.6); ctx.lineTo(tx, ty - 6 * s); ctx.fill();
+  if (lv >= 3) { ctx.fillStyle = '#ffe28a'; ctx.font = `${Math.round(7 * s)}px system-ui`; ctx.textAlign = 'center'; ctx.fillText('★', tx, ty - 10 * s); }
+}
 // As a family settles in, their yard grows: a picket fence, then a vegetable patch, then a garden shed.
 function drawYard(cx, cy, s, hw, hh, age, h) {
   if (age < 6) return;
-  ctx.strokeStyle = '#efe6d2'; ctx.lineWidth = Math.max(0.8, 0.8 * s);
+  ctx.strokeStyle = S.tier >= 3 ? '#b8ae9c' : '#efe6d2'; ctx.lineWidth = Math.max(0.8, (S.tier >= 3 ? 1.4 : 0.8) * s); // picket fences become low stone walls in grand towns
   const a0 = 0.12 + h * 0.1, a1 = a0 + 0.38;
   ctx.beginPath();
   for (let k = 0; k <= 6; k++) { const f = a0 + (a1 - a0) * k / 6, x = cx - hw + hw * f, y = cy + hh * f; ctx.moveTo(x, y); ctx.lineTo(x, y - 3.2 * s); }
@@ -559,6 +621,7 @@ export function frame(now) {
   A.drawLight(ctx, view);
   A.drawSky(ctx, view);
   L.drawNight(ctx, cw, ch, lights, cam.tw, waterAtScreen);
+  drawFireworks(fdt);
   A.drawAir(ctx, view, fdt);
   drawLabels(tileMode);
 }
@@ -756,7 +819,7 @@ function drawTiles() {
 
   // Pass 1: ground
   const tint = new Path2D(), border = new Path2D(), valid = new Path2D(), invalid = new Path2D(), roadPath = new Path2D(), pavedPath = new Path2D();
-  const isPaved = (i) => { const rt = L.roadTown.get(i); if (rt === -1) return S.tier >= 3; const t = townById(rt); return !!(t && t.imp && t.imp.paved); };
+  const isPaved = (i) => { const rt = L.roadTown.get(i); if (rt === -1) return S.tier >= 3; const t = townById(rt); if (!t) return false; if (t.imp && t.imp.paved) return true; return S.tier >= 2 && groundDist2(i % W, Math.floor(i / W), t.x, t.y) <= (S.tier >= 3 ? 16 : 5); }; // a paved town square, growing with the realm
   let anyRoad = false, anyRiver = false, anyBridge = false;
   const riverPaths = [new Path2D(), new Path2D(), new Path2D()], bridgePath = new Path2D(), canalPath = new Path2D(); let anyCanal = false;
   let anyOwn = false;
@@ -896,7 +959,10 @@ function drawTiles() {
           continue;
         }
         if (bld.p >= 1 && !A_FLAT.has(bld.t) && tw >= 26) A.longShadow(ctx, cx, cy, s, tw);
-        drawSpriteF(buildingSprite(bld, wx, y), cx, cy, s, bld.f);
+        { const sp = buildingSprite(bld, wx, y), ps = popScale(i);
+          drawSpriteF(sp, cx, cy, s * ps, bld.f);
+          if (bld.t !== 'house' && (bld.lv || 1) >= 2 && bld.p >= 1 && tw >= 30) levelTrim(sp, cx, cy, s, bld.lv);
+          if (bld.t === 'townhall' && bld.p >= 1 && S.tier >= 4 && tw >= 30) statue(cx - tw * 0.42, cy + tw * 0.12, s); }
         if (bld.t === 'house' && bld.p >= 1 && tw >= 30) drawYard(cx, cy, s, hw, hh, S.day - (bld.d || 0), hash2(wx, y, 61));
         if (bld.t === 'shipyard' && bld.p >= 1) X.drawFleet(ctx, i, view);
         if (bld.p >= 1 && tw >= 30 && ANIM.has(bld.t)) animate(bld.t, cx, cy, s, wx, y);
@@ -1006,6 +1072,10 @@ function drawTiles() {
         continue;
       }
       if (S.zones.has(i) || world.river[i]) continue;
+      if (S.tier >= 3 && tw >= 28 && L.roads.has(i) && hash2(wx, y, 44) < 0.35) { // banners along the main streets of a grand town
+        const rt = townById(L.roadTown.get(i));
+        if (rt && groundDist2(wx, y, rt.x, rt.y) <= 20) { const bx = cx - tw * 0.16, by = cy + tw * 0.02; ctx.strokeStyle = '#4a3a2c'; ctx.lineWidth = Math.max(1, s); ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(bx, by - 16 * s); ctx.stroke(); ctx.fillStyle = rt.capital ? '#7a3aa0' : '#c0503e'; ctx.fillRect(bx, by - 15.5 * s, 4 * s, 7 * s); ctx.fillStyle = '#e8b830'; ctx.fillRect(bx, by - 9 * s, 4 * s, 1 * s); }
+      }
       if (tw >= 28 && L.roads.has(i) && hash2(wx, y, 43) < 0.4) {
         const lt = townById(L.roadTown.get(i));
         if (lt && lt.imp && lt.imp.lanterns) {
@@ -1055,7 +1125,7 @@ function drawLabels(tileMode) {
     const x = sx(tileWX(t.x, t.y)), y = sy(tileWY(t.y));
     if (x < -100 || x > cw + 100 || y < -60 || y > ch + 100) continue;
     const face = (t.mood ? MOOD_FACES[t.mood.level] : '') + (t.spec ? ' ' + SPECS[t.spec].icon : '');
-    if (tileMode) label(`${t.name} ${face}`, x, y - tw * 0.9, 13, `${Math.floor(t.pop)} folk`);
+    if (tileMode) label(`${t.name} ${face}`, x, y - tw * 0.9, 13, `${Math.floor(t.pop)} folk${t.fame ? ' · ★ ' + t.fame.title : ''}`);
     if (tileMode && tw < 70 && t.districts) for (const d of t.districts) { // quarter names, softly
       const dx = sx(tileWX(d.x, d.y)), dy = sy(tileWY(d.y));
       ctx.font = `italic 600 ${Math.round(11 + tw * 0.05)}px Georgia, serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
