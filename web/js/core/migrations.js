@@ -5,7 +5,7 @@
 //   2. add a function to MIGRATIONS that upgrades a save from the previous version,
 // and old saves (and backup files) are upgraded step by step when they are loaded.
 // Never edit an old migration once it has shipped; add a new one instead.
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;
 
 const MIGRATIONS = {
   // v1 -> v2: fields added over many updates (research, talents, contracts, kingdoms, armies...) are
@@ -20,6 +20,15 @@ const MIGRATIONS = {
     canals: d.canals || [],
     caravans: d.caravans || [],
     v: 2,
+  }),
+  // v2 -> v3: only Housing, Farmland and Workshop remain as zones. Painted-but-unbuilt tiles of the others
+  // become their nearest match (pasture -> farmland, shops -> workshop) or are cleared; buildings already
+  // standing are kept. Town mood is gone, so its saved score is dropped.
+  2: (d) => ({
+    ...d,
+    zones: (d.zones || []).map(([i, z]) => [i, z === 'pasture' ? 'farmland' : z === 'shops' ? 'workshop' : z]).filter(([, z]) => ['housing', 'farmland', 'workshop'].includes(z)),
+    towns: (d.towns || []).map((t) => { const { mood: _mood, ...rest } = t; return rest; }),
+    v: 3,
   }),
 };
 

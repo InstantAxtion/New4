@@ -55,7 +55,7 @@ export function requestsSection() {
       : q.kind === 'gift' ? `<button class="btn small primary ${S.res[q.res] >= q.amt ? '' : 'disabled'}" data-act="givereq" data-arg="${q.id}">Give ${q.amt} ${RES_NAMES[q.res].toLowerCase()}</button>`
       : `<span class="meta">Build it in ${t ? esc(t.name) : 'town'}</span>`;
     return `<div class="item"><div><b>${esc(q.who)}</b><div class="meta">${esc(q.text)}</div></div>${btn}</div>`;
-  }).join('')}</div><div class="note">Each kindness earns a little gold and cheers the town. Unanswered requests simply pass.</div></div>`;
+  }).join('')}</div><div class="note">Each kindness earns a little gold, and families settle faster for a while. Unanswered requests simply pass.</div></div>`;
 }
 
 export function royalSection() {
@@ -133,7 +133,7 @@ export function showBackup() {
 export function caravanSection() {
   if (S.towns.length < 2) return '';
   const pairs = caravanPairs().slice(0, 6), room = S.caravans.length < maxCaravans();
-  return `<div class="section"><h3>🐴 Caravans</h3><div class="note">Wagon trains between your own towns: each one earns gold and cheers up both towns. ${S.caravans.length} of ${maxCaravans()} in use.</div>
+  return `<div class="section"><h3>🐴 Caravans</h3><div class="note">Wagon trains between your own towns: each one earns gold. ${S.caravans.length} of ${maxCaravans()} in use.</div>
     ${S.caravans.length ? `<div class="list">${S.caravans.map(([a, b], k) => `<div class="item"><div><b>${esc((townById(a) || {}).name || '?')} ⇄ ${esc((townById(b) || {}).name || '?')}</b><div class="meta">+0.3 gold a day</div></div><button class="btn small" data-act="stopcar" data-arg="${k}">Stop</button></div>`).join('')}</div>` : ''}
     ${room && pairs.length ? `<div class="list">${pairs.map(([a, b]) => `<div class="item"><div><b>${esc(a.name)} ⇄ ${esc(b.name)}</b><div class="cost" style="margin-top:4px">${costChips(CARAVAN_COST)}</div></div><button class="btn small leaf ${affordable(CARAVAN_COST) ? '' : 'disabled'}" data-act="startcar" data-arg="${a.id}:${b.id}">Start</button></div>`).join('')}</div>` : ''}</div>`;
 }

@@ -22,7 +22,7 @@ export function showMenu() {
   openSheet('menu', () => head('Menu', 'Hearthlands')
     + settingsHTML('data-act="set" data-arg')
     + `<div class="section"><h3>How to play</h3><div class="note">
-      • <b>Zones</b>: paint Housing for homes, Farmland and Pastures for food, Woodlots for timber, Parks for happier towns, and Workshops and Shops for gold. Villagers build them over time. <b>Road</b> paints free roads, and <b>Erase</b> clears zones and roads.<br>
+      • <b>Zones</b>: paint Housing for homes, Farmland for food and Workshops for gold. Villagers build them over time. <b>Road</b> paints free roads, and <b>Erase</b> clears zones and roads.<br>
       • <b>Build</b>: place Lumber Camps by woods, Quarries and Mines by hills, Docks on the shore.<br>
       • Your border grows as your town grows. Watchtowers push it further.<br>
       • Trade with nearby villages and send gifts. Close friends may join your kingdom.<br>

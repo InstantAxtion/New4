@@ -71,7 +71,7 @@ export function zoneInfo(k) {
   if (d) {
     if (d.cap) facts.push(`🏠 Homes for ${d.cap}`);
     if (d.prod) facts.push(Object.entries(d.prod).map(([r, v]) => `${ICON[r].replace('<svg', '<svg width="14" height="14" style="vertical-align:-2px"')} +${v}/day`).join(' '));
-    if (d.mood) facts.push('😊 Happier town');
+    if (d.homes) facts.push(`🏠 Homes +${Math.round(d.homes * 100)}%`);
     if (d.jobs) facts.push(`👷 ${d.jobs} jobs`);
   } else if (k === 'road' || k === 'canal') facts.push('Free');
   return `<span class="mimg">${img}</span><div class="mtext"><b>${name}${locked ? ` <em class="lockt">🔒 ${TIERS[d.tier].name}</em>` : ''}</b><small>${ZONE_TEXT[k] || ''}</small>

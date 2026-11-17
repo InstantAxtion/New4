@@ -92,9 +92,8 @@ export function setMode(mode, background = false) {
     const group = (label, items) => `<div class="zgroup"><div class="zglabel">${label}</div><div class="zgitems">${items}</div></div>`;
     html = `<div class="zinfo">${zoneInfo(mode.zone)}</div>
       <div class="zrow"><div class="zscroll">
-        ${group('Homes & food', zt('housing') + zt('farmland') + zt('pasture'))}
-        ${group('Work', zt('woodlot') + zt('workshop') + zt('mining') + zt('shops'))}
-        ${group('Town', zt('park') + tile('road', 'Road', '<span class="zsw road"></span>') + tile('canal', 'Canal', '<span class="zsw canal"></span>'))}
+        ${group('Zones', zt('housing') + zt('farmland') + zt('workshop'))}
+        ${group('Paths', tile('road', 'Road', '<span class="zsw road"></span>') + tile('canal', 'Canal', '<span class="zsw canal"></span>'))}
         ${group('Tidy', tile('erase', 'Erase', '<span class="zsw erase"></span>'))}
       </div>
       <div class="zact"><button class="pill ${S.undo && S.undo.length ? '' : 'disabled'}" data-act="undo" aria-label="Undo">↶ Undo</button><button class="pill done" data-act="cancelmode">✓ Done</button></div></div>`;
@@ -467,7 +466,7 @@ export function initUI() {
   on('tier', (t) => {
     if (t === 1) {
       hint('spec', 'Towns can now choose a <b>speciality</b>: Farming, Crafts, Trade, Industry or Learning. Open a town hall to pick one. Bigger buildings also have a little <b>upkeep</b>; if it can\'t be paid they simply rest (💤) until it can.', null);
-      hint('everyday', 'Your realm is a Village! New <b>Everyday</b> buildings (well, chapel, tavern…) make towns happier, and happy towns grow faster. You can now make <b>goods</b> too, and build your region\'s <b>specialty</b>.', '#bottombar [data-tab=build]');
+      hint('everyday', 'Your realm is a Village! New <b>Everyday</b> buildings: wells, chapels and parks make homes roomier, and a tavern helps families settle. You can now make <b>goods</b> too, and build your region\'s <b>specialty</b>.', '#bottombar [data-tab=build]');
     }
     if (t === 3) hint('wonders2', 'Four new regional wonders await: a Cliff Monastery, a Great Bridge, an Observatory and a Botanical Dome. Look under Build → Wonders.', '#bottombar [data-tab=build]');
   });

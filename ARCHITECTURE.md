@@ -84,7 +84,7 @@ the same folder with Capacitor.
 
 ### Add a building
 1. Add an entry to `js/data/buildings.js`: `name`, `cost`, `time`, `tier`, and optionally `prod`
-   (per day), `use` (inputs), `jobs`, `mood`, `store`, `research` (an idea that unlocks it),
+   (per day), `use` (inputs), `jobs`, `homes` (makes homes roomier), `store`, `research` (an idea that unlocks it),
    `cat` (`'everyday'`, `'goods'`, `'military'`...), and `desc`.
 2. Draw it in `sprites.js` (`S.mytype = [frame((g) => { ... })]`). Helpers like `box`, `gable`,
    `cone` and `windows` keep the style consistent.

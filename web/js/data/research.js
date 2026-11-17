@@ -36,7 +36,7 @@ export const RESEARCH = [
   { id: 'scholarship', era: 3, icon: '🎓', name: 'Scholarship', cost: 260, req: ['guilds'], desc: 'Unlocks the Scriptorium; +20% knowledge.', unlocks: ['scriptorium'] },
   { id: 'shipbuilding', era: 3, icon: '⛵', name: 'Shipbuilding', cost: 260, req: ['navigation'], desc: '+20% from shipyards and harbours.' },
   { id: 'stonework', era: 3, icon: '🗿', name: 'Fine Stonework', cost: 260, req: ['deepmining'], desc: 'Wonders go up 20% faster.' },
-  { id: 'theatre', era: 3, icon: '🎭', name: 'Theatre', cost: 260, req: ['medicine'], desc: 'Towns are a little happier.' },
+  { id: 'theatre', era: 3, icon: '🎭', name: 'Theatre', cost: 260, req: ['medicine'], desc: 'Families settle 10% faster.' },
   { id: 'diplomacy', era: 3, icon: '🤝', name: 'Diplomacy', cost: 260, req: ['spicetrade'], desc: 'Gifts make 25% more friends; contracts pay 20% more.' },
   { id: 'astronomy', era: 4, icon: '🔭', name: 'Astronomy', cost: 400, req: ['scholarship'], desc: '+25% knowledge.' },
   { id: 'grandmarkets', era: 4, icon: '🏪', name: 'Grand Markets', cost: 400, req: ['banking'], desc: '+15% gold from markets and shops.' },
@@ -45,7 +45,7 @@ export const RESEARCH = [
   { id: 'drill', era: 1, icon: '🛡️', name: 'Drill', cost: 70, req: ['tools'], desc: 'Soldiers fight 20% better.' },
   { id: 'fortifications', era: 2, icon: '🏰', name: 'Fortifications', cost: 140, req: ['drill', 'masonry'], desc: 'Unlocks the Stone Fort; towers and forts defend 30% better.', unlocks: ['fort'] },
   { id: 'tactics', era: 3, icon: '⚔️', name: 'Tactics', cost: 260, req: ['fortifications'], desc: 'Your field army fights 25% better and marches faster.' },
-  { id: 'harmony', era: 5, icon: '☀️', name: 'Golden Harmony', cost: 600, req: ['printing', 'banking', 'engineering'], desc: 'Every town is a little happier (+1 mood).' },
+  { id: 'harmony', era: 5, icon: '☀️', name: 'Golden Harmony', cost: 600, req: ['printing', 'banking', 'engineering'], desc: 'Families settle 25% faster everywhere.' },
   { id: 'enlightenment', era: 5, icon: '✨', name: 'Enlightenment', cost: 800, req: ['astronomy', 'universities', 'grandmarkets'], desc: '+10% to everything your realm makes.' },
 ];
 export const ERAS = ['Early days', 'Growing', 'Flourishing', 'Renowned', 'Golden', 'Legend'];

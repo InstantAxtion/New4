@@ -7,7 +7,7 @@ Pick any spot on the planet, then grow from a hamlet into a kingdom at your own 
 - **Real Earth**: continents and coastlines come from Natural Earth country shapes. Mountains, deserts,
   rainforests, taiga, tundra and ice follow their real locations. Every tile knows which country it's in.
 - **Pick any homeland**: the start screen rates the woodland, stone, farmland and coast around the spot you choose.
-- **Mixed building**: paint Housing, Farmland, Pasture (sheep and cows, food and a little wool), Woodlot (planted timber), Park (a happier town), Workshop and Shops zones, and villagers build them over time.
+- **Mixed building**: paint Housing, Farmland and Workshop zones, and villagers build them over time. Place everything else yourself: Lumber Camp, Woodlot, Pasture, Quarry, Mining Pit, Iron Mine, Shops, Fishing Dock, Watchtower, Market and more.
   Place key buildings yourself: Lumber Camp, Quarry, Iron Mine, Fishing Dock, Watchtower and Market.
 - **Expansion**: your border grows with your town, and Watchtowers push it further. Found new settlements anywhere on Earth.
 - **Peaceful neighbours**: about 600 villages around the world. Trade with them and send gifts,
@@ -23,7 +23,7 @@ Pick any spot on the planet, then grow from a hamlet into a kingdom at your own 
 - **Wildlife and weather**: sheep, cows and chickens on the farms. Deer, reindeer, rabbits, gazelles and camels in the wild. Flocks of birds, fishing boats and sailing ships. Drifting clouds with shadows, showers with soft rain sound, snowfall in winter, and crickets at night.
 - **Regional building styles**: towns build in the style of where they stand on Earth (timber-framed, Nordic, Mediterranean, adobe, tropical stilt houses or curved-eave). Homes improve by themselves from cottage to town house to manor as a town grows, and each step holds more people.
 - **Neighbours with personality**: each village has a leader with a temperament. Leaders send letters with small requests (help is rewarded, ignoring them costs nothing), share little stories with friends, and their villages visibly grow on the map.
-- **Town mood**: everyday buildings (well, apiary, windmill, chapel, tavern, school), goods and charm make towns 🙂 Content, 😊 Happy or 😄 Joyful. Happier towns attract families faster, and mood never punishes.
+- **Town growth**: families move into empty homes while there is food. Bread, cloth, pottery, festivals, some research and talents make them settle faster, and each town panel lists what helps. Wells, chapels and parks make homes roomier.
 - **Goods**: bread (bakery), tools (smithy), cloth (weaver) and ale or wine (brewery). Each is a simple one-step workshop, and the goods row appears once goods unlock.
 - **Regional specialties**: orchards in timber-framed towns, ice-fishing huts in Nordic ones, vineyards in Mediterranean ones, oasis gardens in adobe towns, cacao groves in the tropics and rice terraces in curved-eave towns.
 - **Villagers with lives**: everyone has a name from their region, an age, a family, a home, a job and a growing skill. Weddings, babies, coming of age, master craftspeople, retirements and young families moving between towns all appear in each town's chronicle. Tap anyone walking about to meet them.

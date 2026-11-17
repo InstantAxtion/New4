@@ -43,7 +43,7 @@ export const SKILLS = {
   oasis: 'Gardening', cacao: 'Harvesting', orchard: 'Grafting', shipyard: 'Shipwrighting',
 };
 export const SKILL_HELP = {
-  yard: 'builds faster', tavern: 'cheers the town', chapel: 'cheers the town', school: 'pupils learn faster', tower: 'border reaches further',
+  yard: 'builds faster', tavern: 'families settle faster', chapel: 'a calm, close-knit town', school: 'pupils learn faster', tower: 'border reaches further',
   stable: 'riders travel faster', market: 'better trades', harbour: 'more gold',
 };
 export const GENERAL_SKILL = 'Know-how';
@@ -254,14 +254,13 @@ on('stepped', (dd) => {
 // A short, gentle line about someone's day.
 export function thought(t, p) {
   const age = ageOf(p), job = p.j ? JOBS[p.j] : null;
-  const mood = t.mood ? t.mood.level : 0;
   const lines = [];
   if (age < 6) lines.push('Toddles after the hens and laughs at everything.', 'Fast asleep after a busy morning.');
   else if (age < 16) lines.push(t.hasSchool ? 'Learning letters at the school.' : 'Wishes the town had a school.', 'Racing friends down to the fields.', 'Helping out at home today.');
   else if (age >= 65) lines.push('Telling stories of the old days to anyone who will listen.', 'Tending a little herb garden.', 'Enjoying a long, slow walk.');
   else if (job) lines.push(p.k >= 80 ? `Proud master ${job.toLowerCase()}, teaching apprentices.` : `Busy as a ${job.toLowerCase()}, getting better every season.`, `Thinking about supper after a day as a ${job.toLowerCase()}.`);
   else lines.push('Helping the builders around town.', 'Looking for work at one of the new buildings.');
-  if (mood >= 2) lines.push(`Loves living in ${t.name}.`);
+  if (t.pop >= t.cap - 1) lines.push(`Loves living in ${t.name}, though it is getting crowded.`);
   if (S.res.bread > 1) lines.push('Smells fresh bread and is very content.');
   if (p.p) { const q = personById(t, p.p); if (q) lines.push(`Off to meet ${q.f} by the well.`); }
   const pet = petOf(t, p);

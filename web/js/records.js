@@ -49,7 +49,6 @@ export const TROPHIES = [
   ['all-festivals', '🏮', 'All Year Round', 'Hold all four seasonal festivals', () => !!S.festsHeld && ['blossom', 'midsummer', 'harvest', 'lights'].every((k) => S.festsHeld[k])],
   ['helper', '💛', 'Good Neighbour', 'Help five villagers with their requests', () => (S.stats.helpedFolk || 0) >= 5],
   ['coronation', '🫅', 'Long Live the Crown', 'See an heir crowned', () => (S.stats.coronations || 0) >= 1],
-  ['joyful', '😄', 'Joy Abounds', 'Make a town Joyful', () => S.towns.some((t) => t.mood && t.mood.level >= 2)],
   ['weddings', '💍', 'Wedding Bells', 'Celebrate 25 weddings in one realm', () => (S.stats.weddings || 0) >= 25],
   ['master', '⭐', 'Master of the Craft', 'Raise a master craftsperson', () => (S.stats.masters || 0) >= 1],
   ['joined', '🤝', 'Open Arms', 'Welcome a neighbouring village into your realm', () => (S.stats.joins || 0) >= 1],

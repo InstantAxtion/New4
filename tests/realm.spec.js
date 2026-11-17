@@ -37,3 +37,23 @@ test('an old version-1 save still loads', async ({ page }) => {
   });
   expect(ok).toBe(true);
 });
+
+test('a version-2 save with retired zones and town mood loads cleanly', async ({ page }) => {
+  const errors = await openGame(page);
+  await startRealm(page);
+  const r = await page.evaluate(async () => {
+    const g = await import('./js/game.js');
+    const c = g.S.towns[0], i = (c.y + 4) * 2000 + c.x, j = (c.y + 6) * 2000 + c.x, k = (c.y + 8) * 2000 + c.x;
+    g.save();
+    const d = JSON.parse(localStorage.getItem('hearthlands-slot-1'));
+    d.v = 2; d.zones = [[i, 'pasture'], [j, 'park'], [k, 'shops']]; d.towns[0].mood = { score: 3, level: 1 };
+    localStorage.setItem('hearthlands-slot-1', JSON.stringify(d));
+    const ok = g.load(1);
+    for (let n = 0; n < 40; n++) g.update(g.DAY_SECONDS / 4);
+    return { ok, zones: [...g.S.zones.values()].sort(), mood: 'mood' in g.S.towns[0] };
+  });
+  expect(r.ok).toBe(true);
+  expect(r.zones.every((z) => ['housing', 'farmland', 'workshop'].includes(z))).toBe(true);
+  expect(r.mood).toBe(false);
+  expect(errors).toEqual([]);
+});

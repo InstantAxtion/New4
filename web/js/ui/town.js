@@ -1,6 +1,6 @@
 // Moved out of ui.js to keep modules small. See ARCHITECTURE.md.
 import { JOBS, SKILLS, ageOf, fullName } from '../folk.js';
-import { CONTACT_RANGE, DEFS, GIFT_AMOUNT, HOUSE_CAP_MULT, HOUSE_LEVELS, IMPROVEMENTS, IMPROVE_TIER, M, MOODS, PACE, RES, RES_NAMES, S, SPECS, SPEC_CHANGE_COST, SPEC_TIER, TIERS, TRAITS, UPKEEP, ZONES, affordable, anchorOf, canInvite, charm, continentAt, crewsBusy, crewsOf, harbourTowns, inContact, moodOf, nbExtra, ownerOf, priceNote, townById, tradeOffers, yardsIn, zonesWaiting } from '../game.js';
+import { growthParts, growthMult, CONTACT_RANGE, DEFS, GIFT_AMOUNT, HOUSE_CAP_MULT, HOUSE_LEVELS, IMPROVEMENTS, IMPROVE_TIER, M, PACE, RES, RES_NAMES, S, SPECS, SPEC_CHANGE_COST, SPEC_TIER, TIERS, TRAITS, UPKEEP, ZONES, affordable, anchorOf, canInvite, charm, continentAt, crewsBusy, crewsOf, harbourTowns, inContact, nbExtra, ownerOf, priceNote, townById, tradeOffers, yardsIn, zonesWaiting } from '../game.js';
 import { markDirty, townStyle } from '../render.js';
 import { farmSeason } from '../seasons.js';
 import { STYLES } from '../sprites.js';
@@ -14,7 +14,7 @@ export function festivalSection(t) {
   const f = ST.festivalNow(t), c = ST.canFestival(t), on = t.fest && S.day < t.fest.until;
   const cur = on ? ST.ALL_FESTS().find((x) => x.key === t.fest.key) : null;
   const specials = on ? '' : `<div class="list">${ST.SPECIALS.map((sp) => { const cs = ST.canSpecial(t, sp.key); return `<div class="item"><div><b>${sp.icon} ${sp.name}</b><div class="meta">${sp.desc}${cs.ok ? '' : ` <i>${esc(cs.reason)}</i>`}</div><div class="cost" style="margin-top:4px">${costChips(sp.cost)}</div></div><button class="btn small leaf ${cs.ok ? '' : 'disabled'}" data-act="special" data-arg="${t.id}:${sp.key}">Hold</button></div>`; }).join('')}</div>`;
-  return `<div class="section"><h3>${f.icon} Festivals</h3><div class="note">${on ? `<b>${cur ? cur.name : 'A celebration'}</b> is on now! The whole town is out celebrating.` : `This season's festival is <b>${f.name}</b>: ${f.desc} The town is happier during it, and for a season afterwards, and neighbours come to visit.`}</div>
+  return `<div class="section"><h3>${f.icon} Festivals</h3><div class="note">${on ? `<b>${cur ? cur.name : 'A celebration'}</b> is on now! The whole town is out celebrating.` : `This season's festival is <b>${f.name}</b>: ${f.desc} Families settle 30% faster during it (and a little faster for a season after), and neighbours come to visit.`}</div>
     ${on ? '' : `<div class="row"><button class="btn small leaf ${c.ok ? '' : 'disabled'}" data-act="festival" data-arg="${t.id}">Hold ${f.name}</button><div class="cost">${costChips(ST.FESTIVAL_COST)}</div></div>${c.ok ? '' : `<div class="note">${esc(c.reason)}</div>`}`}${specials}${t.royalVisit && S.day < t.royalVisit.until ? `<div class="note">👑 ${esc(t.royalVisit.name)} of ${esc(t.royalVisit.village)} is visiting!</div>` : ''}</div>`;
 }
 
@@ -84,10 +84,11 @@ export function specSection(t) {
       <div><b>${sp.icon} ${sp.name}</b><div class="meta">${sp.desc}</div></div><span>${t.spec === k ? '✓' : ''}</span></button>`).join('')}</div></div>`;
 }
 
-export function moodSection(t) {
-  const m = moodOf(t), M2 = MOODS[m.level];
-  return `<div class="section"><h3>Mood</h3><div class="moodline"><span class="face">${M2.face}</span><span>${M2.name}${m.level < 2 ? `<div class="meta" style="font-weight:500;color:var(--ink-soft);font-size:12px">${m.level === 0 ? 'Happier towns attract families faster.' : 'A little more and they will be joyful.'}</div>` : '<div class="meta" style="font-weight:500;color:var(--ink-soft);font-size:12px">Families flock here.</div>'}</span></div>
-    <div class="chips2">${m.parts.map(([l]) => `<span>✓ ${esc(l)}</span>`).join('')}${m.missing.slice(0, 4).map((l) => `<span class="want">+ ${esc(l)}</span>`).join('')}</div></div>`;
+// What helps families settle in this town (growth boosts, each with its percentage).
+export function growthSection(t) {
+  const parts = growthParts(t), total = Math.round((growthMult(t) - 1) * 100);
+  return `<div class="section"><h3>📈 Families settling in</h3><div class="note">New families move in while there is food and room in the homes${total ? `, <b>${total}% faster</b> here right now` : ''}.</div>
+    ${parts.length ? `<div class="chips2">${parts.map(([l, p]) => `<span>✓ ${esc(l)} +${p}%</span>`).join('')}</div>` : '<div class="note">Bread, cloth, pottery and festivals all help.</div>'}</div>`;
 }
 
 export function folkSection(t) {
@@ -132,7 +133,7 @@ export function townInfo(t, sub) {
       <div class="note">${t.pop >= t.cap - 0.5 ? 'Every home is full. Zone more housing to grow.' : S.fed ? 'Families are moving in.' : 'Growth has paused until there is more food.'}</div>
       ${t.capital && next ? `<div class="note">The keep grows grander as your realm reaches ${next.name}.</div>` : ''}
       <div class="kv"><span>Continent</span><span>${continentAt(t.x, t.y)}</span><span>Harbour</span><span>${harbourTowns().includes(t) ? 'Yes ⚓' : 'None yet'}</span><span>Charm</span><span>${'✿'.repeat(charm(t)) || '—'} ${charm(t)}/5</span></div>
-      ${statsSection(t)}${specSection(t)}${moodSection(t)}${festivalSection(t)}${folkSection(t)}
+      ${statsSection(t)}${specSection(t)}${growthSection(t)}${festivalSection(t)}${folkSection(t)}
       <div class="section"><h3>Make ${esc(t.name)} lovelier</h3>${S.tier < IMPROVE_TIER ? `<div class="note">Civic improvements unlock when your realm becomes a ${TIERS[IMPROVE_TIER].name}.</div>` : `<div class="note">Each improvement changes how the town looks and makes room for 4% more villagers.</div>
         <div class="list">${Object.entries(IMPROVEMENTS).map(([k, d]) => {
           const done = t.imp && t.imp[k];

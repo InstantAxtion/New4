@@ -21,7 +21,7 @@ export const SPECS = {
   crafts: { name: 'Crafts', icon: '⚒', desc: 'Workshops, bakeries, breweries, weavers and smiths.' },
   trade: { name: 'Trade', icon: '💰', desc: 'Markets, harbours and taxes; better deals with neighbours.' },
   industry: { name: 'Industry', icon: '⛏', desc: 'Lumber camps, quarries and mines.' },
-  learning: { name: 'Learning', icon: '📖', desc: 'Villagers learn twice as fast, and the town is happier.' },
+  learning: { name: 'Learning', icon: '📖', desc: 'Villagers learn their trades twice as fast.' },
 };
 const SPEC_OF = {
   farm: 'farming', pasture: 'farming', dock: 'farming', apiary: 'farming', riceterrace: 'farming', icehut: 'farming', oasis: 'farming', orchard: 'farming', vineyard: 'farming',
@@ -42,7 +42,7 @@ export function setSpec(t, key) {
   t.spec = key; emit('toast', `${t.name} now specialises in ${SPECS[key].name} ${SPECS[key].icon}.`); emit('change');
   return true;
 }
-export const EVERYDAY = ['granary', 'warehouse', 'yard', 'well', 'apiary', 'windmill', 'chapel', 'tavern', 'school', 'stable'];
+export const EVERYDAY = ['granary', 'warehouse', 'yard', 'well', 'park', 'apiary', 'windmill', 'chapel', 'tavern', 'school', 'stable'];
 // Builder crews per town: one to start, one more per 150 folk, and two per Builder's Yard.
 export const yardsIn = (t) => { let n = 0; for (const b of S.buildings.values()) if (b.t === 'yard' && b.town === t.id && b.p >= 1 && !b.idle) n++; return n; };
 export const crewsOf = (t) => 1 + Math.floor(t.pop / PACE.builders) + 2 * yardsIn(t) + (hasTalent('crews') ? 1 : 0);
@@ -94,53 +94,28 @@ export function openRoute(a, b) {
   emit('toast', `Ships set out to chart a route from ${a.name} to ${b.name}.`); emit('change');
   return true;
 }
-// ---- town mood: never punishes, happier towns grow faster ----
-export const MOODS = [{ name: 'Content', face: '🙂' }, { name: 'Happy', face: '😊' }, { name: 'Joyful', face: '😄' }];
-const MOOD_SOURCES = [
-  ['well', 'A well', 1], ['apiary', 'Honey from the apiary', 1], ['windmill', 'The windmill', 1], ['chapel', 'A chapel', 2],
-  ['tavern', 'A tavern', 1], ['school', 'A school', 1], ['park', 'A park', 1],
-  ['vineyard', 'Their vineyard', 1], ['oasis', 'The oasis garden', 1], ['cacao', 'The cacao grove', 1], ['orchard', 'The orchard', 1],
-];
-export function moodOf(t) {
-  const have = new Set();
-  for (const b of S.buildings.values()) if (b.town === t.id && b.p >= 1 && !b.idle) have.add(b.t);
-  const parts = [], missing = [];
-  let score = 0;
-  for (const [type, label, v] of MOOD_SOURCES) {
-    const d = DEFS[type];
-    if (have.has(type)) { parts.push([label, v]); score += v; }
-    else if (!d.style && d.tier <= S.tier) missing.push(DEFS[type].name);
-  }
-  if (t.served) { parts.push(['Ale or wine at the tavern', 1]); score += 1; }
-  if (S.res.bread > 0.5) { parts.push(['Fresh bread', 1]); score += 1; }
-  if (S.res.cloth > 0.5) { parts.push(['Fine clothes', 1]); score += 1; }
-  if (S.res.pottery > 0.5) { parts.push(['Pots and jugs at home', 1]); score += 1; }
-  if (S.res.spices > 0.5) { parts.push(['Spiced food', 1]); score += 1; }
-  if (S.res.books > 0.5) { parts.push(['Books to read', 1]); score += 1; }
-  if (S.golden) { parts.push(['A golden age', 1]); score += 1; }
-  if (hasTech('harmony')) { parts.push(['Golden Harmony', 1]); score += 1; }
-  if (hasTech('theatre')) { parts.push(['An evening at the theatre', 0.5]); score += 0.5; }
-  { const rm = rulerMood(); if (rm) { parts.push(['A beloved ruler', rm]); score += rm; } }
-  if (hasTalent('joy')) { parts.push(['A merry realm', 1]); score += 1; }
-  if ((S.caravans || []).some(([a, b]) => a === t.id || b === t.id)) { parts.push(['Goods by caravan', 1]); score += 1; }
-  const c = charm(t); if (c) { parts.push(['Civic charm', c * 0.5]); score += c * 0.5; }
-  if (t.spec === 'learning') { parts.push(['A town of learning', 1]); score += 1; }
-  if (t.fest && S.day < t.fest.until) { const v = 2 + (t.fest.ale ? 1 : 0); parts.push(['A festival!', v]); score += v; }
-  else if (t.glow && S.day < t.glow) { parts.push(['Fond festival memories', 1]); score += 1; }
-  if (t.cheer && S.day < t.cheer) { parts.push(['A good deed done', 1]); score += 1; }
-  if (t.jobSkill && ((t.jobSkill.tavern || 0) >= 50 || (t.jobSkill.chapel || 0) >= 50)) { parts.push(['Warm hospitality and kindness', 0.5]); score += 0.5; }
-  if (hasWonder('monastery')) { parts.push(['The Cliff Monastery', 1]); score += 1; }
-  if (hasWonder('dome')) { parts.push(['The Botanical Dome', 1]); score += 1; }
-  const level = score >= 6 ? 2 : score >= 2.5 ? 1 : 0;
-  return { score, level, parts, missing };
+// ---- town growth ----
+// Families move into empty homes while there is food. A few clear things speed that up; each is listed
+// with its percentage in the town panel. (There is no separate mood score.)
+export function growthParts(t) {
+  const parts = [];
+  if (S.res.bread > 0.5) parts.push(['Fresh bread', 5]);
+  if (S.res.cloth > 0.5) parts.push(['Fine clothes', 5]);
+  if (S.res.pottery > 0.5) parts.push(['Pots and jugs', 5]);
+  if (t.fest && S.day < t.fest.until) parts.push(['A festival!', 30]);
+  else if (t.glow && S.day < t.glow) parts.push(['After the festival', 10]);
+  if (t.cheer && S.day < t.cheer) parts.push(['A good deed done', 10]);
+  if (hasTech('herbal')) parts.push(['Herbal Lore', 15]);
+  if (hasTech('medicine')) parts.push(['Medicine', 10]);
+  if (hasTech('theatre')) parts.push(['Theatre', 10]);
+  if (hasTech('harmony')) parts.push(['Golden Harmony', 25]);
+  if (hasTalent('feast') && S.res.food > 150) parts.push(['Full Tables', 20]);
+  if (hasTalent('joy')) parts.push(['Bustling Towns', 20]);
+  if (rulerMult('growth') > 1) parts.push(['The ruler’s gifts', Math.round((rulerMult('growth') - 1) * 100)]);
+  if (t.jobSkill && (t.jobSkill.tavern || 0) >= 50) parts.push(['A welcoming tavern', 5]);
+  return parts;
 }
-function updateMoods() {
-  for (const t of S.towns) {
-    const m = moodOf(t), prev = t.mood ? t.mood.level : 0;
-    t.mood = { score: m.score, level: m.level };
-    if (m.level > prev && m.level === 2) emit('toast', `${MOODS[2].face} ${t.name} is joyful!`);
-  }
-}
+export const growthMult = (t) => growthParts(t).reduce((m, [, p]) => m * (1 + p / 100), 1);
 
 // ---- civic improvements: making a town lovelier ----
 export const IMPROVEMENTS = {
@@ -173,7 +148,7 @@ export function improve(t, key) {
   emit('improved', { t, key }); emit('change');
   return true;
 }
-export const MANUAL = ['lumber', 'dock', 'quarry', 'mine', 'tower', 'barracks', 'fort', 'market', 'shipyard', 'harbour', 'stonebridge', 'tunnel'];
+export const MANUAL = ['lumber', 'woodlot', 'pasture', 'dock', 'quarry', 'pit', 'mine', 'shops', 'tower', 'barracks', 'fort', 'market', 'shipyard', 'harbour', 'stonebridge', 'tunnel'];
 export const WONDERS = ['library', 'gardens', 'lighthouse', 'greatcastle', 'cathedral'];
 export const ALL_WONDERS = [...WONDERS, 'monastery', 'bridge', 'observatory', 'dome'];
 // Grand buildings that cover 2×2 tiles: the anchor tile plus three more below it.
@@ -388,6 +363,12 @@ function computeDistricts(t) {
   });
   t.districts = out;
 }
+// Everyday buildings that make homes roomier: each kind counts once per town (up to +30% in all).
+function homesBonus(t) {
+  const seen = new Set(); let b = 0;
+  for (const x of S.buildings.values()) if (x.town === t.id && x.p >= 1 && DEFS[x.t] && DEFS[x.t].homes && !seen.has(x.t)) { seen.add(x.t); b += DEFS[x.t].homes; }
+  return b;
+}
 export function recomputeTowns() {
   const gc = hasWonder('greatcastle') ? 4 : 0;
   const cath = hasWonder('cathedral') ? 1.3 : 1;
@@ -403,7 +384,7 @@ export function recomputeTowns() {
   for (const t of S.towns) {
     const cap = TIERS[S.tier].radiusCap;
     t.radius = Math.min(cap, (t.capital ? 5 : 4) + t.n * 0.3) + t.towers * 3 + gc + (hasTech('cartography') ? 2 : 0) + (hasTalent('border') ? 2 : 0) + (hasTech('surveying') ? 1 : 0);
-    t.cap = Math.round(t.capRaw * cath * (1 + 0.04 * charm(t)) * (S.res.glass > 0.5 ? 1.05 : 1) * (hasTech('architecture') ? 1.1 : 1));
+    t.cap = Math.round(t.capRaw * cath * (1 + 0.04 * charm(t)) * (1 + Math.min(0.3, homesBonus(t))) * (S.res.glass > 0.5 ? 1.05 : 1) * (hasTech('architecture') ? 1.1 : 1));
     computeDistricts(t);
   }
 }
@@ -442,6 +423,7 @@ export function canPlace(type, x, y, opt = {}) {
   if (type === 'dome' && !(b === B.GRASS || b === B.FOREST || b === B.JUNGLE || b === B.SAVANNA)) return { ok: false, reason: 'Needs green land.' };
   if (type === 'lumber' && !WOODS.has(b) && !adjacent(x, y, (n) => WOODS.has(n))) return { ok: false, reason: 'Needs woodland nearby.' };
   if ((type === 'dock' || type === 'lighthouse' || type === 'harbour' || type === 'shipyard') && !adjacent(x, y, (n) => n === B.SHALLOW || n === B.OCEAN) && !((type === 'dock' || type === 'shipyard') && byRiver(x, y))) return { ok: false, reason: 'Must touch the water.' };
+  if (type === 'pit' && !rocky(x, y)) return { ok: false, reason: 'Needs rocky ground: hills, desert, or beside mountains.' };
   if (type === 'mine' && !(b === B.HILLS || adjacent(x, y, (n) => n === B.MOUNTAIN || n === B.SNOW))) return { ok: false, reason: 'Needs hills or mountains.' };
   if (opt.moving === undefined && !affordable(d.cost)) return { ok: false, reason: 'Not enough resources.', own };
   return { ok: true, own };
@@ -576,7 +558,6 @@ export let FOUND_COST = FOUND_COST_BASE;
 // The ruler's traits (set by the royal family module).
 let rulerFx = () => null; export function setRulerFx(f) { rulerFx = f; }
 export const rulerMult = (k) => { const fx = rulerFx(); return fx && fx[k] ? 1 + fx[k] : 1; };
-export const rulerMood = () => { const fx = rulerFx(); return fx && fx.mood ? fx.mood : 0; };
 export const hasTech = (id) => !!(S.research && S.research.done.includes(id));
 export const canResearch = (r) => !hasTech(r.id) && r.req.every(hasTech);
 export function pickResearch(id) { const r = RESEARCH.find((q) => q.id === id); if (!r || !canResearch(r)) return false; S.research.cur = id; emit('change'); return true; }
@@ -825,7 +806,6 @@ export const QUESTS = [
   Q('trade', 'Trade with a neighbouring village', () => S.stats.trades >= 1, { gold: 30 }),
   Q('well', 'Dig a Well (Build → Everyday)', () => count('well') >= 1, { stone: 20 }),
   Q('village', 'Become a Village (25 villagers)', () => S.tier >= 1, { food: 60, wood: 40 }),
-  Q('happy', 'Make a town Happy 😊', () => S.towns.some((t) => t.mood && t.mood.level >= 1), { gold: 40 }),
   Q('bread', 'Bake your first bread', () => count('bakery') >= 1 && S.res.bread > 0, { food: 60 }),
   Q('specialty', "Build your region's specialty", () => SPECIALTIES.some((k) => count(k) >= 1), { gold: 60 }),
   Q('yard', "Open a Builder's Yard for more builders", () => count('yard') >= 1, { wood: 30 }),
@@ -840,7 +820,6 @@ export const QUESTS = [
   Q('town', 'Become a Town (80 villagers)', () => S.tier >= 2, { stone: 80, gold: 60 }),
   Q('market', 'Open a Market', () => count('market') >= 1, { iron: 30 }),
   Q('tools', 'Forge tools at a Smithy', () => count('smithy') >= 1 && S.res.tools > 0, { iron: 30 }),
-  Q('joyful', 'Make a town Joyful 😄', () => S.towns.some((t) => t.mood && t.mood.level >= 2), { gold: 120 }),
   Q('master', 'A villager becomes a master of their trade', () => (S.stats.masters || 0) >= 1, { gold: 100 }),
   Q('join', 'Welcome a neighbour into your kingdom', () => S.stats.joins >= 1, { gold: 100 }),
   Q('wonder1', 'Complete a Wonder', () => WONDERS.some(hasWonder), { gold: 150, iron: 50 }),
@@ -1007,9 +986,8 @@ function step(dd) {
   const eat = Math.max(0, pop * 0.1 * PACE.eat * dd - breadEat * 2);
   S.fed = S.res.food >= eat;
   S.res.food = Math.max(0, S.res.food - eat);
-  updateMoods();
   for (const t of S.towns) {
-    const mg = (1 + 0.2 * (t.mood ? t.mood.level : 0)) * (hasTech('herbal') ? 1.15 : 1) * (hasTech('medicine') ? 1.1 : 1) * (hasTalent('feast') && S.res.food > 150 ? 1.2 : 1); // happier towns attract families faster (mood never punishes)
+    const mg = growthMult(t);
     if (t.pop < t.cap && S.fed) t.pop = Math.min(t.cap, t.pop + Math.max(t.pop < 30 ? PACE.minGrowth : 0.02, (t.cap - t.pop) * 0.06 * PACE.growth) * mg * dd);
     else if (t.pop > t.cap) t.pop = Math.max(t.cap, t.pop - 0.5 * dd);
   }

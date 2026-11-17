@@ -15,7 +15,6 @@ import { diamondPath, drawSprite, drawSpriteF, label } from './render/canvas.js'
 import { ANIM, animate, drawFireworks, drawYard, festive, festiveExtras, levelTrim, lostAnimal, popScale, pops, statue } from './render/effects.js';
 import { bucketWalkers, drawRowWalkers, drawWalkers, stableTowns, updateWalkers, walkers, wear } from './render/walkers.js';
 L.setExtraLookup((i) => nbExtra.has(i));
-const MOOD_FACES = ['🙂', '😊', '😄'];
 
 export const TILE_MODE_TW = 20;
 export const A_GENTLE = () => !!S.settings.gentle;
@@ -612,7 +611,7 @@ function drawLabels(tileMode) {
   for (const t of S.towns) {
     const x = sx(tileWX(t.x, t.y)), y = sy(tileWY(t.y));
     if (x < -100 || x > cw + 100 || y < -60 || y > ch + 100) continue;
-    const face = (t.mood ? MOOD_FACES[t.mood.level] : '') + (t.spec ? ' ' + SPECS[t.spec].icon : '');
+    const face = t.spec ? SPECS[t.spec].icon : '';
     if (tileMode) label(`${t.name} ${face}`, x, y - tw * 0.9, 13, `${Math.floor(t.pop)} folk${t.fame ? ' · ★ ' + t.fame.title : ''}`);
     if (tileMode && tw < 70 && t.districts) for (const d of t.districts) { // quarter names, softly
       const dx = sx(tileWX(d.x, d.y)), dy = sy(tileWY(d.y));

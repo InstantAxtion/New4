@@ -64,9 +64,8 @@ export function menuPage(page) {
   } else if (page === 'help') {
     html = mhead('How to Play') + `<div class="helptext">
       <p>Pick any spot on Earth and grow a hamlet into a kingdom at your own pace. Your capital can never be lost, but neighbouring kingdoms may raid your other towns, so keep a garrison.</p>
-      <h3>🌾 Zones</h3>Paint <b>Housing</b>, <b>Farmland</b>, <b>Pasture</b>, <b>Woodlot</b>, <b>Park</b>, <b>Workshops</b> and <b>Shops</b>. Your builders put them up one by one. A Builder's Yard adds more crews. The <b>Road</b> tool lays roads for free wherever you like.
-      <h3>🔨 Build</h3>Place key buildings yourself: lumber camps by woods, quarries and mines by hills, docks on shores and rivers. Everyday buildings like wells, taverns and schools make towns happier.
-      <h3>😊 Mood</h3>Happy towns attract families faster. Tap a town hall to see what would help.
+      <h3>🌾 Zones</h3>Paint <b>Housing</b>, <b>Farmland</b> and <b>Workshops</b>. Pastures, woodlots, mining pits and shops are placed from Build. Your builders put them up one by one. A Builder's Yard adds more crews. The <b>Road</b> tool lays roads for free wherever you like.
+      <h3>🔨 Build</h3>Place key buildings yourself: lumber camps by woods, quarries and mines by hills, docks on shores and rivers. Everyday buildings like wells, chapels and parks make homes roomier.
       <h3>🏡 Folk</h3>Everyone has a name, a family, a trade and sometimes a pet. Tap anyone walking about to meet them.
       <h3>🤝 Neighbours</h3>Trade, send gifts and answer letters. Close friends may join your realm.
       <h3>🛤 Getting about</h3>Paint roads and canals, build stone bridges and mountain tunnels, and send caravans between your towns from the Realm panel.

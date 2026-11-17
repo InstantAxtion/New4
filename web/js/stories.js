@@ -94,7 +94,6 @@ function maybeRoyalVisit(dd) {
   emit('toast', `👑 ${n.leader || 'The elder'} of ${n.name} is visiting ${best.name}, with a gift of ${gift} gold!`);
 }
 on('stepped', (dd) => { if (S.started) maybeRoyalVisit(dd); });
-export const festiveMood = (t) => (t.fest && S.day < t.fest.until ? 2 + (t.fest.ale ? 1 : 0) : t.glow && S.day < t.glow ? 1 : 0);
 
 // ---------------- small requests from villagers ----------------
 const ANIMALS = [['goat', '🐐'], ['sheep', '🐑'], ['hen', '🐔']];
@@ -161,7 +160,6 @@ function stepRequests(dd) {
   }
   if ((S.requests || []).length < 3 && S.tier >= 1 && Math.random() < 0.015 * dd) newRequest();
 }
-export const cheerMood = (t) => (t.cheer && S.day < t.cheer ? 1 : 0);
 
 // ---------------- the royal family ----------------
 const ROYAL = {
@@ -180,9 +178,9 @@ export const RULER_TRAITS = {
   diplomat: { icon: '🕊️', name: 'Diplomat', desc: 'Gifts make 25% more friends.', fx: { friend: 0.25 } },
   shrewd: { icon: '💰', name: 'Shrewd', desc: '+10% gold.', fx: { gold: 0.1 } },
   green: { icon: '🌾', name: 'Green-fingered', desc: '+10% food.', fx: { food: 0.1 } },
-  beloved: { icon: '❤️', name: 'Beloved', desc: 'Every town a little happier.', fx: { mood: 0.5 } },
+  beloved: { icon: '❤️', name: 'Beloved', desc: 'Families settle 15% faster.', fx: { growth: 0.15 } },
   scholarly: { icon: '📖', name: 'Scholarly', desc: 'Villagers learn their trades 15% faster.', fx: { learn: 0.15 } },
-  patron: { icon: '🎨', name: 'Patron of the Arts', desc: 'A little happier towns and a little more knowledge.', fx: { mood: 0.3, know: 0.05 } },
+  patron: { icon: '🎨', name: 'Patron of the Arts', desc: '+10% knowledge and families settle 5% faster.', fx: { know: 0.1, growth: 0.05 } },
 };
 const TRAIT_KEYS = Object.keys(RULER_TRAITS);
 export function rulerFxNow() {
