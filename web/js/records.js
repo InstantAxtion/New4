@@ -52,6 +52,8 @@ export const TROPHIES = [
   ['weddings', '💍', 'Wedding Bells', 'Celebrate 25 weddings in one realm', () => (S.stats.weddings || 0) >= 25],
   ['master', '⭐', 'Master of the Craft', 'Raise a master craftsperson', () => (S.stats.masters || 0) >= 1],
   ['joined', '🤝', 'Open Arms', 'Welcome a neighbouring village into your realm', () => (S.stats.joins || 0) >= 1],
+  ['defender', '🛡️', 'Stout Walls', 'Drive off a raid', () => (S.stats.raidsRepelled || 0) >= 1],
+  ['conqueror', '⚔️', 'Banners Afield', 'Win a village with your army', () => (S.stats.battlesWon || 0) >= 1],
   ['thousand', '👥', 'A Thousand Souls', 'Reach 1,000 villagers in one realm', () => totalPop() >= 1000],
 ];
 export function trophies() { try { return JSON.parse(localStorage.getItem(TKEY)) || {}; } catch (e) { return {}; } }

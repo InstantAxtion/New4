@@ -17,6 +17,7 @@ import { stepTile, moonIcon } from './life.js';
 import * as XP from './explore.js';
 import * as ST from './stories.js';
 import * as RC from './records.js';
+import * as WAR from './war.js';
 import { STYLES } from './sprites.js';
 import { townStyle } from './render.js';
 import { seasonIndex, SEASONS, SEASON_ICONS, nightAt, farmSeason, setNightOff } from './seasons.js';
@@ -187,7 +188,7 @@ function buildHUD() {
     S.speed = +b.dataset.speed; sfx('tap'); updateHUD();
   });
   $('#bottombar').innerHTML = [
-    ['build', '🔨', 'Build'], ['zones', '🌾', 'Zones'], ['research', '📚', 'Research'], ['realm', '🏰', 'Realm'], ['menu', '☰', 'Menu'],
+    ['build', '🔨', 'Build'], ['zones', '🌾', 'Zones'], ['research', '📚', 'Research'], ['army', '⚔️', 'Army'], ['realm', '🏰', 'Realm'], ['menu', '☰', 'Menu'],
   ].map(([k, ic, l]) => `<button data-tab="${k}"><span class="ic">${ic}</span>${l}</button>`).join('');
   $('#bottombar').addEventListener('click', (e) => {
     const b = e.target.closest('button'); if (!b) return;
@@ -196,7 +197,7 @@ function buildHUD() {
     if (sheetKind === tab) { closeSheet(); return; }
     if (tab === 'zones') { closeSheet(); setMode(M.mode && M.mode.kind === 'zone' ? null : { kind: 'zone', zone: 'housing' }); return; }
     setMode(null);
-    ({ build: showBuild, realm: showRealm, menu: showMenu, research: showResearch })[tab]();
+    ({ build: showBuild, realm: showRealm, menu: showMenu, research: showResearch, army: showArmy })[tab]();
   });
   $('#pring').addEventListener('click', () => { sfx('tap'); if (sheetKind === 'progress') closeSheet(); else { setMode(null); showProgress(); } });
   $('#zoomctl').addEventListener('click', (e) => {
@@ -226,7 +227,7 @@ export function updateHUD() {
   $('#tierbadge').textContent = TIERS[S.tier].name;
   { const p = totalPop(), next = TIERS[S.tier + 1], f = next ? Math.max(0, Math.min(1, (p - TIERS[S.tier].pop) / (next.pop - TIERS[S.tier].pop))) : 1, ring = $('#pring');
     if (ring) { ring.style.setProperty('--p', f); ring.title = next ? `${Math.floor(p)} / ${next.pop} villagers to ${next.name}` : 'Highest tier'; } }
-  if (performance.now() - lastDot > 3000) { lastDot = performance.now(); const rb = $('#bottombar [data-tab=research]'); if (rb) rb.classList.toggle('dot', !(S.research && S.research.cur) || talentsFree() > 0); }
+  if (performance.now() - lastDot > 3000) { lastDot = performance.now(); const rb = $('#bottombar [data-tab=research]'); if (rb) rb.classList.toggle('dot', !(S.research && S.research.cur) || talentsFree() > 0); const ab = $('#bottombar [data-tab=army]'); if (ab) ab.classList.toggle('dot', !!(S.raids && S.raids.length)); }
   $('#goodsbar').classList.toggle('hidden', !(S.tier >= 1 || GOODS.some((g) => S.res[g] > 0)));
   for (const r of [...RES, ...GOODS]) {
     const el = $('#res-' + r); if (!el) continue;
@@ -351,6 +352,24 @@ export function showPerson(townId, pid) {
   openSheet('person', () => personCard(t, personById(t, pid)));
 }
 
+// ---------------- army ----------------
+function showArmy() {
+  openSheet('army', () => {
+    const pow = WAR.soldierPow(), a = S.army, raids = S.raids || [];
+    const head2 = head('Army', S.tier < 1 ? 'Raids begin once your realm becomes a Village. A Barracks trains soldiers for its town.' : `${Math.round(WAR.soldiers())} soldiers · each fights at ${pow.toFixed(2)}×`);
+    const raidHTML = raids.length ? `<div class="section warn-sec"><h3>🔥 Raiders on the march</h3><div class="list">${raids.map((r) => { const t = townById(r.to), left = Math.max(0, Math.ceil(r.start + r.days - S.day)), def = t ? WAR.defenceOf(t) : 0;
+      return `<div class="item"><div><b>${esc(r.name)} → ${t ? esc(t.name) : '?'}</b><div class="meta">Arrive in ${left} day${left === 1 ? '' : 's'} · their strength <b>${r.str}</b> vs your defence <b style="color:${def >= r.str ? '#4e7a34' : '#b04a30'}">${def}</b></div></div>${a && !a.march && t && a.at !== t.id ? `<button class="btn small primary" data-act="adefend" data-arg="${t.id}">Defend</button>` : ''}</div>`; }).join('')}</div></div>` : '';
+    const towns = `<div class="section"><h3>🏘️ Town defences</h3><div class="list">${S.towns.map((t) => `<div class="item"><div><b>${esc(t.name)}${t.capital ? ' 👑' : ''}</b><div class="meta">Garrison ${Math.floor(t.garrison || 0)} / ${WAR.garrisonCap(t)}${WAR.garrisonCap(t) ? '' : ' (build a Barracks)'}</div></div><span class="defv">🛡️ ${WAR.defenceOf(t)}</span></div>`).join('')}</div>
+      <div class="note">Barracks train soldiers for their town. Watchtowers and Stone Forts make a town stronger. Soldiers eat a little food and are paid a little gold.</div></div>`;
+    const field = `<div class="section"><h3>🚩 Field army</h3>${a ? `<div class="note">${a.n} soldiers · strength ${Math.round(WAR.armyPow())} · ${a.march ? `marching to ${a.march.kind === 'attack' ? 'attack' : 'defend'} (${Math.max(0, Math.ceil(a.march.start + a.march.days - S.day))} days)` : `stationed at ${esc((townById(a.at) || {}).name || 'the capital')}`}</div>` : '<div class="note">Gather soldiers from your garrisons into an army that can march to defend a town or take an enemy village.</div>'}
+      <div class="row">${[5, 10, 25].map((k) => `<button class="btn small ${WAR.soldiers() - (a ? a.n : 0) >= 1 && !(a && a.march) ? '' : 'disabled'}" data-act="muster" data-arg="${k}">+${k} soldiers</button>`).join('')}${a && !a.march ? '<button class="btn small" data-act="disband">Send home</button>' : ''}</div>
+      ${a && !a.march ? `<div class="tlabel" style="margin-top:6px">Defend a town</div><div class="row">${S.towns.filter((t) => t.id !== a.at).map((t) => `<button class="btn small" data-act="adefend" data-arg="${t.id}">${esc(t.name)}</button>`).join('') || '<span class="note">Only one town.</span>'}</div>` : ''}
+      ${a && !a.march ? (() => { const ts = WAR.targets().slice(0, 8); return `<div class="tlabel" style="margin-top:6px">Attack an enemy village</div>${ts.length ? `<div class="list">${ts.map((n) => { const d = WAR.villageDefence(n), win = WAR.armyPow() >= d; return `<div class="item"><div><b>${esc(n.name)}</b><div class="meta">${esc(n.realm)} · defence ${d} · ${win ? 'you should win' : 'too strong for now'}</div></div><button class="btn small ${win ? 'leaf' : ''}" data-act="aattack" data-arg="${n.id}">Attack</button></div>`; }).join('')}</div>` : '<div class="note">No enemy villages within reach.</div>'}`; })() : ''}</div>`;
+    const realms = WAR.realmList();
+    const realmHTML = `<div class="section"><h3>🏰 Kingdoms nearby</h3>${realms.length ? `<div class="list">${realms.map((k) => `<div class="item"><div><b style="color:hsl(${k.hue},45%,38%)">${esc(k.name)}</b><div class="meta">${k.members.length} villages · strength ${Math.round(k.r.str)}${k.r.tribute > S.day ? ` · at peace for ${Math.ceil(k.r.tribute - S.day)} days` : ''}</div></div>${k.r.tribute > S.day ? '<span>🕊️</span>' : `<button class="btn small ${S.res.gold >= WAR.tributeCost(k.r) ? '' : 'disabled'}" data-act="tribute" data-arg="${k.r.id}">Tribute ${WAR.tributeCost(k.r)}g</button>`}</div>`).join('')}</div><div class="note">Paying tribute keeps a kingdom's raiders away for a year.</div>` : '<div class="note">No kingdoms close by. Lucky you.</div>'}</div>`;
+    return head2 + raidHTML + towns + field + realmHTML;
+  });
+}
 // ---------------- progress page, year report and tier celebration ----------------
 function showProgress() {
   openSheet('progress', () => {
@@ -580,7 +599,7 @@ function showMenu() {
       • <b>Build</b>: place Lumber Camps by woods, Quarries and Mines by hills, Docks on the shore.<br>
       • Your border grows as your town grows. Watchtowers push it further.<br>
       • Trade with nearby villages and send gifts. Close friends may join your kingdom.<br>
-      • Nothing can go wrong. Pause whenever you like, and the realm waits for you.<br>
+      • Pause whenever you like, and the realm waits for you. From Village tier, keep an eye out for raiders (Army tab).<br>
       • <b>S Pen</b>: hover to see what's there. In Zones, the pen paints and fingers move the map. Hold the pen's side button to erase.</div></div>
       <div class="section"><h3>Map data</h3><div class="note">Earth outlines from Natural Earth (public domain) via world-atlas.</div></div>
       <div class="row"><button class="btn small" data-act="savenow">Save now</button>${document.body.classList.contains('native') || !document.documentElement.requestFullscreen ? '' : '<button class="btn small" data-act="fullscreen">Full screen</button>'}<button class="btn small" data-act="backup">Back up realm</button><button class="btn small primary" data-act="mainmenu">Main menu</button></div>`);
@@ -718,7 +737,7 @@ function neighborInfo(n, sub) {
   return head(esc(n.name), `Neighbouring village · ${Math.floor(n.pop)} folk`)
     + `<div class="note">${sub}</div>
     <div class="note">Led by <b>${esc(n.leader || 'their elder')}</b> · ${tr.label}: ${tr.blurb}</div>
-    ${n.realm ? `<div class="note">🏰 Part of the <b>${esc(n.realm)}</b>, a peaceful neighbouring realm.</div>` : ''}
+    ${n.realm ? `<div class="note">🏰 Part of the <b>${esc(n.realm)}</b> · defence ${WAR.villageDefence(n)}${WAR.attackable(n) ? ' <button class="btn small" data-act="goarmy">⚔️ Army</button>' : ''}</div>` : ''}
     ${req ? `<div class="section"><h3>✉ A request</h3><div class="note">“${esc(req.text)}”</div>
       <div class="row"><button class="btn small primary ${contact && S.res[req.res] >= req.amt ? '' : 'disabled'}" data-act="fulfil">Send ${req.amt} ${RES_NAMES[req.res].toLowerCase()}</button>
       <div class="note" style="margin:0">They'll send ${Object.entries(req.reward).map(([k, v]) => `${v} ${k}`).join(', ')} in thanks</div></div>
@@ -795,6 +814,12 @@ function act(name, arg, el) {
     case 'csend': if (sendContract(+arg)) { sfx('coin'); haptic(); refreshSheet(true); } else sfx('error'); break;
     case 'progress': showProgress(); break;
     case 'yearrep': if (S.lastReport) showYear(S.lastReport); break;
+    case 'muster': if (WAR.muster(+arg)) { sfx('place'); refreshSheet(true); } else sfx('error'); break;
+    case 'disband': WAR.disband(); refreshSheet(true); break;
+    case 'adefend': if (WAR.marchDefend(+arg)) { sfx('tap'); toast('Your army marches out.'); refreshSheet(true); } else sfx('error'); break;
+    case 'aattack': if (WAR.marchAttack(+arg)) { sfx('fanfare'); toast('⚔️ Your army marches to battle!'); refreshSheet(true); } else { sfx('error'); toast('Gather an army first (Army tab).'); } break;
+    case 'tribute': if (WAR.payTribute(+arg)) { sfx('coin'); refreshSheet(true); } else sfx('error'); break;
+    case 'goarmy': showArmy(); break;
     case 'movebld': if (sel) { const i = idxOf(sel.x, sel.y), b = S.buildings.get(i); if (b) { closeSheet(); setMode({ kind: 'move', from: i, type: b.t }); toast(`Tap where the ${DEFS[b.t].name} should go.`); } } break;
     case 'turnbld': if (sel && turnBuilding(idxOf(sel.x, sel.y))) { sfx('tap'); markDirty(); } break;
     case 'flip': if (M.mode) { M.mode.flip = !M.mode.flip; setMode(M.mode); markDirty(); } break;
@@ -968,7 +993,7 @@ function menuPage(page) {
     html = mhead('Settings') + settingsHTML('data-set');
   } else if (page === 'help') {
     html = mhead('How to Play') + `<div class="helptext">
-      <p>Pick any spot on Earth and grow a hamlet into a kingdom. There is no way to lose, so take your time.</p>
+      <p>Pick any spot on Earth and grow a hamlet into a kingdom at your own pace. Your capital can never be lost, but neighbouring kingdoms may raid your other towns, so keep a garrison.</p>
       <h3>🌾 Zones</h3>Paint <b>Housing</b>, <b>Farmland</b>, <b>Pasture</b>, <b>Woodlot</b>, <b>Park</b>, <b>Workshops</b> and <b>Shops</b>. Your builders put them up one by one. A Builder's Yard adds more crews. The <b>Road</b> tool lays roads for free wherever you like.
       <h3>🔨 Build</h3>Place key buildings yourself: lumber camps by woods, quarries and mines by hills, docks on shores and rivers. Everyday buildings like wells, taverns and schools make towns happier.
       <h3>😊 Mood</h3>Happy towns attract families faster. Tap a town hall to see what would help.
@@ -977,6 +1002,7 @@ function menuPage(page) {
       <h3>🛤 Getting about</h3>Paint roads and canals, build stone bridges and mountain tunnels, and send caravans between your towns from the Realm panel.
       <h3>👪 Villagers</h3>Tap someone to rename them, see their skills and family tree, or follow them around town. Workers get better the longer they do the same job.
       <h3>📚 Research</h3>Pick an idea to study and spend talent points as your realm grows.
+      <h3>⚔️ Army</h3>From Village tier, neighbouring kingdoms may send raiders. Build Barracks, Watchtowers and Forts, raise a field army to defend or attack, or pay tribute for peace.
       <h3>⛵ Later on</h3>Choose a speciality for each town, build harbours, chart sea routes and raise wonders. Past Kingdom lies the Empire.
       <h3>✋ Controls</h3>Drag to move, pinch to zoom, tap to inspect. With an S Pen, the pen paints zones and a finger moves the map.</div>`;
   } else if (page === 'credits') {

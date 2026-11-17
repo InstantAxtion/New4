@@ -8,6 +8,7 @@ import * as L from './life.js';
 import * as A from './alive.js';
 import * as X from './explore.js';
 import * as K from './kingdoms.js';
+import { drawWar } from './war.js';
 import * as ST from './stories.js';
 import { petOf, personById, ageOf } from './folk.js';
 import { styleAt } from './regions.js';
@@ -613,7 +614,7 @@ export function frame(now) {
   if (S.routes && S.routes.length) L.drawRoutes(ctx, animTime, S.routes, townById, sx, sy, cam.tw);
   const view = curView();
   A.drawTravellers(ctx, view);
-  X.drawHighwayTraffic(ctx, view); X.drawCaravans(ctx, view); K.drawMigrations(ctx, view);
+  X.drawHighwayTraffic(ctx, view); X.drawCaravans(ctx, view); K.drawMigrations(ctx, view); drawWar(ctx, view);
   drawExplorers();
   L.drawClouds(ctx, animTime, cam, cw, ch, sx, sy, tileMode);
   L.drawBirds(ctx, animTime, cam, cw, ch, sx, sy);

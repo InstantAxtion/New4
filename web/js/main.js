@@ -9,6 +9,7 @@ import { initTutorial, updateTutorial } from './tutorial.js';
 import './folk.js';
 import './explore.js';
 import './stories.js';
+import './war.js';
 import './records.js';
 import { sfx, setAmbience, setScene, thunder, setMusicMood, bells } from './audio.js';
 import { seasonIndex, CYCLE } from './seasons.js';

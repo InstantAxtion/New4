@@ -464,3 +464,6 @@ button:focus, button:focus-visible { outline: none; }
 .unlocks { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 8px; }
 .ul { display: flex; flex-direction: column; align-items: center; gap: 4px; background: var(--tint); border-radius: 14px; padding: 8px 4px; font-size: 12px; font-weight: 700; text-align: center; }
 .ul img { width: 48px; height: 40px; object-fit: contain; }
+
+.warn-sec { border: 2px solid #d86a4a; } .defv { font-weight: 800; color: var(--accent-dark); }
+#bottombar button { min-width: 54px; padding: 7px 6px 6px; }

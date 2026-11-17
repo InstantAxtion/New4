@@ -630,6 +630,29 @@ function buildingSprites() {
     const [cx, cy] = P(0.7, 0.85); g.fillStyle = '#5a4a3c'; g.fillRect(cx - 4, cy - 4, 8, 3.5); g.fillStyle = v ? '#8a96a6' : '#b0a090'; g.beginPath(); g.ellipse(cx, cy - 4, 3.5, 1.4, 0, 0, 7); g.fill();
     g.fillStyle = '#2a2a2a'; g.beginPath(); g.arc(cx - 2.5, cy, 1.1, 0, 7); g.arc(cx + 2.5, cy, 1.1, 0, 7); g.fill();
   }));
+  // Barracks: a long hall, a training yard with a dummy and a weapon rack
+  S.barracks = [frame((g) => {
+    shadow(g, 24, 11);
+    box(g, 0.15, 0.18, 0.62, 0.62, 10, '#b8a88c'); gable(g, 0.15, 0.18, 0.62, 0.62, 10, 7, '#7a3a32');
+    windows(g, 0.2, 0.58, 0.62, 7, 2, '#f5d78a');
+    const [fx, fy] = P(0.39, 0.4, 17); flag(g, fx, fy, 10, '#c0503e');
+    g.fillStyle = 'rgba(190,160,110,0.6)'; g.beginPath(); g.ellipse(...P(0.78, 0.7), 10, 5, 0, 0, 7); g.fill(); // yard
+    const [dx, dy] = P(0.8, 0.62); g.strokeStyle = '#6e4a30'; g.lineWidth = 1.2; g.beginPath(); g.moveTo(dx, dy); g.lineTo(dx, dy - 9); g.moveTo(dx - 3.5, dy - 6.5); g.lineTo(dx + 3.5, dy - 6.5); g.stroke();
+    g.fillStyle = '#d8c090'; g.beginPath(); g.ellipse(dx, dy - 6, 2, 3, 0, 0, 7); g.fill(); g.beginPath(); g.arc(dx, dy - 10, 1.6, 0, 7); g.fill();
+    const [rx, ry] = P(0.7, 0.88); g.strokeStyle = '#5a4030'; g.lineWidth = 0.8; g.beginPath(); g.moveTo(rx - 5, ry); g.lineTo(rx + 5, ry); g.stroke();
+    for (let k = 0; k < 4; k++) { g.strokeStyle = '#8a8a90'; g.beginPath(); g.moveTo(rx - 4 + k * 2.6, ry); g.lineTo(rx - 4 + k * 2.6, ry - 9); g.stroke(); }
+  })];
+  // Stone fort: a square keep with corner towers
+  S.fort = [frame((g) => {
+    shadow(g, 26, 12);
+    const stone = '#a8a092';
+    box(g, 0.12, 0.12, 0.88, 0.88, 7, stone); crenels(g, 0.12, 0.12, 0.88, 0.88, 7, stone);
+    box(g, 0.32, 0.32, 0.68, 0.68, 17, '#b8b0a2'); crenels(g, 0.32, 0.32, 0.68, 0.68, 17, '#b8b0a2');
+    windows(g, 0.36, 0.64, 0.68, 12, 2, '#3c3a40');
+    for (const [u, v] of [[0.12, 0.88], [0.88, 0.88], [0.88, 0.12]]) { cyl(g, u, v, 0, 4, 11, stone); cone(g, u, v, 11, 5, 7, '#5a4a62'); }
+    const [dx, dy] = P(0.5, 0.88, 0); g.fillStyle = '#4a3424'; g.beginPath(); g.ellipse(dx, dy - 3.5, 2.6, 3.5, 0, Math.PI, 0); g.lineTo(dx + 2.6, dy); g.lineTo(dx - 2.6, dy); g.fill();
+    const [fx, fy] = P(0.5, 0.5, 21); flag(g, fx, fy, 11, '#c0503e');
+  }, 84, 104, 42, 74)];
   // Grist mill: a stone mill house with a big wheel and flour sacks
   S.gristmill = [frame((g) => {
     shadow(g, 22, 10);

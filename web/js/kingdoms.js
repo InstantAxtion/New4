@@ -8,11 +8,10 @@ import * as L from './life.js';
 const FORMS = [(n) => `Kingdom of ${n}`, (n) => `Duchy of ${n}`, (n) => `Realm of ${n}`, (n) => `${n} March`, (n) => `Principality of ${n}`, (n) => `Free Lands of ${n}`];
 const d2 = (a, b) => { let dx = Math.abs(a.x - b.x); if (dx > W / 2) dx = W - dx; const dy = (a.y - b.y) / 2; return dx * dx + dy * dy; };
 const order = (n) => ((n.id * 2654435761) >>> 0) / 4294967296;
-let cache = [], key = '';
-export function kingdoms() {
-  const k = S.neighbors.length + ':' + Math.floor(S.day / 4) + ':' + S.towns.length;
-  if (k === key) return cache;
-  key = k;
+let cache = [], key = '', ver = 0;
+export const realmsChanged = () => { ver++; };
+// The first time, kingdoms form around well-spaced capitals; after that they live in the save and change over time.
+function seedRealms() {
   const caps = [];
   for (const n of [...S.neighbors].sort((a, b) => order(a) - order(b))) {
     if (caps.length >= 36) break;
@@ -20,16 +19,33 @@ export function kingdoms() {
     if (caps.some((c) => d2(c, n) < 75 * 75) || S.towns.some((t) => d2(t, n) < 45 * 45)) continue;
     caps.push(n);
   }
-  const R = 16 + Math.min(70, (S.day / YEAR) * 5), R2 = R * R;
-  const out = caps.map((c, i) => ({ id: i, cap: c, name: FORMS[c.id % FORMS.length](c.name), hue: c.hue, members: [c] }));
+  const R2 = 22 * 22;
+  S.realms = caps.map((c, i) => ({ id: i + 1, cap: c.id, name: FORMS[c.id % FORMS.length](c.name), hue: c.hue, members: [c.id], str: 0, agg: 0.6 + ((c.id * 37) % 10) / 10 }));
   for (const n of S.neighbors) {
-    n.realm = null;
     if (n.joined || n.friend >= 60) continue;
     let best = -1, bd = R2;
-    for (let i = 0; i < caps.length; i++) { const d = d2(caps[i], n); if (d < bd) { bd = d; best = i; } }
-    if (best >= 0) { if (n !== caps[best]) out[best].members.push(n); n.realm = out[best].name; }
+    for (let i = 0; i < caps.length; i++) { const dd = d2(caps[i], n); if (dd < bd) { bd = dd; best = i; } }
+    if (best >= 0 && n !== caps[best]) S.realms[best].members.push(n.id);
   }
-  cache = out.filter((kd) => kd.members.length >= 2);
+  for (const r of S.realms) r.str = 10 + r.members.length * 5;
+  S.realms = S.realms.filter((r) => r.members.length >= 2);
+}
+export function kingdoms() {
+  if (!S.realms) { if (!S.neighbors.length) return []; seedRealms(); ver++; }
+  const k = ver + ':' + S.realms.length + ':' + S.neighbors.length;
+  if (k === key) return cache;
+  key = k;
+  const byId = new Map(S.neighbors.map((n) => [n.id, n]));
+  for (const n of S.neighbors) n.realm = null;
+  cache = [];
+  for (const r of S.realms) {
+    r.members = r.members.filter((id) => { const n = byId.get(id); return n && !n.joined; });
+    const members = r.members.map((id) => byId.get(id));
+    if (!members.length) continue;
+    const cap = byId.get(r.cap) || members[0];
+    for (const n of members) { n.realm = r.name; n.realmId = r.id; }
+    cache.push({ id: r.id, cap, name: r.name, hue: r.hue, members, r });
+  }
   return cache;
 }
 // Soft tinted lands around each kingdom's villages, with its name over the capital.

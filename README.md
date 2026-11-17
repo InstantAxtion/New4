@@ -1,8 +1,7 @@
 # Hearthlands
 
 A relaxing medieval kingdom builder set on a real Earth of **8 million isometric tiles** (2000 × 4000).
-Pick any spot on the planet, then grow from a hamlet into a kingdom at your own pace. You can't lose,
-there are no timers, and you can pause whenever you like.
+Pick any spot on the planet, then grow from a hamlet into a kingdom at your own pace. There are no timers and you can pause whenever you like, but neighbouring kingdoms may raid your towns.
 
 ## Features
 - **Real Earth**: continents and coastlines come from Natural Earth country shapes. Mountains, deserts,
@@ -62,6 +61,7 @@ there are no timers, and you can pause whenever you like.
 - **Double speed**: pause, play or 2× speed.
 - **Progression**: goals come in seven **chapters** (A Humble Start to Kingdom and Beyond), each with its own reward. The research tree has **40 ideas** over six eras, and some ideas unlock buildings (Grist Mill, Warehouse, Potter, Glassworks, Spice House, Scriptorium). Tap the 🏆 ring by the realm name for the **Progress** page. Reaching a new tier brings fireworks, a fanfare and a card showing everything it unlocked.
 - **Economy**: gentle **storage limits**, raised by Granaries and Warehouses; when a store is full, the extra is sold for a little gold. Two-step **production chains** (grain → flour → bread, wool → cloth). Towns earn **fame titles** for what they make most (Bakers' Town, Famous Wine Town…), each with +10%. Friendly neighbours offer year-long **contracts** with big rewards.
+- **Kingdoms and war**: the kingdoms on the map are alive. They grow, take in villages, and conquer each other. From Village tier they send **raiders** who march on your towns (you get a warning and see them coming). Hold them off and they leave gold behind; let them through and they carry off supplies, and a strong enough raid can capture an outlying town (never your capital). Build **Barracks** to train garrisons, add **Watchtowers** and **Stone Forts**, research Drill, Fortifications and Tactics, and raise a **field army** to defend towns or take enemy villages (taking a kingdom's capital breaks it apart). You can also pay **tribute** for a year of peace.
 - **Rulers and years**: every ruler is born with a gift and chooses more as their reign goes on (Wise, Master Builder, Diplomat, Beloved…). Each new year brings a cosy **year in review**.
 - **Satisfying touches**: workplaces level up by themselves with time and skill, with a pennant to show it. Buildings pop up when finished, with hammer taps and a chime. Workers carry sacks, logs and fish, and carts haul goods to the town hall. Towns get grander with each tier: paved squares, banners, stone yard walls and a founder's statue.
 - **Roads** form by themselves from each building to its town hall, and villagers walk along them. The **Road** tool in Zones lets you lay extra roads for free. Roads curve smoothly round bends, with grassy verges and worn tracks, and turn to cobbles in cities.

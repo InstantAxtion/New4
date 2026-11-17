@@ -37,6 +37,8 @@ export const DEFS = {
   shipyard: { name: 'Shipyard', cost: { wood: 50, stone: 20 }, prod: { food: 0.8 }, jobs: 3, time: 5, tier: 1, desc: 'On a shore or riverbank. A fishing fleet (+food, docks here +25%) and ferries that carry settlers across short stretches of sea.' },
   harbour: { name: 'Harbour', cost: { wood: 80, stone: 60, gold: 40 }, prod: { gold: 1 }, jobs: 4, time: 8, tier: 2, desc: 'On the coast. Settlers and traders sail from here to other continents.' },
   green: { name: 'Town Green', hidden: true, civic: true, time: 1 },
+  barracks: { name: 'Barracks', cost: { wood: 40, stone: 30 }, jobs: 1, time: 3, tier: 1, cat: 'military', desc: 'Trains soldiers for this town’s garrison (up to 10 each), for a little gold and food.' },
+  fort: { name: 'Stone Fort', research: 'fortifications', cost: { stone: 120, wood: 40, iron: 20 }, jobs: 2, time: 6, tier: 2, cat: 'military', desc: 'A strong keep: +15 defence and room for 10 more soldiers in this town.' },
   stonebridge: { name: 'Stone Bridge', cost: { stone: 40, wood: 10 }, prod: { gold: 0.15 }, time: 4, tier: 1, cat: 'everyday', desc: 'Built across a river. Roads cross it, and travellers pay a coin or two.' },
   tunnel: { name: 'Mountain Tunnel', cost: { stone: 60, wood: 30, iron: 10 }, time: 6, tier: 2, cat: 'everyday', desc: 'Dug into a mountain inside your borders, so roads can pass straight through the range.' },
   fountain: { name: 'Fountain Square', hidden: true, civic: true, time: 1 },
@@ -247,7 +249,7 @@ export function improve(t, key) {
   emit('improved', { t, key }); emit('change');
   return true;
 }
-export const MANUAL = ['lumber', 'dock', 'quarry', 'mine', 'tower', 'market', 'shipyard', 'harbour', 'stonebridge', 'tunnel'];
+export const MANUAL = ['lumber', 'dock', 'quarry', 'mine', 'tower', 'barracks', 'fort', 'market', 'shipyard', 'harbour', 'stonebridge', 'tunnel'];
 export const WONDERS = ['library', 'gardens', 'lighthouse', 'greatcastle', 'cathedral'];
 export const ALL_WONDERS = [...WONDERS, 'monastery', 'bridge', 'observatory', 'dome'];
 // Grand buildings that cover 2×2 tiles: the anchor tile plus three more below it.
@@ -699,6 +701,9 @@ export const RESEARCH = [
   { id: 'grandmarkets', era: 4, icon: '🏪', name: 'Grand Markets', cost: 400, req: ['banking'], desc: '+15% gold from markets and shops.' },
   { id: 'greatbuilders', era: 4, icon: '🏗️', name: 'Great Builders', cost: 400, req: ['stonework', 'engineering'], desc: 'Wonders go up another 25% faster.' },
   { id: 'universities', era: 4, icon: '🏫', name: 'Universities', cost: 400, req: ['printing'], desc: 'Skills grow 30% faster.' },
+  { id: 'drill', era: 1, icon: '🛡️', name: 'Drill', cost: 70, req: ['tools'], desc: 'Soldiers fight 20% better.' },
+  { id: 'fortifications', era: 2, icon: '🏰', name: 'Fortifications', cost: 140, req: ['drill', 'masonry'], desc: 'Unlocks the Stone Fort; towers and forts defend 30% better.', unlocks: ['fort'] },
+  { id: 'tactics', era: 3, icon: '⚔️', name: 'Tactics', cost: 260, req: ['fortifications'], desc: 'Your field army fights 25% better and marches faster.' },
   { id: 'harmony', era: 5, icon: '☀️', name: 'Golden Harmony', cost: 600, req: ['printing', 'banking', 'engineering'], desc: 'Every town is a little happier (+1 mood).' },
   { id: 'enlightenment', era: 5, icon: '✨', name: 'Enlightenment', cost: 800, req: ['astronomy', 'universities', 'grandmarkets'], desc: '+10% to everything your realm makes.' },
 ];
@@ -919,7 +924,23 @@ export function canInvite(n) {
 }
 export function invite(n) {
   if (!canInvite(n).ok) return false;
-  n.joined = true; indexNeighbors();
+  return annexVillage(n, 'joined');
+}
+// A village becomes one of your towns (by invitation, or by conquest).
+// Raiders capture an outlying town: it becomes a village of their kingdom (it can be won back).
+export function loseTown(t, realmName, hue) {
+  if (!t || t.capital) return null;
+  for (const [i, b] of [...S.buildings]) if (b.town === t.id) S.buildings.delete(i);
+  for (const i of [...S.zones.keys()]) if (groundDist2(i % W, Math.floor(i / W), t.x, t.y) <= t.radius * t.radius) S.zones.delete(i);
+  S.towns = S.towns.filter((q) => q !== t);
+  S.caravans = (S.caravans || []).filter(([a, b]) => a !== t.id && b !== t.id);
+  const n = { id: 100000 + Math.floor(Math.random() * 899999), name: t.name, x: t.x, y: t.y, pop: Math.max(8, Math.round(t.pop * 0.5)), surplus: 'food', want: 'gold', friend: 0, joined: false, hue, captured: true };
+  (S.capV ||= []).push(n); S.neighbors.push(n); n.realm = realmName;
+  recomputeOccupied(); recomputeTowns(); indexNeighbors(); emit('change');
+  return n;
+}
+export function annexVillage(n, how = 'joined') {
+  n.joined = true; n.realm = null; indexNeighbors();
   const t = addTown(n.x, n.y, { name: n.name, pop: n.pop, built: true });
   // They bring their homes and fields with them.
   const rng = mulberry32(n.id * 7 + 1);
@@ -931,9 +952,9 @@ export function invite(n) {
     S.buildings.set(idxOf(x, y), { t: type, p: 1, town: t.id, m: yieldMult(type, x, y), z: 1 });
     if (type === 'house') houses--; else farms--;
   }
-  S.stats.joins++;
+  if (how === 'joined') S.stats.joins++; else S.stats.conquests = (S.stats.conquests || 0) + 1;
   recomputeTowns();
-  emit('toast', `${n.name} has joined your kingdom!`); emit('joined', t); emit('change');
+  emit('toast', how === 'joined' ? `${n.name} has joined your kingdom!` : `⚔️ ${n.name} is now part of your realm!`); emit('joined', t); emit('change');
   return true;
 }
 
@@ -1213,7 +1234,7 @@ function step(dd) {
 export function newGame(name, x, y) {
   S.started = true; S.name = name || 'Hearthlands'; S.day = 0; S.tier = 0; S.speed = 1;
   S.res = { food: 60, wood: 50, stone: 20, gold: 30, iron: 0, bread: 0, tools: 0, cloth: 0, ale: 0, pottery: 0, glass: 0, spices: 0, books: 0, flour: 0, wool: 0 };
-  S.hints = []; S.golden = false; S.undo = []; S.research = { cur: null, prog: 0, done: [], bank: 0 }; S.talents = []; S.contracts = []; S.yearMark = null; S.lastReport = null; FOUND_COST = FOUND_COST_BASE;
+  S.hints = []; S.golden = false; S.undo = []; S.research = { cur: null, prog: 0, done: [], bank: 0 }; S.talents = []; S.contracts = []; S.yearMark = null; S.lastReport = null; S.realms = null; S.army = null; S.raids = []; S.capV = []; FOUND_COST = FOUND_COST_BASE;
   S.expeditions = []; S.explored = []; S.journal = []; S.treasures = {}; S.festsHeld = {}; S.requests = []; S.nextReq = 0; S.royal = null; S.hist = []; S.miles = [];
   S.towns = []; S.buildings = new Map(); S.zones = new Map(); S.proads = new Set(); S.canals = new Set(); S.caravans = []; S.occupied = new Map(); S.nextTownId = 1;
   S.questsDone = new Set(); S.stats = { trades: 0, gifts: 0, joins: 0 }; S.routes = [];
@@ -1248,7 +1269,7 @@ export function save() {
     v: 1, name: S.name, day: S.day, speed: S.speed, tier: S.tier, res: S.res, towns: S.towns,
     buildings: [...S.buildings].map(([i, b]) => [i, b.t, +b.p.toFixed(3), b.town, +(b.m || 1).toFixed(2), b.z ? 1 : 0, b.lv || 1, b.f || 0, Math.round(b.d || 0)]),
     zones: [...S.zones], proads: [...S.proads], canals: [...S.canals], caravans: S.caravans || [], nb: S.neighbors.filter((n) => n.friend || n.joined || n.req || (n.log && n.log.length) || n.pop > 70).map((n) => [n.id, n.friend, n.joined ? 1 : 0, +n.pop.toFixed(1), n.req || null, n.log || []]),
-    quests: [...S.questsDone], stats: S.stats, routes: S.routes || [], hints: S.hints || [], golden: S.golden ? 1 : 0, research: S.research, talents: S.talents || [], contracts: S.contracts || [], yearMark: S.yearMark || null,
+    quests: [...S.questsDone], stats: S.stats, routes: S.routes || [], hints: S.hints || [], golden: S.golden ? 1 : 0, research: S.research, talents: S.talents || [], contracts: S.contracts || [], yearMark: S.yearMark || null, realms: S.realms || null, army: S.army || null, raids: S.raids || [], capV: (S.capV || []).filter((n) => !n.joined), garrison: S.towns.map((t) => [t.id, Math.round((t.garrison || 0) * 10) / 10]),
     expeditions: S.expeditions || [], explored: S.explored || [], journal: S.journal || [], treasures: S.treasures || {}, festsHeld: S.festsHeld || {},
     requests: S.requests || [], nextReq: S.nextReq || 0, royal: S.royal || null, hist: S.hist || [], miles: S.miles || [], nextFolk: S.nextFolk || 1, cam: S.cam, nextTownId: S.nextTownId, tutorial: S.tutorial,
     meta: {
@@ -1283,12 +1304,12 @@ export function load(n = currentSlot) {
   S.towns = d.towns; S.routes = d.routes || []; S.nextTownId = d.nextTownId; S.stats = d.stats; S.questsDone = new Set(d.quests);
   S.tutorial = d.tutorial ?? 99; // realms from before the tutorial existed skip it
   for (const g of GOODS) if (S.res[g] === undefined) S.res[g] = 0;
-  S.hints = d.hints || []; S.golden = !!d.golden; S.undo = []; S.research = d.research || { cur: null, prog: 0, done: [], bank: 0 }; S.talents = d.talents || []; S.contracts = d.contracts || []; S.yearMark = d.yearMark || null; FOUND_COST = hasTalent('settler') ? { food: 25, wood: 25, gold: 15 } : FOUND_COST_BASE;
+  S.hints = d.hints || []; S.golden = !!d.golden; S.undo = []; S.research = d.research || { cur: null, prog: 0, done: [], bank: 0 }; S.talents = d.talents || []; S.contracts = d.contracts || []; S.yearMark = d.yearMark || null; S.realms = d.realms || null; S.army = d.army || null; S.raids = d.raids || []; for (const [id, g] of d.garrison || []) { const t = S.towns.find((q) => q.id === id); if (t) t.garrison = g; } FOUND_COST = hasTalent('settler') ? { food: 25, wood: 25, gold: 15 } : FOUND_COST_BASE;
   S.expeditions = d.expeditions || []; S.explored = d.explored || []; S.journal = d.journal || []; S.treasures = d.treasures || {}; S.festsHeld = d.festsHeld || {};
   S.requests = d.requests || []; S.nextReq = d.nextReq || 0; S.royal = d.royal || null; S.hist = d.hist || []; S.miles = d.miles || []; if (d.nextFolk) S.nextFolk = d.nextFolk;
   S.buildings = new Map(d.buildings.map(([i, t, p, town, m, z, lv, f, bd]) => [i, { t, p, town, m, z, lv: lv || 1, f: f || 0, d: bd || 0 }])); recomputeOccupied();
   S.zones = new Map(d.zones); S.proads = new Set(d.proads || []); S.canals = new Set(d.canals || []); S.caravans = d.caravans || [];
-  S.neighbors = generateNeighbors();
+  S.neighbors = generateNeighbors(); S.capV = d.capV || []; S.neighbors.push(...S.capV);
   const cap = S.towns.find((t) => t.capital) || S.towns[0];
   if (cap) S.neighbors = S.neighbors.filter((n2) => groundDist2(n2.x, n2.y, cap.x, cap.y) > 144 || d.nb.some((e) => e[0] === n2.id));
   for (const [id, f, j, p, req, log] of d.nb) { const q = S.neighbors.find((r) => r.id === id); if (q) { q.friend = f; q.joined = !!j; q.pop = p; q.req = req || null; q.log = log || []; } }
